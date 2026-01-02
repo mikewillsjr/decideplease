@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useAuth, useUser } from '@clerk/clerk-react';
-import AppHeader from './components/AppHeader';
-import AppFooter from './components/AppFooter';
+import { useAuth, useUser, useClerk } from '@clerk/clerk-react';
+import UnifiedHeader from './components/UnifiedHeader';
+import UnifiedFooter from './components/UnifiedFooter';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import AdminPanel from './components/AdminPanel';
@@ -12,6 +12,7 @@ import './App.css';
 function App() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const { user } = useUser();
+  const { signOut } = useClerk();
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
@@ -491,13 +492,15 @@ function App() {
 
   return (
     <div className="app">
-      <AppHeader
+      <UnifiedHeader
+        isSignedIn={true}
         credits={credits}
         userEmail={user?.primaryEmailAddress?.emailAddress}
         creditPackInfo={creditPackInfo}
         onCreditsUpdated={loadUserInfo}
         isAdmin={isAdmin}
         onOpenAdmin={() => setShowAdminPanel(true)}
+        onSignOut={signOut}
       />
       <div className="app-body">
         <Sidebar
@@ -519,7 +522,7 @@ function App() {
           onRetryLoad={handleRetryLoad}
         />
       </div>
-      <AppFooter />
+      <UnifiedFooter />
       {showAdminPanel && (
         <AdminPanel onClose={() => setShowAdminPanel(false)} />
       )}

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { SignIn, SignUp } from '@clerk/clerk-react';
+import UnifiedHeader from './UnifiedHeader';
+import UnifiedFooter from './UnifiedFooter';
 import './LandingPage.css';
 
 const DEMOS = [
@@ -83,20 +85,8 @@ export default function LandingPage() {
 
   return (
     <div className="landing">
-      {/* Navigation */}
-      <nav className="landing-nav">
-        <div className="nav-container">
-          <div className="logo">
-            <span className="logo-icon">&#x2B21;</span>
-            <span className="logo-text">DecidePlease</span>
-          </div>
-          <div className="nav-actions">
-            <a href="#demo" className="btn-link">Example</a>
-            <button className="btn-link" onClick={() => openAuth('signin')}>Log in</button>
-            <button className="btn-primary" onClick={() => openAuth('signup')}>Try Free</button>
-          </div>
-        </div>
-      </nav>
+      {/* Unified Navigation */}
+      <UnifiedHeader isSignedIn={false} onOpenAuth={openAuth} />
 
       {/* Hero Section */}
       <section className="hero">
@@ -415,10 +405,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="landing-footer">
-        &copy; 2026 DecidePlease. Built for serious decisions.
-      </footer>
+      {/* Unified Footer */}
+      <UnifiedFooter />
 
       {/* Auth Modal */}
       {showAuth && (

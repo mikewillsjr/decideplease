@@ -1,11 +1,11 @@
-import './AppFooter.css';
+import './UnifiedFooter.css';
 
-export default function AppFooter() {
+export default function UnifiedFooter() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="app-footer">
-      <div className="footer-content">
+    <footer className="unified-footer">
+      <div className="footer-container">
         <div className="footer-left">
           <span className="footer-copyright">
             &copy; {currentYear} DecidePlease

@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import Stage1 from './Stage1';
 import Stage2 from './Stage2';
 import Stage3 from './Stage3';
+import CouncilDebate from './CouncilDebate';
 import SpeedSelector, { SPEED_OPTIONS } from './SpeedSelector';
 import RerunModal from './RerunModal';
 import './ChatInterface.css';
@@ -213,29 +214,27 @@ export default function ChatInterface({
                     </div>
                   )}
 
-                  {/* Stage 1 */}
-                  {msg.loading?.stage1 && (
-                    <div className="stage-loading">
-                      <div className="spinner"></div>
-                      <span>Running Stage 1: Collecting individual responses...</span>
-                    </div>
+                  {/* Council Debate Visualization (shown during loading) */}
+                  {(msg.loading?.stage1 || msg.loading?.stage2 || msg.loading?.stage3) && (
+                    <CouncilDebate
+                      loading={msg.loading}
+                      stage1Data={msg.stage1}
+                      stage2Data={msg.stage2}
+                      stage3Data={msg.stage3}
+                    />
                   )}
-                  {msg.stage1 && <Stage1 responses={msg.stage1} />}
 
-                  {/* Stage 2 */}
-                  {msg.loading?.stage2 && (
-                    <div className="stage-loading">
-                      <div className="spinner"></div>
-                      <span>Running Stage 2: Peer rankings...</span>
-                    </div>
-                  )}
+                  {/* Stage 1 - Individual Responses */}
+                  {msg.stage1 && !msg.loading?.stage1 && <Stage1 responses={msg.stage1} />}
+
+                  {/* Stage 2 - Peer Rankings */}
                   {msg.stage2Skipped && (
                     <div className="stage-skipped">
                       <span className="skipped-icon">&#x21BB;</span>
                       <span>Peer review skipped for Quick Answer mode</span>
                     </div>
                   )}
-                  {msg.stage2 && msg.stage2.length > 0 && (
+                  {msg.stage2 && msg.stage2.length > 0 && !msg.loading?.stage2 && (
                     <Stage2
                       rankings={msg.stage2}
                       labelToModel={msg.metadata?.label_to_model}
@@ -243,14 +242,8 @@ export default function ChatInterface({
                     />
                   )}
 
-                  {/* Stage 3 */}
-                  {msg.loading?.stage3 && (
-                    <div className="stage-loading">
-                      <div className="spinner"></div>
-                      <span>Running Stage 3: Final synthesis...</span>
-                    </div>
-                  )}
-                  {msg.stage3 && <Stage3 finalResponse={msg.stage3} />}
+                  {/* Stage 3 - Final Synthesis */}
+                  {msg.stage3 && !msg.loading?.stage3 && <Stage3 finalResponse={msg.stage3} />}
 
                   {/* Re-run button (shown after Stage 3 completes) */}
                   {msg.stage3 && !isLoading && (
@@ -273,13 +266,6 @@ export default function ChatInterface({
               )}
             </div>
           ))
-        )}
-
-        {isLoading && (
-          <div className="loading-indicator">
-            <div className="spinner"></div>
-            <span>Consulting the council...</span>
-          </div>
         )}
 
         <div ref={messagesEndRef} />
