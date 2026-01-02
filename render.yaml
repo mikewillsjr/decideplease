@@ -1,0 +1,63 @@
+# Render Blueprint for DecidePlease
+# Deploy with: https://render.com/deploy
+
+services:
+  # Backend API (Python/FastAPI)
+  - type: web
+    name: decideplease-api
+    runtime: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: DATABASE_URL
+        fromDatabase:
+          name: decideplease-db
+          property: connectionString
+      - key: CLERK_SECRET_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: CLERK_ISSUER
+        sync: false  # Set manually - your Clerk frontend API URL
+      - key: STRIPE_SECRET_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: STRIPE_PRICE_ID
+        sync: false  # Set manually - your Stripe price ID for credit pack
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false  # Set manually after creating webhook in Stripe
+      - key: CORS_ORIGINS
+        value: https://decideplease.com,https://www.decideplease.com
+
+  # Frontend Static Site (React/Vite)
+  - type: web
+    name: decideplease
+    runtime: static
+    region: oregon
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+    routes:
+      # Route API requests to backend
+      - type: rewrite
+        source: /api/*
+        destination: https://decideplease-api.onrender.com/api/*
+      # SPA fallback - all other routes go to index.html
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        sync: false  # Set manually in Render dashboard
+
+databases:
+  - name: decideplease-db
+    region: oregon
+    plan: starter  # $7/month, 1GB storage
+    databaseName: decideplease
+    user: decideplease

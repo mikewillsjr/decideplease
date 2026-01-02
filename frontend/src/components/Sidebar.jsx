@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useClerk } from '@clerk/clerk-react';
+import { api } from '../api';
 import './Sidebar.css';
 
 export default function Sidebar({
@@ -6,11 +8,31 @@ export default function Sidebar({
   currentConversationId,
   onSelectConversation,
   onNewConversation,
+  credits,
+  userEmail,
+  creditPackInfo,
+  onCreditsUpdated,
 }) {
+  const { signOut } = useClerk();
+  const [isBuyingCredits, setIsBuyingCredits] = useState(false);
+
+  const handleBuyCredits = async () => {
+    setIsBuyingCredits(true);
+    try {
+      const { checkout_url } = await api.createCheckoutSession();
+      // Redirect to Stripe checkout
+      window.location.href = checkout_url;
+    } catch (error) {
+      console.error('Failed to create checkout:', error);
+      alert('Failed to start checkout. Please try again.');
+      setIsBuyingCredits(false);
+    }
+  };
+
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <h1>LLM Council</h1>
+        <h1>DecidePlease</h1>
         <button className="new-conversation-btn" onClick={onNewConversation}>
           + New Conversation
         </button>
@@ -36,6 +58,32 @@ export default function Sidebar({
               </div>
             </div>
           ))
+        )}
+      </div>
+
+      <div className="sidebar-footer">
+        <div className="credits-section">
+          <div className="credits-display">
+            <span className="credits-label">Credits:</span>
+            <span className="credits-value">{credits ?? '...'}</span>
+          </div>
+          {creditPackInfo?.stripe_configured && (
+            <button
+              className="buy-credits-btn"
+              onClick={handleBuyCredits}
+              disabled={isBuyingCredits}
+            >
+              {isBuyingCredits ? 'Loading...' : `Buy ${creditPackInfo.credits} for ${creditPackInfo.price_display}`}
+            </button>
+          )}
+        </div>
+        {userEmail && (
+          <div className="user-info">
+            <span className="user-email">{userEmail}</span>
+            <button className="sign-out-btn" onClick={() => signOut()}>
+              Sign out
+            </button>
+          </div>
         )}
       </div>
     </div>

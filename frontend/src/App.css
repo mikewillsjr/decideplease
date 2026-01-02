@@ -13,3 +13,72 @@
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
 }
+
+/* Loading screen */
+.app.loading-screen {
+  justify-content: center;
+  align-items: center;
+}
+
+.loading-content {
+  text-align: center;
+}
+
+.loading-content h1 {
+  font-size: 32px;
+  color: #4a90e2;
+  margin-bottom: 16px;
+}
+
+.loading-content p {
+  color: #666;
+  font-size: 16px;
+}
+
+/* Auth screen */
+.app.auth-screen {
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f2 100%);
+}
+
+.auth-container {
+  text-align: center;
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
+  width: 100%;
+}
+
+.auth-container h1 {
+  font-size: 28px;
+  color: #4a90e2;
+  margin: 0 0 8px 0;
+}
+
+.auth-tagline {
+  color: #666;
+  margin: 0 0 24px 0;
+  font-size: 14px;
+}
+
+.auth-toggle {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #666;
+}
+
+.auth-toggle button {
+  background: none;
+  border: none;
+  color: #4a90e2;
+  cursor: pointer;
+  font-size: 14px;
+  text-decoration: underline;
+}
+
+.auth-toggle button:hover {
+  color: #357abd;
+}

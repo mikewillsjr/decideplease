@@ -76,3 +76,80 @@
   color: #999;
   font-size: 12px;
 }
+
+.sidebar-footer {
+  padding: 16px;
+  border-top: 1px solid #e0e0e0;
+  background: #f0f0f0;
+}
+
+.credits-section {
+  margin-bottom: 12px;
+}
+
+.credits-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.buy-credits-btn {
+  width: 100%;
+  padding: 8px 12px;
+  background: #22c55e;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.buy-credits-btn:hover:not(:disabled) {
+  background: #16a34a;
+}
+
+.buy-credits-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.credits-label {
+  color: #666;
+}
+
+.credits-value {
+  font-weight: 600;
+  color: #4a90e2;
+}
+
+.user-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.user-email {
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
+.sign-out-btn {
+  background: none;
+  border: none;
+  color: #4a90e2;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.sign-out-btn:hover {
+  text-decoration: underline;
+}

@@ -1,16 +1,62 @@
 /**
- * API client for the LLM Council backend.
+ * API client for the DecidePlease backend.
  */
 
-const API_BASE = 'http://localhost:8001';
+// In production with same-domain routing, API_BASE can be empty (relative paths)
+// In development, use localhost:8001
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
+// Token getter - set by App.jsx when Clerk is ready
+let getAuthToken = null;
+
+export const setAuthTokenGetter = (getter) => {
+  getAuthToken = getter;
+};
+
+/**
+ * Get headers including auth token if available.
+ */
+const getHeaders = async () => {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
+  if (getAuthToken) {
+    const token = await getAuthToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  return headers;
+};
 
 export const api = {
+  /**
+   * Get current user information including credits.
+   */
+  async getUserInfo() {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/user`, { headers });
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Not authenticated');
+      }
+      throw new Error('Failed to get user info');
+    }
+    return response.json();
+  },
+
   /**
    * List all conversations.
    */
   async listConversations() {
-    const response = await fetch(`${API_BASE}/api/conversations`);
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/conversations`, { headers });
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Not authenticated');
+      }
       throw new Error('Failed to list conversations');
     }
     return response.json();
@@ -20,14 +66,16 @@ export const api = {
    * Create a new conversation.
    */
   async createConversation() {
+    const headers = await getHeaders();
     const response = await fetch(`${API_BASE}/api/conversations`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({}),
     });
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Not authenticated');
+      }
       throw new Error('Failed to create conversation');
     }
     return response.json();
@@ -37,10 +85,15 @@ export const api = {
    * Get a specific conversation.
    */
   async getConversation(conversationId) {
+    const headers = await getHeaders();
     const response = await fetch(
-      `${API_BASE}/api/conversations/${conversationId}`
+      `${API_BASE}/api/conversations/${conversationId}`,
+      { headers }
     );
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Not authenticated');
+      }
       throw new Error('Failed to get conversation');
     }
     return response.json();
@@ -50,17 +103,22 @@ export const api = {
    * Send a message in a conversation.
    */
   async sendMessage(conversationId, content) {
+    const headers = await getHeaders();
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ content }),
       }
     );
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Not authenticated');
+      }
+      if (response.status === 402) {
+        throw new Error('Insufficient credits');
+      }
       throw new Error('Failed to send message');
     }
     return response.json();
@@ -74,18 +132,23 @@ export const api = {
    * @returns {Promise<void>}
    */
   async sendMessageStream(conversationId, content, onEvent) {
+    const headers = await getHeaders();
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message/stream`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ content }),
       }
     );
 
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Not authenticated');
+      }
+      if (response.status === 402) {
+        throw new Error('Insufficient credits');
+      }
       throw new Error('Failed to send message');
     }
 
@@ -111,5 +174,39 @@ export const api = {
         }
       }
     }
+  },
+
+  /**
+   * Get credit pack information.
+   */
+  async getCreditPackInfo() {
+    const response = await fetch(`${API_BASE}/api/credits/info`);
+    if (!response.ok) {
+      throw new Error('Failed to get credit pack info');
+    }
+    return response.json();
+  },
+
+  /**
+   * Create a checkout session to purchase credits.
+   * Returns a URL to redirect the user to Stripe checkout.
+   */
+  async createCheckoutSession() {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/credits/checkout`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        success_url: `${window.location.origin}/?payment=success`,
+        cancel_url: `${window.location.origin}/?payment=cancelled`,
+      }),
+    });
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Not authenticated');
+      }
+      throw new Error('Failed to create checkout session');
+    }
+    return response.json();
   },
 };

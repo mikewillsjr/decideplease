@@ -1,26 +1,79 @@
 import { useState, useEffect } from 'react';
+import { useAuth, useUser, SignIn, SignUp } from '@clerk/clerk-react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
-import { api } from './api';
+import { api, setAuthTokenGetter } from './api';
 import './App.css';
 
 function App() {
+  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { user } = useUser();
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [credits, setCredits] = useState(null);
+  const [creditPackInfo, setCreditPackInfo] = useState(null);
+  const [showSignUp, setShowSignUp] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Load conversations on mount
+  // Set up auth token getter for API calls
   useEffect(() => {
-    loadConversations();
-  }, []);
+    if (isLoaded && isSignedIn) {
+      setAuthTokenGetter(() => getToken());
+    }
+  }, [isLoaded, isSignedIn, getToken]);
+
+  // Load conversations and user info when signed in
+  useEffect(() => {
+    if (isSignedIn) {
+      loadConversations();
+      loadUserInfo();
+      loadCreditPackInfo();
+      checkPaymentStatus();
+    }
+  }, [isSignedIn]);
 
   // Load conversation details when selected
   useEffect(() => {
-    if (currentConversationId) {
+    if (currentConversationId && isSignedIn) {
       loadConversation(currentConversationId);
     }
-  }, [currentConversationId]);
+  }, [currentConversationId, isSignedIn]);
+
+  const loadUserInfo = async () => {
+    try {
+      const userInfo = await api.getUserInfo();
+      setCredits(userInfo.credits);
+    } catch (error) {
+      console.error('Failed to load user info:', error);
+    }
+  };
+
+  const loadCreditPackInfo = async () => {
+    try {
+      const info = await api.getCreditPackInfo();
+      setCreditPackInfo(info);
+    } catch (error) {
+      console.error('Failed to load credit pack info:', error);
+    }
+  };
+
+  const checkPaymentStatus = () => {
+    // Check URL params for payment status
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get('payment');
+
+    if (paymentStatus === 'success') {
+      // Reload user info to get updated credits
+      setTimeout(() => loadUserInfo(), 1000);
+      // Clear the URL param
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (paymentStatus === 'cancelled') {
+      // Clear the URL param
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  };
 
   const loadConversations = async () => {
     try {
@@ -44,7 +97,7 @@ function App() {
     try {
       const newConv = await api.createConversation();
       setConversations([
-        { id: newConv.id, created_at: newConv.created_at, message_count: 0 },
+        { id: newConv.id, created_at: newConv.created_at, title: 'New Conversation', message_count: 0 },
         ...conversations,
       ]);
       setCurrentConversationId(newConv.id);
@@ -60,7 +113,15 @@ function App() {
   const handleSendMessage = async (content) => {
     if (!currentConversationId) return;
 
+    // Check credits before sending
+    if (credits !== null && credits <= 0) {
+      setError('No credits remaining. Please purchase more credits to continue.');
+      return;
+    }
+
     setIsLoading(true);
+    setError(null);
+
     try {
       // Optimistically add user message to UI
       const userMessage = { role: 'user', content };
@@ -156,13 +217,17 @@ function App() {
             break;
 
           case 'complete':
-            // Stream complete, reload conversations list
+            // Stream complete, update credits and reload conversations
+            if (event.credits !== undefined) {
+              setCredits(event.credits);
+            }
             loadConversations();
             setIsLoading(false);
             break;
 
           case 'error':
             console.error('Stream error:', event.message);
+            setError(event.message);
             setIsLoading(false);
             break;
 
@@ -172,6 +237,11 @@ function App() {
       });
     } catch (error) {
       console.error('Failed to send message:', error);
+      if (error.message === 'Insufficient credits') {
+        setError('No credits remaining. Please purchase more credits to continue.');
+      } else {
+        setError('Failed to send message. Please try again.');
+      }
       // Remove optimistic messages on error
       setCurrentConversation((prev) => ({
         ...prev,
@@ -181,6 +251,48 @@ function App() {
     }
   };
 
+  // Show loading state while Clerk initializes
+  if (!isLoaded) {
+    return (
+      <div className="app loading-screen">
+        <div className="loading-content">
+          <h1>DecidePlease</h1>
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show sign in/up if not authenticated
+  if (!isSignedIn) {
+    return (
+      <div className="app auth-screen">
+        <div className="auth-container">
+          <h1>DecidePlease</h1>
+          <p className="auth-tagline">Get answers from a council of AI models</p>
+
+          {showSignUp ? (
+            <>
+              <SignUp afterSignUpUrl="/" />
+              <p className="auth-toggle">
+                Already have an account?{' '}
+                <button onClick={() => setShowSignUp(false)}>Sign in</button>
+              </p>
+            </>
+          ) : (
+            <>
+              <SignIn afterSignInUrl="/" />
+              <p className="auth-toggle">
+                Don't have an account?{' '}
+                <button onClick={() => setShowSignUp(true)}>Sign up</button>
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <Sidebar
@@ -188,11 +300,17 @@ function App() {
         currentConversationId={currentConversationId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        credits={credits}
+        userEmail={user?.primaryEmailAddress?.emailAddress}
+        creditPackInfo={creditPackInfo}
+        onCreditsUpdated={loadUserInfo}
       />
       <ChatInterface
         conversation={currentConversation}
         onSendMessage={handleSendMessage}
         isLoading={isLoading}
+        error={error}
+        onDismissError={() => setError(null)}
       />
     </div>
   );
