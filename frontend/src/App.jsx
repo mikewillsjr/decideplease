@@ -264,20 +264,8 @@ function App() {
     }
   };
 
-  // Show loading state while Clerk initializes
-  if (!isLoaded) {
-    return (
-      <div className="app loading-screen">
-        <div className="loading-content">
-          <h1>DecidePlease</h1>
-          <p>Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show landing page if not authenticated
-  if (!isSignedIn) {
+  // Show landing page while Clerk loads or if not authenticated
+  if (!isLoaded || !isSignedIn) {
     return <LandingPage />;
   }
 
