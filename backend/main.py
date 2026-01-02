@@ -30,7 +30,7 @@ from .council import (
     stage3_synthesize_final,
     calculate_aggregate_rankings
 )
-from .admin import router as admin_router
+from .admin import router as admin_router, ADMIN_EMAILS
 
 
 @asynccontextmanager
@@ -174,14 +174,17 @@ async def send_message(
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Check credits
-    credits = await storage.get_user_credits(user["user_id"])
-    if credits <= 0:
-        raise HTTPException(status_code=402, detail="Insufficient credits")
+    # Check if user is admin (admins get unlimited usage)
+    user_email = user.get("email", "").lower()
+    is_admin = user_email in ADMIN_EMAILS
 
-    # Deduct credit
-    if not await storage.deduct_credit(user["user_id"]):
-        raise HTTPException(status_code=402, detail="Insufficient credits")
+    # Check and deduct credits (skip for admins)
+    if not is_admin:
+        credits = await storage.get_user_credits(user["user_id"])
+        if credits <= 0:
+            raise HTTPException(status_code=402, detail="Insufficient credits")
+        if not await storage.deduct_credit(user["user_id"]):
+            raise HTTPException(status_code=402, detail="Insufficient credits")
 
     # Check if this is the first message
     is_first_message = len(conversation["messages"]) == 0
@@ -231,14 +234,17 @@ async def send_message_stream(
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Check credits
-    credits = await storage.get_user_credits(user["user_id"])
-    if credits <= 0:
-        raise HTTPException(status_code=402, detail="Insufficient credits")
+    # Check if user is admin (admins get unlimited usage)
+    user_email = user.get("email", "").lower()
+    is_admin = user_email in ADMIN_EMAILS
 
-    # Deduct credit upfront
-    if not await storage.deduct_credit(user["user_id"]):
-        raise HTTPException(status_code=402, detail="Insufficient credits")
+    # Check and deduct credits (skip for admins)
+    if not is_admin:
+        credits = await storage.get_user_credits(user["user_id"])
+        if credits <= 0:
+            raise HTTPException(status_code=402, detail="Insufficient credits")
+        if not await storage.deduct_credit(user["user_id"]):
+            raise HTTPException(status_code=402, detail="Insufficient credits")
 
     # Check if this is the first message
     is_first_message = len(conversation["messages"]) == 0
