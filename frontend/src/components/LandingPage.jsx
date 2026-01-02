@@ -33,7 +33,7 @@ export default function LandingPage() {
           <span className="title-highlight">Consult the council.</span>
         </h1>
         <p className="hero-subtitle">
-          Get answers vetted by GPT-5.2, Claude Opus 4.5, Gemini 3 Pro, Grok 4.1 & DeepSeek V3.2 working together.
+          Get answers vetted by ChatGPT, Claude, Gemini, Grok & DeepSeek working together.
           They debate. They rank. They synthesize. You get the truth.
         </p>
         <div className="hero-cta-group">
@@ -49,7 +49,7 @@ export default function LandingPage() {
         <div className="hero-visual">
           <div className="council-ring">
             <div className="model-node" style={{ '--i': 0 }}>
-              <span className="node-label">GPT-5.2</span>
+              <span className="node-label">ChatGPT</span>
             </div>
             <div className="model-node" style={{ '--i': 1 }}>
               <span className="node-label">Claude</span>

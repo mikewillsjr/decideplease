@@ -247,12 +247,12 @@
   animation-delay: calc(var(--i) * -2s);
 }
 
-/* Pentagon layout for 5 nodes */
-.model-node:nth-child(1) { top: 0; left: 50%; transform: translateX(-50%); }
-.model-node:nth-child(2) { top: 30%; right: -5%; transform: translateY(-50%); }
-.model-node:nth-child(3) { bottom: 5%; right: 10%; }
-.model-node:nth-child(4) { bottom: 5%; left: 10%; }
-.model-node:nth-child(5) { top: 30%; left: -5%; transform: translateY(-50%); }
+/* Pentagon layout for 5 nodes with unique colors */
+.model-node:nth-child(1) { top: 0; left: 50%; transform: translateX(-50%); background: #e8f5e9; border-color: #81c784; } /* ChatGPT - green */
+.model-node:nth-child(2) { top: 30%; right: -5%; transform: translateY(-50%); background: #fff3e0; border-color: #ffb74d; } /* Claude - orange */
+.model-node:nth-child(3) { bottom: 5%; right: 10%; background: #e3f2fd; border-color: #64b5f6; } /* Gemini - blue */
+.model-node:nth-child(4) { bottom: 5%; left: 10%; background: #fce4ec; border-color: #f06292; } /* Grok - pink */
+.model-node:nth-child(5) { top: 30%; left: -5%; transform: translateY(-50%); background: #e8eaf6; border-color: #7986cb; } /* DeepSeek - indigo */
 
 .node-label {
   font-size: 11px;
