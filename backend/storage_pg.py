@@ -67,7 +67,7 @@ async def get_conversation(conversation_id: str, user_id: str) -> Optional[Dict[
         # Get all messages for this conversation
         messages = await conn.fetch(
             """
-            SELECT role, content, stage1, stage2, stage3
+            SELECT id, role, content, stage1, stage2, stage3
             FROM messages
             WHERE conversation_id = $1
             ORDER BY created_at ASC
@@ -76,6 +76,8 @@ async def get_conversation(conversation_id: str, user_id: str) -> Optional[Dict[
         )
 
         message_list = []
+        orphan_message_ids = []
+
         for msg in messages:
             if msg["role"] == "user":
                 message_list.append({
@@ -83,12 +85,27 @@ async def get_conversation(conversation_id: str, user_id: str) -> Optional[Dict[
                     "content": msg["content"]
                 })
             else:
+                # Skip and mark for deletion assistant messages with no stage data
+                # (these are orphaned from interrupted processing)
+                if msg["stage1"] is None and msg["stage2"] is None and msg["stage3"] is None:
+                    orphan_message_ids.append(msg["id"])
+                    continue
+
                 message_list.append({
                     "role": "assistant",
                     "stage1": msg["stage1"],
                     "stage2": msg["stage2"],
                     "stage3": msg["stage3"]
                 })
+
+        # Clean up orphaned assistant messages
+        if orphan_message_ids:
+            await conn.execute(
+                """
+                DELETE FROM messages WHERE id = ANY($1)
+                """,
+                orphan_message_ids
+            )
 
         return {
             "id": str(row["id"]),
