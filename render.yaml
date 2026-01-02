@@ -59,6 +59,6 @@ services:
 databases:
   - name: decideplease-db
     region: oregon
-    plan: starter  # $7/month, 1GB storage
+    plan: basic  # 256MB RAM, 1GB storage
     databaseName: decideplease
     user: decideplease
