@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useAuth, useUser, SignIn, SignUp } from '@clerk/clerk-react';
+import { useAuth, useUser } from '@clerk/clerk-react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import AdminPanel from './components/AdminPanel';
+import LandingPage from './components/LandingPage';
 import { api, setAuthTokenGetter } from './api';
 import './App.css';
 
@@ -15,7 +16,6 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [credits, setCredits] = useState(null);
   const [creditPackInfo, setCreditPackInfo] = useState(null);
-  const [showSignUp, setShowSignUp] = useState(false);
   const [error, setError] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -276,34 +276,9 @@ function App() {
     );
   }
 
-  // Show sign in/up if not authenticated
+  // Show landing page if not authenticated
   if (!isSignedIn) {
-    return (
-      <div className="app auth-screen">
-        <div className="auth-container">
-          <h1>DecidePlease</h1>
-          <p className="auth-tagline">Get answers from a council of AI models</p>
-
-          {showSignUp ? (
-            <>
-              <SignUp afterSignUpUrl="/" />
-              <p className="auth-toggle">
-                Already have an account?{' '}
-                <button onClick={() => setShowSignUp(false)}>Sign in</button>
-              </p>
-            </>
-          ) : (
-            <>
-              <SignIn afterSignInUrl="/" />
-              <p className="auth-toggle">
-                Don't have an account?{' '}
-                <button onClick={() => setShowSignUp(true)}>Sign up</button>
-              </p>
-            </>
-          )}
-        </div>
-      </div>
-    );
+    return <LandingPage />;
   }
 
   return (
