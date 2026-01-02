@@ -105,6 +105,130 @@ export default function LandingPage() {
         </div>
       </div>
 
+      {/* How It Works Section */}
+      <section className="how-section" id="how">
+        <div className="how-nav">
+          <a className="how-skip" href="#demo" aria-label="Skip to demo">Skip to demo ↓</a>
+          <div className="how-nav-right">
+            <a href="#pricing" className="btn-link">See pricing</a>
+            <button className="btn-primary btn-small" onClick={() => openAuth('signup')}>
+              Try 5 free queries
+            </button>
+          </div>
+        </div>
+
+        {/* Outcome Strip */}
+        <div className="outcome-strip">
+          <div className="outcome-box">
+            <span className="outcome-icon">✓</span>
+            <span className="outcome-text">One clear verdict</span>
+          </div>
+          <div className="outcome-box">
+            <span className="outcome-icon">⚠</span>
+            <span className="outcome-text">Risks surfaced</span>
+          </div>
+          <div className="outcome-box">
+            <span className="outcome-icon">⚖</span>
+            <span className="outcome-text">Dissent preserved</span>
+          </div>
+          <div className="outcome-box">
+            <span className="outcome-icon">→</span>
+            <span className="outcome-text">Next steps ready</span>
+          </div>
+        </div>
+
+        <div className="how-container">
+          <div className="how-grid">
+            {/* Left: Process Explanation */}
+            <div className="how-process">
+              <h2>How It Works</h2>
+
+              <div className="process-step">
+                <div className="step-number">1</div>
+                <div className="step-content">
+                  <h3>You ask once</h3>
+                  <p>Describe your decision, tradeoff, or question. No prompt engineering required.</p>
+                </div>
+              </div>
+
+              <div className="process-step">
+                <div className="step-number">2</div>
+                <div className="step-content">
+                  <h3>5 models deliberate</h3>
+                  <p>GPT, Claude, Gemini, Grok, and DeepSeek each form independent opinions on your question.</p>
+                </div>
+              </div>
+
+              <div className="process-step">
+                <div className="step-number">3</div>
+                <div className="step-content">
+                  <h3>Anonymous peer review</h3>
+                  <p>Each model critiques the others without knowing who wrote what. No favoritism. Pure merit.</p>
+                </div>
+              </div>
+
+              <div className="process-step">
+                <div className="step-number">4</div>
+                <div className="step-content">
+                  <h3>One verdict emerges</h3>
+                  <p>A chairman model synthesizes consensus, flags dissent, and delivers actionable next steps.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Sticky Demo Card */}
+            <div className="how-demo-wrapper">
+              <div className="how-demo-card">
+                <div className="demo-label">Example Output</div>
+                <div className="verdict-header">
+                  <span className="verdict-title">Consensus Verdict</span>
+                  <span className="verdict-badge">92% CONFIDENCE</span>
+                </div>
+                <div className="verdict-body">
+                  <div className="verdict-question">
+                    Q: "Migrate to Next.js or stick with React Router?"
+                  </div>
+
+                  <h4 className="verdict-recommendation">
+                    <span className="v-dot"></span>
+                    Recommendation: Migrate to Next.js
+                  </h4>
+
+                  <div className="model-votes">
+                    <div className="vote agree">
+                      <span className="vote-model">GPT-4</span>
+                      <span className="vote-stance">Next.js</span>
+                    </div>
+                    <div className="vote agree">
+                      <span className="vote-model">Claude</span>
+                      <span className="vote-stance">Next.js</span>
+                    </div>
+                    <div className="vote dissent">
+                      <span className="vote-model">Gemini</span>
+                      <span className="vote-stance">React Router (dissent)</span>
+                    </div>
+                  </div>
+
+                  <div className="insight-box risk">
+                    <div className="ib-label">Primary Risk</div>
+                    <div className="ib-text">
+                      Migration complexity may pause feature work for 2-3 sprints.
+                    </div>
+                  </div>
+
+                  <div className="insight-box flip">
+                    <div className="ib-label">Flip Condition</div>
+                    <div className="ib-text">
+                      If SEO is not critical, verdict flips to <strong>React Router</strong>.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Demo Section */}
       <section className="demo-section" id="demo">
         <div className="demo-container">

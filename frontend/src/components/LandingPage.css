@@ -220,12 +220,12 @@
 .hero-note {
   font-size: 0.8rem;
   color: #555;
-  margin-bottom: 60px;
+  margin-bottom: 20px;
 }
 
 /* Council Visual */
 .council-visual {
-  margin-top: 40px;
+  margin-top: 20px;
   display: flex;
   justify-content: center;
 }
@@ -233,7 +233,8 @@
 .council-arena {
   position: relative;
   width: 420px;
-  height: 380px;
+  height: 320px;
+  overflow: hidden;
 }
 
 .model-node {
@@ -322,62 +323,63 @@
 }
 
 /* Random wandering animations - each model roams differently */
+/* Arena is 420x320px, nodes are 80x80px, so max top=240, max left=340 */
 @keyframes wanderChatGPT {
-  0% { top: 0; left: 170px; }
-  10% { top: 25px; left: 220px; }
-  20% { top: 60px; left: 280px; }
-  30% { top: 40px; left: 320px; }
-  40% { top: 80px; left: 290px; }
-  50% { top: 50px; left: 240px; }
-  60% { top: 20px; left: 180px; }
-  70% { top: 45px; left: 130px; }
-  80% { top: 30px; left: 100px; }
-  90% { top: 10px; left: 140px; }
-  100% { top: 0; left: 170px; }
+  0% { top: 10px; left: 170px; }
+  10% { top: 30px; left: 220px; }
+  20% { top: 50px; left: 270px; }
+  30% { top: 35px; left: 300px; }
+  40% { top: 70px; left: 260px; }
+  50% { top: 45px; left: 200px; }
+  60% { top: 25px; left: 150px; }
+  70% { top: 55px; left: 120px; }
+  80% { top: 40px; left: 90px; }
+  90% { top: 20px; left: 130px; }
+  100% { top: 10px; left: 170px; }
 }
 
 @keyframes wanderClaude {
-  0% { top: 80px; right: 0; left: auto; }
-  12% { top: 60px; right: 30px; }
-  25% { top: 100px; right: 60px; }
-  37% { top: 150px; right: 40px; }
-  50% { top: 130px; right: 10px; }
-  62% { top: 90px; right: -10px; }
-  75% { top: 110px; right: 20px; }
-  87% { top: 70px; right: 40px; }
-  100% { top: 80px; right: 0; left: auto; }
+  0% { top: 60px; left: 300px; }
+  12% { top: 45px; left: 320px; }
+  25% { top: 90px; left: 280px; }
+  37% { top: 130px; left: 300px; }
+  50% { top: 110px; left: 330px; }
+  62% { top: 80px; left: 340px; }
+  75% { top: 100px; left: 310px; }
+  87% { top: 70px; left: 290px; }
+  100% { top: 60px; left: 300px; }
 }
 
 @keyframes wanderGemini {
-  0% { bottom: 20px; right: 60px; top: auto; left: auto; }
-  15% { bottom: 50px; right: 100px; }
-  30% { bottom: 80px; right: 140px; }
-  45% { bottom: 60px; right: 110px; }
-  60% { bottom: 30px; right: 80px; }
-  75% { bottom: 10px; right: 40px; }
-  90% { bottom: 40px; right: 30px; }
-  100% { bottom: 20px; right: 60px; top: auto; left: auto; }
+  0% { top: 200px; left: 280px; }
+  15% { top: 170px; left: 240px; }
+  30% { top: 140px; left: 200px; }
+  45% { top: 160px; left: 230px; }
+  60% { top: 190px; left: 260px; }
+  75% { top: 210px; left: 300px; }
+  90% { top: 180px; left: 310px; }
+  100% { top: 200px; left: 280px; }
 }
 
 @keyframes wanderGrok {
-  0% { bottom: 20px; left: 60px; top: auto; right: auto; }
-  14% { bottom: 40px; left: 30px; }
-  28% { bottom: 70px; left: 50px; }
-  42% { bottom: 100px; left: 80px; }
-  56% { bottom: 80px; left: 120px; }
-  70% { bottom: 50px; left: 100px; }
-  84% { bottom: 30px; left: 70px; }
-  100% { bottom: 20px; left: 60px; top: auto; right: auto; }
+  0% { top: 200px; left: 60px; }
+  14% { top: 180px; left: 30px; }
+  28% { top: 150px; left: 50px; }
+  42% { top: 120px; left: 80px; }
+  56% { top: 140px; left: 110px; }
+  70% { top: 170px; left: 90px; }
+  84% { top: 190px; left: 70px; }
+  100% { top: 200px; left: 60px; }
 }
 
 @keyframes wanderDeepSeek {
-  0% { top: 80px; left: 0; right: auto; }
-  16% { top: 120px; left: 20px; }
-  33% { top: 160px; left: 50px; }
-  50% { top: 140px; left: 80px; }
-  66% { top: 100px; left: 60px; }
-  83% { top: 70px; left: 30px; }
-  100% { top: 80px; left: 0; right: auto; }
+  0% { top: 60px; left: 10px; }
+  16% { top: 100px; left: 30px; }
+  33% { top: 140px; left: 50px; }
+  50% { top: 120px; left: 80px; }
+  66% { top: 90px; left: 60px; }
+  83% { top: 70px; left: 25px; }
+  100% { top: 60px; left: 10px; }
 }
 
 /* Trust Strip */
@@ -419,6 +421,210 @@
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-subtle);
+}
+
+/* How It Works Section */
+.how-section {
+  padding: 60px 0 80px;
+  background: linear-gradient(180deg, var(--bg-deep) 0%, #08080a 100%);
+}
+
+.how-nav {
+  max-width: var(--container-width);
+  margin: 0 auto 40px;
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.how-skip {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: color 0.2s;
+}
+
+.how-skip:hover {
+  color: white;
+}
+
+.how-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.btn-primary.btn-small {
+  padding: 8px 16px;
+  font-size: 0.85rem;
+}
+
+/* Outcome Strip */
+.outcome-strip {
+  max-width: var(--container-width);
+  margin: 0 auto 48px;
+  padding: 0 24px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.outcome-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.outcome-icon {
+  font-size: 1.2rem;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(93, 93, 255, 0.1);
+  border-radius: 6px;
+  color: var(--primary);
+}
+
+.outcome-text {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #e2e8f0;
+}
+
+/* How Container & Grid */
+.how-container {
+  max-width: var(--container-width);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.how-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: start;
+}
+
+/* Process Steps */
+.how-process h2 {
+  font-size: 2rem;
+  margin-bottom: 32px;
+  color: white;
+}
+
+.process-step {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.step-number {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  background: var(--primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: white;
+}
+
+.step-content h3 {
+  font-size: 1.1rem;
+  margin-bottom: 6px;
+  color: white;
+}
+
+.step-content p {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* Sticky Demo Card */
+.how-demo-wrapper {
+  position: sticky;
+  top: 100px;
+}
+
+.how-demo-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.demo-label {
+  background: rgba(93, 93, 255, 0.1);
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.how-demo-card .verdict-header {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.how-demo-card .verdict-body {
+  padding: 20px 24px;
+}
+
+/* Model Votes */
+.model-votes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.vote {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+}
+
+.vote-model {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.vote-stance {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.vote.agree .vote-stance {
+  color: var(--accent-green);
+}
+
+.vote.dissent {
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.05);
+}
+
+.vote.dissent .vote-stance {
+  color: var(--accent-danger);
+  font-weight: 600;
 }
 
 /* Demo Section */
@@ -789,12 +995,50 @@
   }
 
   .council-visual {
-    margin-top: 30px;
+    margin-top: 20px;
   }
 
   .council-arena {
     width: 300px;
-    height: 280px;
-    transform: scale(0.85);
+    height: 240px;
+    transform: scale(0.8);
+  }
+
+  /* How It Works - Mobile */
+  .how-nav {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .how-nav-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .outcome-strip {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .outcome-box {
+    padding: 12px 14px;
+  }
+
+  .outcome-text {
+    font-size: 0.8rem;
+  }
+
+  .how-grid {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+
+  .how-demo-wrapper {
+    position: static;
+  }
+
+  .how-process h2 {
+    font-size: 1.6rem;
   }
 }
