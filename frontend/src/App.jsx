@@ -264,8 +264,13 @@ function App() {
     }
   };
 
-  // Show landing page while Clerk loads or if not authenticated
-  if (!isLoaded || !isSignedIn) {
+  // Show nothing while Clerk is loading (prevents flash)
+  if (!isLoaded) {
+    return null;
+  }
+
+  // Show landing page only when we know user is not signed in
+  if (!isSignedIn) {
     return <LandingPage />;
   }
 
