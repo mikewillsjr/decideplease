@@ -1,0 +1,91 @@
+import { useState } from 'react';
+import { useClerk } from '@clerk/clerk-react';
+import { api } from '../api';
+import './Header.css';
+
+export default function Header({
+  credits,
+  userEmail,
+  creditPackInfo,
+  onCreditsUpdated,
+  isAdmin,
+  onOpenAdmin,
+}) {
+  const { signOut } = useClerk();
+  const [isBuyingCredits, setIsBuyingCredits] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  const handleBuyCredits = async () => {
+    setIsBuyingCredits(true);
+    try {
+      const { checkout_url } = await api.createCheckoutSession();
+      window.location.href = checkout_url;
+    } catch (error) {
+      console.error('Failed to create checkout:', error);
+      alert('Failed to start checkout. Please try again.');
+      setIsBuyingCredits(false);
+    }
+  };
+
+  return (
+    <header className="app-header">
+      <div className="header-left">
+        <span className="header-logo-icon">D</span>
+        <span className="header-logo-text">DecidePlease</span>
+      </div>
+
+      <div className="header-right">
+        {/* Credits Display */}
+        <div className="header-credits">
+          <span className="credits-label">Credits:</span>
+          <span className="credits-value">{credits ?? '...'}</span>
+          {creditPackInfo?.stripe_configured && (
+            <button
+              className="buy-credits-btn"
+              onClick={handleBuyCredits}
+              disabled={isBuyingCredits}
+            >
+              {isBuyingCredits ? '...' : `+${creditPackInfo.credits}`}
+            </button>
+          )}
+        </div>
+
+        {/* User Menu */}
+        <div className="user-menu-container">
+          <button
+            className="user-menu-trigger"
+            onClick={() => setShowUserMenu(!showUserMenu)}
+          >
+            <span className="user-avatar">
+              {userEmail ? userEmail.charAt(0).toUpperCase() : '?'}
+            </span>
+          </button>
+
+          {showUserMenu && (
+            <div className="user-menu-dropdown">
+              <div className="user-menu-email">{userEmail}</div>
+              <div className="user-menu-divider" />
+              {isAdmin && (
+                <button
+                  className="user-menu-item"
+                  onClick={() => {
+                    onOpenAdmin();
+                    setShowUserMenu(false);
+                  }}
+                >
+                  Admin Panel
+                </button>
+              )}
+              <button
+                className="user-menu-item"
+                onClick={() => signOut()}
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth, useUser } from '@clerk/clerk-react';
+import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import AdminPanel from './components/AdminPanel';
@@ -276,11 +277,7 @@ function App() {
 
   return (
     <div className="app">
-      <Sidebar
-        conversations={conversations}
-        currentConversationId={currentConversationId}
-        onSelectConversation={handleSelectConversation}
-        onNewConversation={handleNewConversation}
+      <Header
         credits={credits}
         userEmail={user?.primaryEmailAddress?.emailAddress}
         creditPackInfo={creditPackInfo}
@@ -288,13 +285,21 @@ function App() {
         isAdmin={isAdmin}
         onOpenAdmin={() => setShowAdminPanel(true)}
       />
-      <ChatInterface
-        conversation={currentConversation}
-        onSendMessage={handleSendMessage}
-        isLoading={isLoading}
-        error={error}
-        onDismissError={() => setError(null)}
-      />
+      <div className="app-body">
+        <Sidebar
+          conversations={conversations}
+          currentConversationId={currentConversationId}
+          onSelectConversation={handleSelectConversation}
+          onNewConversation={handleNewConversation}
+        />
+        <ChatInterface
+          conversation={currentConversation}
+          onSendMessage={handleSendMessage}
+          isLoading={isLoading}
+          error={error}
+          onDismissError={() => setError(null)}
+        />
+      </div>
       {showAdminPanel && (
         <AdminPanel onClose={() => setShowAdminPanel(false)} />
       )}
