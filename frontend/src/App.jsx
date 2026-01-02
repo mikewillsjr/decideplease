@@ -18,6 +18,7 @@ function App() {
   const [credits, setCredits] = useState(null);
   const [creditPackInfo, setCreditPackInfo] = useState(null);
   const [error, setError] = useState(null);
+  const [loadError, setLoadError] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
 
@@ -99,6 +100,7 @@ function App() {
   };
 
   const loadConversation = async (id) => {
+    setLoadError(false);
     try {
       const conv = await api.getConversation(id);
       console.log('[App] Loaded conversation:', conv);
@@ -107,10 +109,107 @@ function App() {
         conv.messages = [];
       }
       setCurrentConversation(conv);
+
+      // Check if this conversation is still being processed
+      try {
+        const status = await api.getConversationStatus(id);
+        if (status.processing) {
+          console.log('[App] Conversation still processing, stage:', status.current_stage);
+          // Start polling for updates
+          startPollingForUpdates(id, status.current_stage);
+        }
+      } catch (statusError) {
+        console.error('Failed to check conversation status:', statusError);
+      }
     } catch (error) {
       console.error('Failed to load conversation:', error);
-      // Set empty conversation on error to prevent crash
+      // Set error state so user can retry or delete
+      setLoadError(true);
       setCurrentConversation({ id, messages: [], title: 'Error loading' });
+    }
+  };
+
+  const startPollingForUpdates = (conversationId, initialStage) => {
+    // Set up loading state for the current stage
+    setCurrentConversation((prev) => {
+      if (!prev) return prev;
+      const messages = [...prev.messages];
+      // Find the last assistant message or create one
+      let lastMsg = messages[messages.length - 1];
+      if (!lastMsg || lastMsg.role !== 'assistant') {
+        lastMsg = {
+          role: 'assistant',
+          stage1: null,
+          stage2: null,
+          stage3: null,
+          loading: { stage1: false, stage2: false, stage3: false },
+        };
+        messages.push(lastMsg);
+      }
+      // Set the current stage as loading
+      if (!lastMsg.loading) {
+        lastMsg.loading = { stage1: false, stage2: false, stage3: false };
+      }
+      lastMsg.loading[initialStage] = true;
+      lastMsg.processingResumed = true;
+      return { ...prev, messages };
+    });
+
+    setIsLoading(true);
+
+    // Poll every 2 seconds until complete
+    const pollInterval = setInterval(async () => {
+      try {
+        const status = await api.getConversationStatus(conversationId);
+
+        if (!status.processing) {
+          // Processing complete, reload conversation
+          clearInterval(pollInterval);
+          setIsLoading(false);
+          const conv = await api.getConversation(conversationId);
+          if (conv && !conv.messages) {
+            conv.messages = [];
+          }
+          setCurrentConversation(conv);
+          loadUserInfo(); // Refresh credits
+          loadConversations(); // Refresh sidebar
+        } else {
+          // Update loading state for current stage
+          setCurrentConversation((prev) => {
+            if (!prev) return prev;
+            const messages = [...prev.messages];
+            const lastMsg = messages[messages.length - 1];
+            if (lastMsg && lastMsg.role === 'assistant' && lastMsg.loading) {
+              lastMsg.loading = {
+                stage1: status.current_stage === 'stage1',
+                stage2: status.current_stage === 'stage2',
+                stage3: status.current_stage === 'stage3',
+              };
+            }
+            return { ...prev, messages };
+          });
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+        clearInterval(pollInterval);
+        setIsLoading(false);
+      }
+    }, 2000);
+
+    // Stop polling if conversation changes
+    return () => clearInterval(pollInterval);
+  };
+
+  const handleRetryLoad = () => {
+    if (currentConversationId) {
+      loadConversation(currentConversationId);
+    }
+  };
+
+  const handleDeleteFailedConversation = async () => {
+    if (currentConversationId) {
+      await handleDeleteConversation(currentConversationId);
+      setLoadError(false);
     }
   };
 
@@ -129,6 +228,22 @@ function App() {
 
   const handleSelectConversation = (id) => {
     setCurrentConversationId(id);
+  };
+
+  const handleDeleteConversation = async (id) => {
+    try {
+      await api.deleteConversation(id);
+      // Remove from local state
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      // If deleted conversation was selected, clear selection
+      if (currentConversationId === id) {
+        setCurrentConversationId(null);
+        setCurrentConversation(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+      setError('Failed to delete conversation. Please try again.');
+    }
   };
 
   const handleSendMessage = async (content) => {
@@ -298,6 +413,7 @@ function App() {
           currentConversationId={currentConversationId}
           onSelectConversation={handleSelectConversation}
           onNewConversation={handleNewConversation}
+          onDeleteConversation={handleDeleteConversation}
         />
         <ChatInterface
           conversation={currentConversation}
@@ -305,6 +421,9 @@ function App() {
           isLoading={isLoading}
           error={error}
           onDismissError={() => setError(null)}
+          loadError={loadError}
+          onDeleteConversation={handleDeleteFailedConversation}
+          onRetryLoad={handleRetryLoad}
         />
       </div>
       {showAdminPanel && (

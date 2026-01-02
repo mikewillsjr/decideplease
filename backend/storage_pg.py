@@ -180,6 +180,47 @@ async def add_assistant_message(
         )
 
 
+async def create_pending_assistant_message(conversation_id: str) -> int:
+    """
+    Create a pending assistant message placeholder.
+    Returns the message ID for later updates.
+    """
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO messages (conversation_id, role, created_at)
+            VALUES ($1, 'assistant', NOW())
+            RETURNING id
+            """,
+            UUID(conversation_id)
+        )
+        return row["id"]
+
+
+async def update_assistant_message_stage(message_id: int, stage: str, data: Any):
+    """
+    Update a specific stage of an assistant message.
+
+    Args:
+        message_id: The message ID
+        stage: 'stage1', 'stage2', or 'stage3'
+        data: The stage data to save
+    """
+    if stage not in ('stage1', 'stage2', 'stage3'):
+        raise ValueError(f"Invalid stage: {stage}")
+
+    async with get_connection() as conn:
+        await conn.execute(
+            f"""
+            UPDATE messages
+            SET {stage} = $1
+            WHERE id = $2
+            """,
+            json.dumps(data),
+            message_id
+        )
+
+
 async def update_conversation_title(conversation_id: str, title: str):
     """
     Update the title of a conversation.
@@ -198,6 +239,30 @@ async def update_conversation_title(conversation_id: str, title: str):
             title,
             UUID(conversation_id)
         )
+
+
+async def delete_conversation(conversation_id: str, user_id: str) -> bool:
+    """
+    Delete a conversation and all its messages.
+
+    Args:
+        conversation_id: Conversation identifier
+        user_id: User ID for ownership verification
+
+    Returns:
+        True if deleted, False if not found
+    """
+    async with get_connection() as conn:
+        # Delete conversation (messages will cascade delete)
+        result = await conn.execute(
+            """
+            DELETE FROM conversations
+            WHERE id = $1 AND user_id = $2
+            """,
+            UUID(conversation_id),
+            user_id
+        )
+        return result == "DELETE 1"
 
 
 # User management functions

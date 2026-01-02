@@ -159,6 +159,18 @@ async def get_conversation(
     return conversation
 
 
+@app.delete("/api/conversations/{conversation_id}")
+async def delete_conversation(
+    conversation_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Delete a conversation and all its messages."""
+    success = await storage.delete_conversation(conversation_id, user["user_id"])
+    if not success:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"success": True}
+
+
 @app.post("/api/conversations/{conversation_id}/message")
 async def send_message(
     conversation_id: str,
@@ -219,6 +231,83 @@ async def send_message(
     }
 
 
+# Track active processing tasks so they continue even if client disconnects
+_active_tasks: Dict[str, asyncio.Task] = {}
+# Track current stage for each active conversation (for status endpoint)
+_active_status: Dict[str, str] = {}
+
+
+async def _process_council_request(
+    conversation_id: str,
+    content: str,
+    user_id: str,
+    is_first_message: bool,
+    event_queue: asyncio.Queue
+):
+    """
+    Background task to process the council request.
+    Saves progress incrementally and pushes events to the queue.
+    Continues running even if client disconnects.
+    """
+    message_id = None
+    try:
+        # Add user message
+        await storage.add_user_message(conversation_id, content)
+
+        # Create pending assistant message to save progress incrementally
+        message_id = await storage.create_pending_assistant_message(conversation_id)
+
+        # Start title generation in parallel
+        title_task = None
+        if is_first_message:
+            title_task = asyncio.create_task(generate_conversation_title(content))
+
+        # Stage 1: Collect responses
+        _active_status[conversation_id] = "stage1"
+        await event_queue.put({'type': 'stage1_start'})
+        stage1_results = await stage1_collect_responses(content)
+        await storage.update_assistant_message_stage(message_id, 'stage1', stage1_results)
+        await event_queue.put({'type': 'stage1_complete', 'data': stage1_results})
+
+        # Stage 2: Collect rankings
+        _active_status[conversation_id] = "stage2"
+        await event_queue.put({'type': 'stage2_start'})
+        stage2_results, label_to_model = await stage2_collect_rankings(content, stage1_results)
+        aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
+        await storage.update_assistant_message_stage(message_id, 'stage2', stage2_results)
+        await event_queue.put({
+            'type': 'stage2_complete',
+            'data': stage2_results,
+            'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings}
+        })
+
+        # Stage 3: Synthesize final answer
+        _active_status[conversation_id] = "stage3"
+        await event_queue.put({'type': 'stage3_start'})
+        stage3_result = await stage3_synthesize_final(content, stage1_results, stage2_results)
+        await storage.update_assistant_message_stage(message_id, 'stage3', stage3_result)
+        await event_queue.put({'type': 'stage3_complete', 'data': stage3_result})
+
+        # Wait for title generation
+        if title_task:
+            title = await title_task
+            await storage.update_conversation_title(conversation_id, title)
+            await event_queue.put({'type': 'title_complete', 'data': {'title': title}})
+
+        # Get final credits
+        remaining_credits = await storage.get_user_credits(user_id)
+        await event_queue.put({'type': 'complete', 'credits': remaining_credits})
+
+    except Exception as e:
+        await event_queue.put({'type': 'error', 'message': str(e)})
+    finally:
+        # Signal completion
+        await event_queue.put(None)
+        # Remove from active tasks and status
+        _active_tasks.pop(conversation_id, None)
+        _active_status.pop(conversation_id, None)
+
+
 @app.post("/api/conversations/{conversation_id}/message/stream")
 async def send_message_stream(
     conversation_id: str,
@@ -228,6 +317,7 @@ async def send_message_stream(
     """
     Send a message and stream the 3-stage council process.
     Returns Server-Sent Events as each stage completes.
+    Processing continues in background even if client disconnects.
     """
     # Check if conversation exists and belongs to user
     conversation = await storage.get_conversation(conversation_id, user["user_id"])
@@ -249,53 +339,31 @@ async def send_message_stream(
     # Check if this is the first message
     is_first_message = len(conversation["messages"]) == 0
 
+    # Create event queue for communication between background task and SSE
+    event_queue: asyncio.Queue = asyncio.Queue()
+
+    # Start background processing task
+    task = asyncio.create_task(_process_council_request(
+        conversation_id,
+        request.content,
+        user["user_id"],
+        is_first_message,
+        event_queue
+    ))
+    _active_tasks[conversation_id] = task
+
     async def event_generator():
         try:
-            # Add user message
-            await storage.add_user_message(conversation_id, request.content)
-
-            # Start title generation in parallel (don't await yet)
-            title_task = None
-            if is_first_message:
-                title_task = asyncio.create_task(generate_conversation_title(request.content))
-
-            # Stage 1: Collect responses
-            yield f"data: {json.dumps({'type': 'stage1_start'})}\n\n"
-            stage1_results = await stage1_collect_responses(request.content)
-            yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results})}\n\n"
-
-            # Stage 2: Collect rankings
-            yield f"data: {json.dumps({'type': 'stage2_start'})}\n\n"
-            stage2_results, label_to_model = await stage2_collect_rankings(request.content, stage1_results)
-            aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
-            yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings}})}\n\n"
-
-            # Stage 3: Synthesize final answer
-            yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
-            stage3_result = await stage3_synthesize_final(request.content, stage1_results, stage2_results)
-            yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result})}\n\n"
-
-            # Wait for title generation if it was started
-            if title_task:
-                title = await title_task
-                await storage.update_conversation_title(conversation_id, title)
-                yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
-
-            # Save complete assistant message
-            await storage.add_assistant_message(
-                conversation_id,
-                stage1_results,
-                stage2_results,
-                stage3_result
-            )
-
-            # Send completion event with updated credits
-            remaining_credits = await storage.get_user_credits(user["user_id"])
-            yield f"data: {json.dumps({'type': 'complete', 'credits': remaining_credits})}\n\n"
-
-        except Exception as e:
-            # Send error event
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            while True:
+                # Wait for next event from background task
+                event = await event_queue.get()
+                if event is None:
+                    # Processing complete
+                    break
+                yield f"data: {json.dumps(event)}\n\n"
+        except asyncio.CancelledError:
+            # Client disconnected, but background task continues
+            pass
 
     return StreamingResponse(
         event_generator(),
@@ -305,6 +373,31 @@ async def send_message_stream(
             "Connection": "keep-alive",
         }
     )
+
+
+@app.get("/api/conversations/{conversation_id}/status")
+async def get_conversation_status(
+    conversation_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Check if a conversation is currently being processed.
+    Returns the current stage if processing, or null if complete.
+    """
+    # Verify ownership
+    conversation = await storage.get_conversation(conversation_id, user["user_id"])
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    if conversation_id in _active_tasks:
+        return {
+            "processing": True,
+            "current_stage": _active_status.get(conversation_id, "starting")
+        }
+    return {
+        "processing": False,
+        "current_stage": None
+    }
 
 
 # ============== Payment Endpoints ==============

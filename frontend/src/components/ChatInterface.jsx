@@ -11,6 +11,9 @@ export default function ChatInterface({
   isLoading,
   error,
   onDismissError,
+  loadError,
+  onDeleteConversation,
+  onRetryLoad,
 }) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
@@ -50,6 +53,27 @@ export default function ChatInterface({
     );
   }
 
+  // Show error state for failed conversation loads
+  if (loadError) {
+    return (
+      <div className="chat-interface">
+        <div className="load-error-state">
+          <div className="error-icon">!</div>
+          <h2>Failed to load conversation</h2>
+          <p>There was a problem loading this conversation. You can try again or delete it.</p>
+          <div className="error-actions">
+            <button className="retry-btn" onClick={onRetryLoad}>
+              Try Again
+            </button>
+            <button className="delete-btn" onClick={onDeleteConversation}>
+              Delete Conversation
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const messages = conversation.messages || [];
 
   return (
@@ -75,6 +99,22 @@ export default function ChatInterface({
               ) : (
                 <div className="assistant-message">
                   <div className="message-label">DecidePlease</div>
+
+                  {/* Welcome back / still processing indicator */}
+                  {msg.processingResumed && (msg.loading?.stage1 || msg.loading?.stage2 || msg.loading?.stage3) && (
+                    <div className="resumed-processing">
+                      <div className="resumed-icon">&#8634;</div>
+                      <span>Welcome back! We're still working on your answer...</span>
+                    </div>
+                  )}
+
+                  {/* Incomplete response indicator (only shown when NOT loading) */}
+                  {!msg.loading && !msg.processingResumed && msg.stage1 && !msg.stage3 && (
+                    <div className="incomplete-response">
+                      <div className="incomplete-icon">!</div>
+                      <span>This response was interrupted. Showing completed stages.</span>
+                    </div>
+                  )}
 
                   {/* Stage 1 */}
                   {msg.loading?.stage1 && (

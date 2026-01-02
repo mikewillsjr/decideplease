@@ -114,6 +114,48 @@ export const api = {
   },
 
   /**
+   * Delete a conversation.
+   */
+  async deleteConversation(conversationId) {
+    const headers = await getHeaders();
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}`,
+      {
+        method: 'DELETE',
+        headers,
+      }
+    );
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Not authenticated');
+      }
+      if (response.status === 404) {
+        throw new Error('Conversation not found');
+      }
+      throw new Error('Failed to delete conversation');
+    }
+    return response.json();
+  },
+
+  /**
+   * Check if a conversation is currently being processed.
+   */
+  async getConversationStatus(conversationId) {
+    const headers = await getHeaders();
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/status`,
+      { headers }
+    );
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Not authenticated');
+      }
+      throw new Error('Failed to get conversation status');
+    }
+    return response.json();
+  },
+
+  /**
    * Send a message in a conversation.
    */
   async sendMessage(conversationId, content) {
