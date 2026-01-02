@@ -29,10 +29,10 @@ export default function Header({
 
   return (
     <header className="app-header">
-      <div className="header-left">
+      <a href="/" className="header-left header-logo-link">
         <span className="header-logo-icon">D</span>
         <span className="header-logo-text">DecidePlease</span>
-      </div>
+      </a>
 
       <div className="header-right">
         {/* Credits Display */}

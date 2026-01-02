@@ -22,6 +22,10 @@
   gap: 10px;
 }
 
+.header-logo-link {
+  text-decoration: none;
+}
+
 .header-logo-icon {
   width: 36px;
   height: 36px;
