@@ -4,7 +4,7 @@ import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import AdminPanel from './components/AdminPanel';
-import LandingPage from './components/LandingPage';
+import DemoPage from './components/DemoPage';
 import { api, setAuthTokenGetter } from './api';
 import './App.css';
 
@@ -392,9 +392,9 @@ function App() {
     return null;
   }
 
-  // Show landing page only when we know user is not signed in
+  // Show demo/landing page only when we know user is not signed in
   if (!isSignedIn) {
-    return <LandingPage />;
+    return <DemoPage />;
   }
 
   return (
