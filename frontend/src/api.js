@@ -6,10 +6,15 @@
 // In development, use localhost:8001
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+// Debug logging
+console.log('[API] Initialized with API_BASE:', API_BASE || '(empty - using relative paths)');
+console.log('[API] VITE_API_URL env var:', import.meta.env.VITE_API_URL);
+
 // Token getter - set by App.jsx when Clerk is ready
 let getAuthToken = null;
 
 export const setAuthTokenGetter = (getter) => {
+  console.log('[API] Auth token getter set');
   getAuthToken = getter;
 };
 
@@ -22,10 +27,19 @@ const getHeaders = async () => {
   };
 
   if (getAuthToken) {
-    const token = await getAuthToken();
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    try {
+      const token = await getAuthToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        console.log('[API] Auth token obtained (length:', token.length, ')');
+      } else {
+        console.warn('[API] getAuthToken returned null/empty token');
+      }
+    } catch (err) {
+      console.error('[API] Failed to get auth token:', err);
     }
+  } else {
+    console.warn('[API] No auth token getter set');
   }
 
   return headers;
@@ -154,23 +168,44 @@ export const api = {
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
+      // Append new chunk to buffer
+      buffer += decoder.decode(value, { stream: true });
+
+      // Process complete lines from buffer
+      const lines = buffer.split('\n');
+      // Keep the last (potentially incomplete) line in buffer
+      buffer = lines.pop() || '';
 
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           const data = line.slice(6);
-          try {
-            const event = JSON.parse(data);
-            onEvent(event.type, event);
-          } catch (e) {
-            console.error('Failed to parse SSE event:', e);
+          if (data.trim()) {
+            try {
+              const event = JSON.parse(data);
+              onEvent(event.type, event);
+            } catch (e) {
+              console.error('Failed to parse SSE event:', e, 'Data:', data.substring(0, 100));
+            }
           }
+        }
+      }
+    }
+
+    // Process any remaining data in buffer
+    if (buffer.startsWith('data: ')) {
+      const data = buffer.slice(6);
+      if (data.trim()) {
+        try {
+          const event = JSON.parse(data);
+          onEvent(event.type, event);
+        } catch (e) {
+          console.error('Failed to parse final SSE event:', e);
         }
       }
     }
