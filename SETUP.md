@@ -238,6 +238,7 @@ STRIPE_PRICE_ID=price_xxxx
 STRIPE_WEBHOOK_SECRET=whsec_xxxx
 DATABASE_URL=(auto-set by Render)
 CORS_ORIGINS=https://decideplease.com,https://www.decideplease.com
+ADMIN_EMAILS=you@example.com,employee@example.com
 ```
 
 ### Frontend (`decideplease`)
@@ -298,3 +299,23 @@ Note: For local dev without Clerk, set `DEVELOPMENT_MODE=true` in backend .env t
 ### Clerk login not working
 - Verify allowed origins in Clerk dashboard
 - Check browser console for errors
+
+---
+
+## Admin Panel
+
+The admin panel is available at the bottom of the sidebar for users whose email is in the `ADMIN_EMAILS` environment variable.
+
+### Features
+- **Dashboard**: Total users, queries, revenue, and daily stats
+- **Users**: Search users, view details, adjust credits manually
+- **Payments**: View all Stripe payments
+- **Queries**: See recent queries across all users
+
+### Setting Up Admin Access
+1. Add `ADMIN_EMAILS` to your backend environment:
+   ```
+   ADMIN_EMAILS=you@example.com,coworker@example.com
+   ```
+2. Redeploy the backend
+3. Sign in with an admin email - you'll see the "Admin Panel" button

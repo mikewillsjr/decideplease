@@ -12,6 +12,8 @@ export default function Sidebar({
   userEmail,
   creditPackInfo,
   onCreditsUpdated,
+  isAdmin,
+  onOpenAdmin,
 }) {
   const { signOut } = useClerk();
   const [isBuyingCredits, setIsBuyingCredits] = useState(false);
@@ -84,6 +86,11 @@ export default function Sidebar({
               Sign out
             </button>
           </div>
+        )}
+        {isAdmin && (
+          <button className="admin-btn" onClick={onOpenAdmin}>
+            Admin Panel
+          </button>
         )}
       </div>
     </div>

@@ -209,4 +209,107 @@ export const api = {
     }
     return response.json();
   },
+
+  // ============== Admin API ==============
+
+  /**
+   * Check if current user has admin access.
+   */
+  async checkAdminAccess() {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/check`, { headers });
+    if (!response.ok) {
+      return { is_admin: false };
+    }
+    return response.json();
+  },
+
+  /**
+   * Get admin dashboard stats.
+   */
+  async getAdminStats() {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/stats`, { headers });
+    if (!response.ok) {
+      throw new Error('Failed to get admin stats');
+    }
+    return response.json();
+  },
+
+  /**
+   * List users (admin).
+   */
+  async getAdminUsers(limit = 50, offset = 0, search = '') {
+    const headers = await getHeaders();
+    const params = new URLSearchParams({ limit, offset });
+    if (search) params.append('search', search);
+    const response = await fetch(`${API_BASE}/api/admin/users?${params}`, { headers });
+    if (!response.ok) {
+      throw new Error('Failed to get users');
+    }
+    return response.json();
+  },
+
+  /**
+   * Get user details (admin).
+   */
+  async getAdminUserDetail(userId) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/users/${userId}`, { headers });
+    if (!response.ok) {
+      throw new Error('Failed to get user details');
+    }
+    return response.json();
+  },
+
+  /**
+   * Adjust user credits (admin).
+   */
+  async adjustUserCredits(userId, credits) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/users/${userId}/credits?credits=${credits}`, {
+      method: 'POST',
+      headers,
+    });
+    if (!response.ok) {
+      throw new Error('Failed to adjust credits');
+    }
+    return response.json();
+  },
+
+  /**
+   * List payments (admin).
+   */
+  async getAdminPayments(limit = 50, offset = 0) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/payments?limit=${limit}&offset=${offset}`, { headers });
+    if (!response.ok) {
+      throw new Error('Failed to get payments');
+    }
+    return response.json();
+  },
+
+  /**
+   * List recent queries (admin).
+   */
+  async getAdminQueries(limit = 50, offset = 0) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/queries?limit=${limit}&offset=${offset}`, { headers });
+    if (!response.ok) {
+      throw new Error('Failed to get queries');
+    }
+    return response.json();
+  },
+
+  /**
+   * Get daily metrics (admin).
+   */
+  async getAdminMetrics(days = 30) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/metrics/daily?days=${days}`, { headers });
+    if (!response.ok) {
+      throw new Error('Failed to get metrics');
+    }
+    return response.json();
+  },
 };

@@ -30,6 +30,7 @@ from .council import (
     stage3_synthesize_final,
     calculate_aggregate_rankings
 )
+from .admin import router as admin_router
 
 
 @asynccontextmanager
@@ -58,6 +59,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include admin router
+app.include_router(admin_router)
 
 
 class CreateConversationRequest(BaseModel):
@@ -356,6 +360,17 @@ async def stripe_webhook(
 
         credits_str = session.get("metadata", {}).get("credits", str(CREDITS_PER_PURCHASE))
         credits_to_add = int(credits_str)
+        amount_cents = session.get("amount_total", 500)
+
+        # Record payment in database
+        await storage.record_payment(
+            user_id=user_id,
+            stripe_session_id=session.get("id"),
+            stripe_payment_intent=session.get("payment_intent"),
+            amount_cents=amount_cents,
+            credits=credits_to_add
+        )
+
         await storage.add_credits(user_id, credits_to_add)
         print(f"[WEBHOOK] Added {credits_to_add} credits to user {user_id}")
 

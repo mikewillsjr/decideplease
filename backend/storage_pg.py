@@ -304,3 +304,35 @@ async def add_credits(user_id: str, amount: int):
             amount,
             user_id
         )
+
+
+async def record_payment(
+    user_id: str,
+    stripe_session_id: str,
+    stripe_payment_intent: str,
+    amount_cents: int,
+    credits: int
+):
+    """
+    Record a successful payment in the database.
+
+    Args:
+        user_id: Clerk user ID
+        stripe_session_id: Stripe checkout session ID
+        stripe_payment_intent: Stripe payment intent ID
+        amount_cents: Payment amount in cents
+        credits: Number of credits purchased
+    """
+    async with get_connection() as conn:
+        await conn.execute(
+            """
+            INSERT INTO payments (user_id, stripe_session_id, stripe_payment_intent, amount_cents, credits, status, created_at)
+            VALUES ($1, $2, $3, $4, $5, 'completed', NOW())
+            ON CONFLICT (stripe_session_id) DO NOTHING
+            """,
+            user_id,
+            stripe_session_id,
+            stripe_payment_intent,
+            amount_cents,
+            credits
+        )

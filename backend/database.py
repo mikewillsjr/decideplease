@@ -79,6 +79,20 @@ async def init_database():
             )
         """)
 
+        # Create payments table for tracking Stripe payments
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS payments (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+                stripe_session_id TEXT UNIQUE,
+                stripe_payment_intent TEXT,
+                amount_cents INTEGER NOT NULL,
+                credits INTEGER NOT NULL,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+
         # Create indexes for common queries
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_conversations_user_id
@@ -87,4 +101,16 @@ async def init_database():
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_messages_conversation_id
             ON messages(conversation_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_payments_user_id
+            ON payments(user_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_messages_created_at
+            ON messages(created_at)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_users_created_at
+            ON users(created_at)
         """)

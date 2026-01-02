@@ -153,3 +153,21 @@
 .sign-out-btn:hover {
   text-decoration: underline;
 }
+
+.admin-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #6366f1;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.admin-btn:hover {
+  background: #4f46e5;
+}

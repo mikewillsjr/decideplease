@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth, useUser, SignIn, SignUp } from '@clerk/clerk-react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
+import AdminPanel from './components/AdminPanel';
 import { api, setAuthTokenGetter } from './api';
 import './App.css';
 
@@ -16,6 +17,8 @@ function App() {
   const [creditPackInfo, setCreditPackInfo] = useState(null);
   const [showSignUp, setShowSignUp] = useState(false);
   const [error, setError] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   // Set up auth token getter for API calls
   useEffect(() => {
@@ -31,8 +34,18 @@ function App() {
       loadUserInfo();
       loadCreditPackInfo();
       checkPaymentStatus();
+      checkAdminAccess();
     }
   }, [isSignedIn]);
+
+  const checkAdminAccess = async () => {
+    try {
+      const { is_admin } = await api.checkAdminAccess();
+      setIsAdmin(is_admin);
+    } catch (error) {
+      console.error('Failed to check admin access:', error);
+    }
+  };
 
   // Load conversation details when selected
   useEffect(() => {
@@ -304,6 +317,8 @@ function App() {
         userEmail={user?.primaryEmailAddress?.emailAddress}
         creditPackInfo={creditPackInfo}
         onCreditsUpdated={loadUserInfo}
+        isAdmin={isAdmin}
+        onOpenAdmin={() => setShowAdminPanel(true)}
       />
       <ChatInterface
         conversation={currentConversation}
@@ -312,6 +327,9 @@ function App() {
         error={error}
         onDismissError={() => setError(null)}
       />
+      {showAdminPanel && (
+        <AdminPanel onClose={() => setShowAdminPanel(false)} />
+      )}
     </div>
   );
 }

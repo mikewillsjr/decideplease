@@ -30,6 +30,8 @@ services:
         sync: false  # Set manually after creating webhook in Stripe
       - key: CORS_ORIGINS
         value: https://decideplease.com,https://www.decideplease.com
+      - key: ADMIN_EMAILS
+        sync: false  # Comma-separated list of admin email addresses
 
   # Frontend Static Site (React/Vite)
   - type: web
