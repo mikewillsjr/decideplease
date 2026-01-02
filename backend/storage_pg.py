@@ -6,6 +6,7 @@ from typing import List, Dict, Any, Optional
 from uuid import UUID
 
 from .database import get_connection
+from .config import RUN_MODES
 
 
 def parse_json_field(value):
@@ -356,13 +357,28 @@ async def deduct_credit(user_id: str) -> bool:
     Returns:
         True if credit was deducted, False if insufficient credits
     """
+    return await deduct_credits(user_id, 1)
+
+
+async def deduct_credits(user_id: str, amount: int) -> bool:
+    """
+    Deduct a specified number of credits from a user's balance.
+
+    Args:
+        user_id: Clerk user ID
+        amount: Number of credits to deduct
+
+    Returns:
+        True if credits were deducted, False if insufficient credits
+    """
     async with get_connection() as conn:
         result = await conn.execute(
             """
             UPDATE users
-            SET credits = credits - 1
-            WHERE id = $1 AND credits > 0
+            SET credits = credits - $1
+            WHERE id = $2 AND credits >= $1
             """,
+            amount,
             user_id
         )
         # Returns "UPDATE X" where X is number of rows affected
@@ -419,3 +435,224 @@ async def record_payment(
             amount_cents,
             credits
         )
+
+
+async def add_assistant_message_with_mode(
+    conversation_id: str,
+    stage1: List[Dict[str, Any]],
+    stage2: List[Dict[str, Any]],
+    stage3: Dict[str, Any],
+    mode: str = "standard",
+    is_rerun: bool = False,
+    rerun_input: Optional[str] = None,
+    parent_message_id: Optional[int] = None
+) -> int:
+    """
+    Add an assistant message with mode and rerun information.
+
+    Args:
+        conversation_id: Conversation identifier
+        stage1: List of individual model responses
+        stage2: List of model rankings
+        stage3: Final synthesized response
+        mode: Run mode used ("quick", "standard", "extra_care")
+        is_rerun: Whether this is a rerun of a previous decision
+        rerun_input: New input provided for rerun (if any)
+        parent_message_id: ID of the original message this is a rerun of
+
+    Returns:
+        The ID of the created message
+    """
+    async with get_connection() as conn:
+        # Calculate revision number for reruns
+        revision_number = 0
+        if is_rerun and parent_message_id:
+            row = await conn.fetchrow(
+                """
+                SELECT COALESCE(MAX(revision_number), 0) + 1 as next_revision
+                FROM messages
+                WHERE parent_message_id = $1 OR id = $1
+                """,
+                parent_message_id
+            )
+            revision_number = row["next_revision"] if row else 1
+
+        row = await conn.fetchrow(
+            """
+            INSERT INTO messages (
+                conversation_id, role, stage1, stage2, stage3,
+                mode, is_rerun, rerun_input, revision_number, parent_message_id, created_at
+            )
+            VALUES ($1, 'assistant', $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+            RETURNING id
+            """,
+            UUID(conversation_id),
+            json.dumps(stage1),
+            json.dumps(stage2),
+            json.dumps(stage3),
+            mode,
+            is_rerun,
+            rerun_input,
+            revision_number,
+            parent_message_id
+        )
+        return row["id"]
+
+
+async def get_message_revisions(conversation_id: str, message_id: int) -> List[Dict[str, Any]]:
+    """
+    Get all revisions for a message (the original and all reruns).
+
+    Args:
+        conversation_id: Conversation identifier
+        message_id: The original message ID
+
+    Returns:
+        List of revision dicts sorted by revision number
+    """
+    async with get_connection() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, stage1, stage2, stage3, mode, is_rerun, rerun_input,
+                   revision_number, parent_message_id, created_at
+            FROM messages
+            WHERE (id = $1 OR parent_message_id = $1)
+              AND conversation_id = $2
+              AND role = 'assistant'
+            ORDER BY revision_number ASC, created_at ASC
+            """,
+            message_id,
+            UUID(conversation_id)
+        )
+
+        return [
+            {
+                "id": row["id"],
+                "stage1": parse_json_field(row["stage1"]),
+                "stage2": parse_json_field(row["stage2"]),
+                "stage3": parse_json_field(row["stage3"]),
+                "mode": row["mode"] or "standard",
+                "is_rerun": row["is_rerun"] or False,
+                "rerun_input": row["rerun_input"],
+                "revision_number": row["revision_number"] or 0,
+                "parent_message_id": row["parent_message_id"],
+                "created_at": row["created_at"].isoformat() if row["created_at"] else None
+            }
+            for row in rows
+        ]
+
+
+async def get_latest_assistant_message(conversation_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get the most recent assistant message in a conversation.
+
+    Args:
+        conversation_id: Conversation identifier
+
+    Returns:
+        The latest assistant message or None
+    """
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, stage1, stage2, stage3, mode, is_rerun, revision_number, created_at
+            FROM messages
+            WHERE conversation_id = $1 AND role = 'assistant'
+              AND stage3 IS NOT NULL
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            UUID(conversation_id)
+        )
+
+        if row is None:
+            return None
+
+        return {
+            "id": row["id"],
+            "stage1": parse_json_field(row["stage1"]),
+            "stage2": parse_json_field(row["stage2"]),
+            "stage3": parse_json_field(row["stage3"]),
+            "mode": row["mode"] or "standard",
+            "is_rerun": row["is_rerun"] or False,
+            "revision_number": row["revision_number"] or 0,
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None
+        }
+
+
+async def get_original_user_message(conversation_id: str) -> Optional[str]:
+    """
+    Get the first user message in a conversation (the original decision question).
+
+    Args:
+        conversation_id: Conversation identifier
+
+    Returns:
+        The original user message content or None
+    """
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT content
+            FROM messages
+            WHERE conversation_id = $1 AND role = 'user'
+            ORDER BY created_at ASC
+            LIMIT 1
+            """,
+            UUID(conversation_id)
+        )
+
+        return row["content"] if row else None
+
+
+async def create_pending_assistant_message_with_mode(
+    conversation_id: str,
+    mode: str = "standard",
+    is_rerun: bool = False,
+    rerun_input: Optional[str] = None,
+    parent_message_id: Optional[int] = None
+) -> int:
+    """
+    Create a pending assistant message placeholder with mode info.
+
+    Args:
+        conversation_id: Conversation identifier
+        mode: Run mode
+        is_rerun: Whether this is a rerun
+        rerun_input: New input for rerun
+        parent_message_id: Original message ID for reruns
+
+    Returns:
+        The message ID for later updates
+    """
+    async with get_connection() as conn:
+        # Calculate revision number for reruns
+        revision_number = 0
+        if is_rerun and parent_message_id:
+            row = await conn.fetchrow(
+                """
+                SELECT COALESCE(MAX(revision_number), 0) + 1 as next_revision
+                FROM messages
+                WHERE parent_message_id = $1 OR id = $1
+                """,
+                parent_message_id
+            )
+            revision_number = row["next_revision"] if row else 1
+
+        row = await conn.fetchrow(
+            """
+            INSERT INTO messages (
+                conversation_id, role, mode, is_rerun, rerun_input,
+                revision_number, parent_message_id, created_at
+            )
+            VALUES ($1, 'assistant', $2, $3, $4, $5, $6, NOW())
+            RETURNING id
+            """,
+            UUID(conversation_id),
+            mode,
+            is_rerun,
+            rerun_input,
+            revision_number,
+            parent_message_id
+        )
+        return row["id"]

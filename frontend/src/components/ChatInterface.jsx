@@ -3,11 +3,14 @@ import ReactMarkdown from 'react-markdown';
 import Stage1 from './Stage1';
 import Stage2 from './Stage2';
 import Stage3 from './Stage3';
+import SpeedSelector, { SPEED_OPTIONS } from './SpeedSelector';
+import RerunModal from './RerunModal';
 import './ChatInterface.css';
 
 export default function ChatInterface({
   conversation,
   onSendMessage,
+  onRerunDecision,
   isLoading,
   error,
   onDismissError,
@@ -16,6 +19,9 @@ export default function ChatInterface({
   onRetryLoad,
 }) {
   const [input, setInput] = useState('');
+  const [selectedMode, setSelectedMode] = useState('standard');
+  const [showRerunModal, setShowRerunModal] = useState(false);
+  const [rerunMessageIndex, setRerunMessageIndex] = useState(null);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -29,9 +35,26 @@ export default function ChatInterface({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (input.trim() && !isLoading) {
-      onSendMessage(input);
+      onSendMessage(input, selectedMode);
       setInput('');
     }
+  };
+
+  const handleRerunClick = (msgIndex) => {
+    setRerunMessageIndex(msgIndex);
+    setShowRerunModal(true);
+  };
+
+  const handleRerunSubmit = (newInput, mode) => {
+    setShowRerunModal(false);
+    if (onRerunDecision) {
+      onRerunDecision(newInput, mode);
+    }
+  };
+
+  const getSelectedCredits = () => {
+    const option = SPEED_OPTIONS.find(o => o.mode === selectedMode);
+    return option ? option.credits : 2;
   };
 
   const handleKeyDown = (e) => {
@@ -68,15 +91,17 @@ export default function ChatInterface({
               rows={2}
             />
             <div className="input-footer">
-              <div className="model-badges">
-                GPT-5 • Claude 4.5 • Gemini 3 • Grok 4 • DeepSeek
-              </div>
+              <SpeedSelector
+                selectedMode={selectedMode}
+                onModeChange={setSelectedMode}
+                disabled={isLoading}
+              />
               <button
                 type="submit"
                 className="send-button"
                 disabled={!input.trim() || isLoading}
               >
-                Run Decision
+                Run Decision ({getSelectedCredits()} cr)
               </button>
             </div>
           </div>
@@ -204,7 +229,13 @@ export default function ChatInterface({
                       <span>Running Stage 2: Peer rankings...</span>
                     </div>
                   )}
-                  {msg.stage2 && (
+                  {msg.stage2Skipped && (
+                    <div className="stage-skipped">
+                      <span className="skipped-icon">&#x21BB;</span>
+                      <span>Peer review skipped for Quick Answer mode</span>
+                    </div>
+                  )}
+                  {msg.stage2 && msg.stage2.length > 0 && (
                     <Stage2
                       rankings={msg.stage2}
                       labelToModel={msg.metadata?.label_to_model}
@@ -220,6 +251,24 @@ export default function ChatInterface({
                     </div>
                   )}
                   {msg.stage3 && <Stage3 finalResponse={msg.stage3} />}
+
+                  {/* Re-run button (shown after Stage 3 completes) */}
+                  {msg.stage3 && !isLoading && (
+                    <div className="rerun-section">
+                      <button
+                        className="rerun-button"
+                        onClick={() => handleRerunClick(index)}
+                      >
+                        Re-run this decision
+                      </button>
+                      {msg.metadata?.mode && (
+                        <span className="run-mode-badge">
+                          {msg.metadata.mode === 'quick' ? 'Quick' :
+                           msg.metadata.mode === 'extra_care' ? 'Extra Care' : 'Standard'}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -255,19 +304,30 @@ export default function ChatInterface({
             rows={2}
           />
           <div className="input-footer">
-            <div className="model-badges">
-              GPT-4o • Claude 3.5 • Gemini 1.5
-            </div>
+            <SpeedSelector
+              selectedMode={selectedMode}
+              onModeChange={setSelectedMode}
+              disabled={isLoading}
+            />
             <button
               type="submit"
               className="send-button"
               disabled={!input.trim() || isLoading}
             >
-              Run Decision
+              Run Decision ({getSelectedCredits()} cr)
             </button>
           </div>
         </div>
       </form>
+
+      {/* Rerun Modal */}
+      {showRerunModal && (
+        <RerunModal
+          isOpen={showRerunModal}
+          onClose={() => setShowRerunModal(false)}
+          onSubmit={handleRerunSubmit}
+        />
+      )}
     </div>
   );
 }

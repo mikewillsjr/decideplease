@@ -627,6 +627,61 @@
   font-weight: 600;
 }
 
+.vote-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+}
+
+.vote-item.dissent {
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.05);
+}
+
+.vote-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  flex-shrink: 0;
+}
+
+.vote-dot.dissent {
+  background: var(--accent-danger);
+}
+
+.vote-model {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.vote-pick {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.vote-item.dissent .vote-pick {
+  color: var(--accent-danger);
+  font-weight: 600;
+}
+
+.verdict-badge.warning {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--accent-gold);
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.shuffle-btn {
+  margin-right: 12px;
+  margin-bottom: 12px;
+}
+
 /* Demo Section */
 .demo-section {
   padding: 80px 0;
@@ -917,6 +972,87 @@
 
 .auth-toggle button:hover {
   text-decoration: underline;
+}
+
+/* Clerk Component Overrides - Constrain within modal */
+.auth-modal-content .cl-rootBox {
+  width: 100%;
+}
+
+.auth-modal-content .cl-card {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.auth-modal-content .cl-headerTitle {
+  color: var(--text-main) !important;
+}
+
+.auth-modal-content .cl-headerSubtitle {
+  color: var(--text-muted) !important;
+}
+
+.auth-modal-content .cl-socialButtonsBlockButton {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid var(--border-subtle) !important;
+  color: var(--text-main) !important;
+}
+
+.auth-modal-content .cl-socialButtonsBlockButton:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: var(--primary) !important;
+}
+
+.auth-modal-content .cl-dividerLine {
+  background: var(--border-subtle) !important;
+}
+
+.auth-modal-content .cl-dividerText {
+  color: var(--text-muted) !important;
+}
+
+.auth-modal-content .cl-formFieldLabel {
+  color: var(--text-main) !important;
+}
+
+.auth-modal-content .cl-formFieldInput {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid var(--border-subtle) !important;
+  color: var(--text-main) !important;
+}
+
+.auth-modal-content .cl-formFieldInput:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px rgba(93, 93, 255, 0.2) !important;
+}
+
+.auth-modal-content .cl-formButtonPrimary {
+  background: linear-gradient(135deg, var(--primary) 0%, #4338ca 100%) !important;
+  box-shadow: 0 4px 12px rgba(93, 93, 255, 0.3) !important;
+}
+
+.auth-modal-content .cl-formButtonPrimary:hover {
+  box-shadow: 0 6px 16px rgba(93, 93, 255, 0.4) !important;
+}
+
+.auth-modal-content .cl-footerActionLink {
+  color: var(--primary) !important;
+}
+
+.auth-modal-content .cl-identityPreview {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid var(--border-subtle) !important;
+}
+
+.auth-modal-content .cl-identityPreviewText {
+  color: var(--text-main) !important;
+}
+
+.auth-modal-content .cl-identityPreviewEditButton {
+  color: var(--primary) !important;
 }
 
 /* Animations */

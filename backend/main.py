@@ -24,12 +24,15 @@ from .payments import (
 )
 from .council import (
     run_full_council,
+    run_council_with_mode,
     generate_conversation_title,
     stage1_collect_responses,
     stage2_collect_rankings,
     stage3_synthesize_final,
-    calculate_aggregate_rankings
+    calculate_aggregate_rankings,
+    extract_tldr_packet
 )
+from .config import RUN_MODES
 from .admin import router as admin_router, ADMIN_EMAILS
 
 
@@ -72,6 +75,13 @@ class CreateConversationRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     """Request to send a message in a conversation."""
     content: str
+    mode: str = "standard"  # "quick", "standard", or "extra_care"
+
+
+class RerunRequest(BaseModel):
+    """Request to rerun a decision."""
+    mode: str = "standard"  # "quick", "standard", or "extra_care"
+    new_input: Optional[str] = None  # Empty = second opinion, non-empty = refinement
 
 
 class ConversationMetadata(BaseModel):
@@ -242,7 +252,12 @@ async def _process_council_request(
     content: str,
     user_id: str,
     is_first_message: bool,
-    event_queue: asyncio.Queue
+    event_queue: asyncio.Queue,
+    mode: str = "standard",
+    is_rerun: bool = False,
+    rerun_input: Optional[str] = None,
+    parent_message_id: Optional[int] = None,
+    context_packet: Optional[Dict[str, Any]] = None
 ):
     """
     Background task to process the council request.
@@ -250,43 +265,99 @@ async def _process_council_request(
     Continues running even if client disconnects.
     """
     message_id = None
+
+    # Validate and get mode config
+    if mode not in RUN_MODES:
+        mode = "standard"
+    mode_config = RUN_MODES[mode]
+
     try:
-        # Add user message
-        await storage.add_user_message(conversation_id, content)
+        # Add user message only for non-reruns
+        if not is_rerun:
+            await storage.add_user_message(conversation_id, content)
 
-        # Create pending assistant message to save progress incrementally
-        message_id = await storage.create_pending_assistant_message(conversation_id)
+        # Create pending assistant message with mode info
+        message_id = await storage.create_pending_assistant_message_with_mode(
+            conversation_id,
+            mode=mode,
+            is_rerun=is_rerun,
+            rerun_input=rerun_input,
+            parent_message_id=parent_message_id
+        )
 
-        # Start title generation in parallel
+        # Send initial event with mode info and remaining credits
+        remaining_credits = await storage.get_user_credits(user_id)
+        await event_queue.put({
+            'type': 'run_started',
+            'mode': mode,
+            'credit_cost': mode_config['credit_cost'],
+            'enable_peer_review': mode_config['enable_peer_review'],
+            'updated_credits': remaining_credits,
+            'is_rerun': is_rerun
+        })
+
+        # Start title generation in parallel (only for first message, non-reruns)
         title_task = None
-        if is_first_message:
+        if is_first_message and not is_rerun:
             title_task = asyncio.create_task(generate_conversation_title(content))
+
+        council_models = mode_config["council_models"]
+        chairman_model = mode_config["chairman_model"]
+        enable_peer_review = mode_config["enable_peer_review"]
+
+        # Build effective query for reruns
+        effective_content = content
+        if is_rerun and context_packet:
+            from .council import build_rerun_query
+            effective_content = build_rerun_query(content, context_packet, rerun_input)
 
         # Stage 1: Collect responses
         _active_status[conversation_id] = "stage1"
         await event_queue.put({'type': 'stage1_start'})
-        stage1_results = await stage1_collect_responses(content)
+        stage1_results = await stage1_collect_responses(effective_content, council_models)
         await storage.update_assistant_message_stage(message_id, 'stage1', stage1_results)
         await event_queue.put({'type': 'stage1_complete', 'data': stage1_results})
 
-        # Stage 2: Collect rankings
-        _active_status[conversation_id] = "stage2"
-        await event_queue.put({'type': 'stage2_start'})
-        stage2_results, label_to_model = await stage2_collect_rankings(content, stage1_results)
-        aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
-        await storage.update_assistant_message_stage(message_id, 'stage2', stage2_results)
-        await event_queue.put({
-            'type': 'stage2_complete',
-            'data': stage2_results,
-            'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings}
-        })
+        # Stage 2: Collect rankings (skip if peer review disabled)
+        stage2_results = []
+        label_to_model = {}
+        aggregate_rankings = []
+
+        if enable_peer_review:
+            _active_status[conversation_id] = "stage2"
+            await event_queue.put({'type': 'stage2_start'})
+            stage2_results, label_to_model = await stage2_collect_rankings(
+                effective_content, stage1_results, council_models
+            )
+            aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
+            await storage.update_assistant_message_stage(message_id, 'stage2', stage2_results)
+            await event_queue.put({
+                'type': 'stage2_complete',
+                'data': stage2_results,
+                'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings}
+            })
+        else:
+            # Emit skipped event for Quick mode
+            await event_queue.put({'type': 'stage2_skipped', 'reason': 'Quick mode - peer review disabled'})
+            await storage.update_assistant_message_stage(message_id, 'stage2', [])
 
         # Stage 3: Synthesize final answer
         _active_status[conversation_id] = "stage3"
         await event_queue.put({'type': 'stage3_start'})
-        stage3_result = await stage3_synthesize_final(content, stage1_results, stage2_results)
+        stage3_result = await stage3_synthesize_final(
+            effective_content, stage1_results, stage2_results, chairman_model
+        )
         await storage.update_assistant_message_stage(message_id, 'stage3', stage3_result)
-        await event_queue.put({'type': 'stage3_complete', 'data': stage3_result})
+        await event_queue.put({
+            'type': 'stage3_complete',
+            'data': stage3_result,
+            'metadata': {
+                'label_to_model': label_to_model,
+                'aggregate_rankings': aggregate_rankings,
+                'mode': mode,
+                'enable_peer_review': enable_peer_review
+            }
+        })
 
         # Wait for title generation
         if title_task:
@@ -296,7 +367,12 @@ async def _process_council_request(
 
         # Get final credits
         remaining_credits = await storage.get_user_credits(user_id)
-        await event_queue.put({'type': 'complete', 'credits': remaining_credits})
+        await event_queue.put({
+            'type': 'complete',
+            'credits': remaining_credits,
+            'mode': mode,
+            'message_id': message_id
+        })
 
     except Exception as e:
         await event_queue.put({'type': 'error', 'message': str(e)})
@@ -319,6 +395,11 @@ async def send_message_stream(
     Returns Server-Sent Events as each stage completes.
     Processing continues in background even if client disconnects.
     """
+    # Validate mode
+    mode = request.mode if request.mode in RUN_MODES else "standard"
+    mode_config = RUN_MODES[mode]
+    credit_cost = mode_config["credit_cost"]
+
     # Check if conversation exists and belongs to user
     conversation = await storage.get_conversation(conversation_id, user["user_id"])
     if conversation is None:
@@ -328,12 +409,15 @@ async def send_message_stream(
     user_email = user.get("email", "").lower()
     is_admin = user_email in ADMIN_EMAILS
 
-    # Check and deduct credits (skip for admins)
+    # Check and deduct credits based on mode cost (skip for admins)
     if not is_admin:
         credits = await storage.get_user_credits(user["user_id"])
-        if credits <= 0:
-            raise HTTPException(status_code=402, detail="Insufficient credits")
-        if not await storage.deduct_credit(user["user_id"]):
+        if credits < credit_cost:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Insufficient credits. Need {credit_cost}, have {credits}."
+            )
+        if not await storage.deduct_credits(user["user_id"], credit_cost):
             raise HTTPException(status_code=402, detail="Insufficient credits")
 
     # Check if this is the first message
@@ -348,7 +432,8 @@ async def send_message_stream(
         request.content,
         user["user_id"],
         is_first_message,
-        event_queue
+        event_queue,
+        mode=mode
     ))
     _active_tasks[conversation_id] = task
 
@@ -397,6 +482,133 @@ async def get_conversation_status(
     return {
         "processing": False,
         "current_stage": None
+    }
+
+
+# ============== Rerun Endpoints ==============
+
+@app.post("/api/conversations/{conversation_id}/rerun")
+async def rerun_decision(
+    conversation_id: str,
+    request: RerunRequest,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Rerun a decision with optional new input.
+    Streams the response like send_message_stream.
+    """
+    # Validate mode
+    mode = request.mode if request.mode in RUN_MODES else "standard"
+    mode_config = RUN_MODES[mode]
+    credit_cost = mode_config["credit_cost"]
+
+    # Check if conversation exists and belongs to user
+    conversation = await storage.get_conversation(conversation_id, user["user_id"])
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Get the original user message (the decision question)
+    original_question = await storage.get_original_user_message(conversation_id)
+    if not original_question:
+        raise HTTPException(status_code=400, detail="No original decision found to rerun")
+
+    # Get the latest assistant message for context
+    latest_message = await storage.get_latest_assistant_message(conversation_id)
+    if not latest_message:
+        raise HTTPException(status_code=400, detail="No previous decision result found")
+
+    # Extract TL;DR context packet from the latest result
+    stage3_response = latest_message.get("stage3", {}).get("response", "")
+    context_packet = extract_tldr_packet(stage3_response)
+
+    # Check if user is admin (admins get unlimited usage)
+    user_email = user.get("email", "").lower()
+    is_admin = user_email in ADMIN_EMAILS
+
+    # Check and deduct credits based on mode cost (skip for admins)
+    if not is_admin:
+        credits = await storage.get_user_credits(user["user_id"])
+        if credits < credit_cost:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Insufficient credits. Need {credit_cost}, have {credits}."
+            )
+        if not await storage.deduct_credits(user["user_id"], credit_cost):
+            raise HTTPException(status_code=402, detail="Insufficient credits")
+
+    # Create event queue for SSE
+    event_queue: asyncio.Queue = asyncio.Queue()
+
+    # Determine the parent message ID (use the original, not a rerun)
+    parent_message_id = latest_message["id"]
+    if latest_message.get("parent_message_id"):
+        parent_message_id = latest_message["parent_message_id"]
+
+    # Start background processing task
+    task = asyncio.create_task(_process_council_request(
+        conversation_id,
+        original_question,
+        user["user_id"],
+        is_first_message=False,
+        event_queue=event_queue,
+        mode=mode,
+        is_rerun=True,
+        rerun_input=request.new_input,
+        parent_message_id=parent_message_id,
+        context_packet=context_packet
+    ))
+    _active_tasks[conversation_id] = task
+
+    async def event_generator():
+        try:
+            while True:
+                event = await event_queue.get()
+                if event is None:
+                    break
+                yield f"data: {json.dumps(event)}\n\n"
+        except asyncio.CancelledError:
+            pass
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
+
+
+@app.get("/api/conversations/{conversation_id}/revisions/{message_id}")
+async def get_revisions(
+    conversation_id: str,
+    message_id: int,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Get all revisions for a specific decision message.
+    """
+    # Verify conversation ownership
+    conversation = await storage.get_conversation(conversation_id, user["user_id"])
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    revisions = await storage.get_message_revisions(conversation_id, message_id)
+    return {"revisions": revisions}
+
+
+@app.get("/api/run-modes")
+async def get_run_modes():
+    """
+    Get available run modes and their configurations.
+    """
+    return {
+        mode: {
+            "label": config["label"],
+            "credit_cost": config["credit_cost"],
+            "enable_peer_review": config["enable_peer_review"],
+        }
+        for mode, config in RUN_MODES.items()
     }
 
 

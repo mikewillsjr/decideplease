@@ -1,0 +1,53 @@
+.speed-selector {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-panel, #0e0e12);
+  border: 1px solid var(--border-subtle, #272730);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.speed-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted, #9ca3af);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-width: 70px;
+}
+
+.speed-option:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main, #ffffff);
+}
+
+.speed-option.selected {
+  background: var(--primary, #5d5dff);
+  color: white;
+}
+
+.speed-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.speed-label {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.speed-credits {
+  font-size: 10px;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+.speed-option.selected .speed-credits {
+  opacity: 0.9;
+}

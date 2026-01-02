@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth, useUser } from '@clerk/clerk-react';
-import Header from './components/Header';
+import AppHeader from './components/AppHeader';
+import AppFooter from './components/AppFooter';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import AdminPanel from './components/AdminPanel';
-import DemoPage from './components/DemoPage';
+import LandingPage from './components/LandingPage';
 import { api, setAuthTokenGetter } from './api';
 import './App.css';
 
@@ -246,7 +247,124 @@ function App() {
     }
   };
 
-  const handleSendMessage = async (content) => {
+  // Helper function to handle SSE events for both send and rerun
+  const handleStreamEvent = (eventType, event, isRerun = false) => {
+    switch (eventType) {
+      case 'run_started':
+        // Update credits immediately after debit
+        if (event.updated_credits !== undefined) {
+          setCredits(event.updated_credits);
+        }
+        // Store mode info in the message
+        setCurrentConversation((prev) => {
+          const messages = [...prev.messages];
+          const lastMsg = messages[messages.length - 1];
+          lastMsg.metadata = {
+            ...lastMsg.metadata,
+            mode: event.mode,
+            enable_peer_review: event.enable_peer_review,
+          };
+          return { ...prev, messages };
+        });
+        break;
+
+      case 'stage1_start':
+        setCurrentConversation((prev) => {
+          const messages = [...prev.messages];
+          const lastMsg = messages[messages.length - 1];
+          lastMsg.loading.stage1 = true;
+          return { ...prev, messages };
+        });
+        break;
+
+      case 'stage1_complete':
+        setCurrentConversation((prev) => {
+          const messages = [...prev.messages];
+          const lastMsg = messages[messages.length - 1];
+          lastMsg.stage1 = event.data;
+          lastMsg.loading.stage1 = false;
+          return { ...prev, messages };
+        });
+        break;
+
+      case 'stage2_start':
+        setCurrentConversation((prev) => {
+          const messages = [...prev.messages];
+          const lastMsg = messages[messages.length - 1];
+          lastMsg.loading.stage2 = true;
+          return { ...prev, messages };
+        });
+        break;
+
+      case 'stage2_skipped':
+        // Mark Stage 2 as skipped (Quick mode)
+        setCurrentConversation((prev) => {
+          const messages = [...prev.messages];
+          const lastMsg = messages[messages.length - 1];
+          lastMsg.stage2Skipped = true;
+          lastMsg.stage2 = [];
+          lastMsg.loading.stage2 = false;
+          return { ...prev, messages };
+        });
+        break;
+
+      case 'stage2_complete':
+        setCurrentConversation((prev) => {
+          const messages = [...prev.messages];
+          const lastMsg = messages[messages.length - 1];
+          lastMsg.stage2 = event.data;
+          lastMsg.metadata = { ...lastMsg.metadata, ...event.metadata };
+          lastMsg.loading.stage2 = false;
+          return { ...prev, messages };
+        });
+        break;
+
+      case 'stage3_start':
+        setCurrentConversation((prev) => {
+          const messages = [...prev.messages];
+          const lastMsg = messages[messages.length - 1];
+          lastMsg.loading.stage3 = true;
+          return { ...prev, messages };
+        });
+        break;
+
+      case 'stage3_complete':
+        setCurrentConversation((prev) => {
+          const messages = [...prev.messages];
+          const lastMsg = messages[messages.length - 1];
+          lastMsg.stage3 = event.data;
+          lastMsg.metadata = { ...lastMsg.metadata, ...event.metadata };
+          lastMsg.loading.stage3 = false;
+          return { ...prev, messages };
+        });
+        break;
+
+      case 'title_complete':
+        // Reload conversations to get updated title
+        loadConversations();
+        break;
+
+      case 'complete':
+        // Stream complete, update credits and reload conversations
+        if (event.credits !== undefined) {
+          setCredits(event.credits);
+        }
+        loadConversations();
+        setIsLoading(false);
+        break;
+
+      case 'error':
+        console.error('Stream error:', event.message);
+        setError(event.message);
+        setIsLoading(false);
+        break;
+
+      default:
+        console.log('Unknown event type:', eventType);
+    }
+  };
+
+  const handleSendMessage = async (content, mode = 'standard') => {
     if (!currentConversationId) return;
 
     // Check credits before sending
@@ -271,8 +389,9 @@ function App() {
         role: 'assistant',
         stage1: null,
         stage2: null,
+        stage2Skipped: false,
         stage3: null,
-        metadata: null,
+        metadata: { mode },
         loading: {
           stage1: false,
           stage2: false,
@@ -287,89 +406,8 @@ function App() {
       }));
 
       // Send message with streaming
-      await api.sendMessageStream(currentConversationId, content, (eventType, event) => {
-        switch (eventType) {
-          case 'stage1_start':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.loading.stage1 = true;
-              return { ...prev, messages };
-            });
-            break;
-
-          case 'stage1_complete':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.stage1 = event.data;
-              lastMsg.loading.stage1 = false;
-              return { ...prev, messages };
-            });
-            break;
-
-          case 'stage2_start':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.loading.stage2 = true;
-              return { ...prev, messages };
-            });
-            break;
-
-          case 'stage2_complete':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.stage2 = event.data;
-              lastMsg.metadata = event.metadata;
-              lastMsg.loading.stage2 = false;
-              return { ...prev, messages };
-            });
-            break;
-
-          case 'stage3_start':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.loading.stage3 = true;
-              return { ...prev, messages };
-            });
-            break;
-
-          case 'stage3_complete':
-            setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
-              const lastMsg = messages[messages.length - 1];
-              lastMsg.stage3 = event.data;
-              lastMsg.loading.stage3 = false;
-              return { ...prev, messages };
-            });
-            break;
-
-          case 'title_complete':
-            // Reload conversations to get updated title
-            loadConversations();
-            break;
-
-          case 'complete':
-            // Stream complete, update credits and reload conversations
-            if (event.credits !== undefined) {
-              setCredits(event.credits);
-            }
-            loadConversations();
-            setIsLoading(false);
-            break;
-
-          case 'error':
-            console.error('Stream error:', event.message);
-            setError(event.message);
-            setIsLoading(false);
-            break;
-
-          default:
-            console.log('Unknown event type:', eventType);
-        }
+      await api.sendMessageStream(currentConversationId, content, mode, (eventType, event) => {
+        handleStreamEvent(eventType, event);
       });
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -387,19 +425,73 @@ function App() {
     }
   };
 
+  const handleRerunDecision = async (newInput, mode = 'standard') => {
+    if (!currentConversationId) return;
+
+    // Check credits before sending
+    if (credits !== null && credits <= 0) {
+      setError('No credits remaining. Please purchase more credits to continue.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Create a partial assistant message for the rerun
+      const assistantMessage = {
+        role: 'assistant',
+        stage1: null,
+        stage2: null,
+        stage2Skipped: false,
+        stage3: null,
+        metadata: { mode, is_rerun: true },
+        loading: {
+          stage1: false,
+          stage2: false,
+          stage3: false,
+        },
+      };
+
+      // Add the partial assistant message
+      setCurrentConversation((prev) => ({
+        ...prev,
+        messages: [...prev.messages, assistantMessage],
+      }));
+
+      // Send rerun request with streaming
+      await api.rerunDecision(currentConversationId, newInput, mode, (eventType, event) => {
+        handleStreamEvent(eventType, event, true);
+      });
+    } catch (error) {
+      console.error('Failed to rerun decision:', error);
+      if (error.message === 'Insufficient credits') {
+        setError('No credits remaining. Please purchase more credits to continue.');
+      } else {
+        setError('Failed to rerun decision. Please try again.');
+      }
+      // Remove optimistic message on error
+      setCurrentConversation((prev) => ({
+        ...prev,
+        messages: prev.messages.slice(0, -1),
+      }));
+      setIsLoading(false);
+    }
+  };
+
   // Show nothing while Clerk is loading (prevents flash)
   if (!isLoaded) {
     return null;
   }
 
-  // Show demo/landing page only when we know user is not signed in
+  // Show landing page when not signed in
   if (!isSignedIn) {
-    return <DemoPage />;
+    return <LandingPage />;
   }
 
   return (
     <div className="app">
-      <Header
+      <AppHeader
         credits={credits}
         userEmail={user?.primaryEmailAddress?.emailAddress}
         creditPackInfo={creditPackInfo}
@@ -418,6 +510,7 @@ function App() {
         <ChatInterface
           conversation={currentConversation}
           onSendMessage={handleSendMessage}
+          onRerunDecision={handleRerunDecision}
           isLoading={isLoading}
           error={error}
           onDismissError={() => setError(null)}
@@ -426,6 +519,7 @@ function App() {
           onRetryLoad={handleRetryLoad}
         />
       </div>
+      <AppFooter />
       {showAdminPanel && (
         <AdminPanel onClose={() => setShowAdminPanel(false)} />
       )}

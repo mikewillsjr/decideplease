@@ -158,14 +158,14 @@ export const api = {
   /**
    * Send a message in a conversation.
    */
-  async sendMessage(conversationId, content) {
+  async sendMessage(conversationId, content, mode = 'standard') {
     const headers = await getHeaders();
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message`,
       {
         method: 'POST',
         headers,
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, mode }),
       }
     );
     if (!response.ok) {
@@ -184,17 +184,18 @@ export const api = {
    * Send a message and receive streaming updates.
    * @param {string} conversationId - The conversation ID
    * @param {string} content - The message content
+   * @param {string} mode - Run mode: 'quick', 'standard', or 'extra_care'
    * @param {function} onEvent - Callback function for each event: (eventType, data) => void
    * @returns {Promise<void>}
    */
-  async sendMessageStream(conversationId, content, onEvent) {
+  async sendMessageStream(conversationId, content, mode, onEvent) {
     const headers = await getHeaders();
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message/stream`,
       {
         method: 'POST',
         headers,
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, mode: mode || 'standard' }),
       }
     );
 
@@ -208,6 +209,74 @@ export const api = {
       throw new Error('Failed to send message');
     }
 
+    await this._processSSEStream(response, onEvent);
+  },
+
+  /**
+   * Rerun a decision with optional new input.
+   * @param {string} conversationId - The conversation ID
+   * @param {string|null} newInput - Optional new input for refinement
+   * @param {string} mode - Run mode: 'quick', 'standard', or 'extra_care'
+   * @param {function} onEvent - Callback function for each event: (eventType, data) => void
+   * @returns {Promise<void>}
+   */
+  async rerunDecision(conversationId, newInput, mode, onEvent) {
+    const headers = await getHeaders();
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/rerun`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          mode: mode || 'standard',
+          new_input: newInput || null,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Not authenticated');
+      }
+      if (response.status === 402) {
+        throw new Error('Insufficient credits');
+      }
+      throw new Error('Failed to rerun decision');
+    }
+
+    await this._processSSEStream(response, onEvent);
+  },
+
+  /**
+   * Get revisions for a specific message.
+   */
+  async getRevisions(conversationId, messageId) {
+    const headers = await getHeaders();
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/revisions/${messageId}`,
+      { headers }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to get revisions');
+    }
+    return response.json();
+  },
+
+  /**
+   * Get available run modes.
+   */
+  async getRunModes() {
+    const response = await fetch(`${API_BASE}/api/run-modes`);
+    if (!response.ok) {
+      throw new Error('Failed to get run modes');
+    }
+    return response.json();
+  },
+
+  /**
+   * Helper to process SSE stream responses.
+   */
+  async _processSSEStream(response, onEvent) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';

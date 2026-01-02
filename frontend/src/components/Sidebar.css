@@ -11,30 +11,8 @@
   z-index: 10;
 }
 
-.sidebar-header {
-  height: var(--header-height);
-  display: flex;
-  align-items: center;
-  padding: 0 20px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.sidebar-logo {
-  font-size: 1.1rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: white;
-  text-decoration: none;
-}
-
-.sidebar-logo .logo-mark {
-  color: var(--primary);
-}
-
 .new-conversation-btn {
-  margin: 20px 20px 10px 20px;
+  margin: 16px 16px 10px 16px;
   background: linear-gradient(135deg, var(--primary) 0%, #4338ca 100%);
   color: white;
   padding: 12px;
@@ -47,7 +25,7 @@
   gap: 8px;
   box-shadow: 0 4px 12px var(--primary-glow);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  width: calc(100% - 40px);
+  width: calc(100% - 32px);
 }
 
 .new-conversation-btn:hover {

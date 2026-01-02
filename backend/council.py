@@ -1,24 +1,29 @@
 """3-stage DecidePlease orchestration."""
 
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from .openrouter import query_models_parallel, query_model
-from .config import COUNCIL_MODELS, CHAIRMAN_MODEL
+from .config import COUNCIL_MODELS, CHAIRMAN_MODEL, RUN_MODES
 
 
-async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
+async def stage1_collect_responses(
+    user_query: str,
+    council_models: Optional[List[str]] = None
+) -> List[Dict[str, Any]]:
     """
     Stage 1: Collect individual responses from all council models.
 
     Args:
         user_query: The user's question
+        council_models: Optional list of models to use (defaults to COUNCIL_MODELS)
 
     Returns:
         List of dicts with 'model' and 'response' keys
     """
+    models = council_models or COUNCIL_MODELS
     messages = [{"role": "user", "content": user_query}]
 
     # Query all models in parallel
-    responses = await query_models_parallel(COUNCIL_MODELS, messages)
+    responses = await query_models_parallel(models, messages)
 
     # Format results
     stage1_results = []
@@ -34,7 +39,8 @@ async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
 
 async def stage2_collect_rankings(
     user_query: str,
-    stage1_results: List[Dict[str, Any]]
+    stage1_results: List[Dict[str, Any]],
+    council_models: Optional[List[str]] = None
 ) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
     """
     Stage 2: Each model ranks the anonymized responses.
@@ -42,10 +48,12 @@ async def stage2_collect_rankings(
     Args:
         user_query: The original user query
         stage1_results: Results from Stage 1
+        council_models: Optional list of models to use (defaults to COUNCIL_MODELS)
 
     Returns:
         Tuple of (rankings list, label_to_model mapping)
     """
+    models = council_models or COUNCIL_MODELS
     # Create anonymized labels for responses (Response A, Response B, etc.)
     labels = [chr(65 + i) for i in range(len(stage1_results))]  # A, B, C, ...
 
@@ -95,7 +103,7 @@ Now provide your evaluation and ranking:"""
     messages = [{"role": "user", "content": ranking_prompt}]
 
     # Get rankings from all council models in parallel
-    responses = await query_models_parallel(COUNCIL_MODELS, messages)
+    responses = await query_models_parallel(models, messages)
 
     # Format results
     stage2_results = []
@@ -115,7 +123,8 @@ Now provide your evaluation and ranking:"""
 async def stage3_synthesize_final(
     user_query: str,
     stage1_results: List[Dict[str, Any]],
-    stage2_results: List[Dict[str, Any]]
+    stage2_results: List[Dict[str, Any]],
+    chairman_model: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Stage 3: Chairman synthesizes final response.
@@ -124,22 +133,26 @@ async def stage3_synthesize_final(
         user_query: The original user query
         stage1_results: Individual model responses from Stage 1
         stage2_results: Rankings from Stage 2
+        chairman_model: Optional model to use as chairman (defaults to CHAIRMAN_MODEL)
 
     Returns:
         Dict with 'model' and 'response' keys
     """
+    chairman = chairman_model or CHAIRMAN_MODEL
     # Build comprehensive context for chairman
     stage1_text = "\n\n".join([
         f"Model: {result['model']}\nResponse: {result['response']}"
         for result in stage1_results
     ])
 
-    stage2_text = "\n\n".join([
-        f"Model: {result['model']}\nRanking: {result['ranking']}"
-        for result in stage2_results
-    ])
+    # Build prompt based on whether peer review was conducted
+    if stage2_results:
+        stage2_text = "\n\n".join([
+            f"Model: {result['model']}\nRanking: {result['ranking']}"
+            for result in stage2_results
+        ])
 
-    chairman_prompt = f"""You are the Chairman of an DecidePlease. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
+        chairman_prompt = f"""You are the Chairman of an DecidePlease. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
 
 Original Question: {user_query}
 
@@ -155,21 +168,36 @@ Your task as Chairman is to synthesize all of this information into a single, co
 - Any patterns of agreement or disagreement
 
 Provide a clear, well-reasoned final answer that represents the council's collective wisdom:"""
+    else:
+        # Quick mode - no peer review
+        chairman_prompt = f"""You are the Chairman of an DecidePlease. Multiple AI models have provided responses to a user's question.
+
+Original Question: {user_query}
+
+Individual Responses:
+{stage1_text}
+
+Your task as Chairman is to synthesize all of these responses into a single, comprehensive, accurate answer to the user's original question. Consider:
+- The key insights from each response
+- Areas of agreement and disagreement
+- The strongest arguments and evidence presented
+
+Provide a clear, well-reasoned final answer that represents the council's collective wisdom:"""
 
     messages = [{"role": "user", "content": chairman_prompt}]
 
     # Query the chairman model
-    response = await query_model(CHAIRMAN_MODEL, messages)
+    response = await query_model(chairman, messages)
 
     if response is None:
         # Fallback if chairman fails
         return {
-            "model": CHAIRMAN_MODEL,
+            "model": chairman,
             "response": "Error: Unable to generate final synthesis."
         }
 
     return {
-        "model": CHAIRMAN_MODEL,
+        "model": chairman,
         "response": response.get('content', '')
     }
 
@@ -295,7 +323,7 @@ Title:"""
 
 async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
     """
-    Run the complete 3-stage council process.
+    Run the complete 3-stage council process (backwards compatible, uses standard mode).
 
     Args:
         user_query: The user's question
@@ -303,33 +331,190 @@ async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
     """
+    return await run_council_with_mode(user_query, mode="standard")
+
+
+async def run_council_with_mode(
+    user_query: str,
+    mode: str = "standard",
+    context_packet: Optional[Dict[str, Any]] = None,
+    is_rerun: bool = False,
+    new_input: Optional[str] = None
+) -> Tuple[List, List, Dict, Dict]:
+    """
+    Run the council process with a specific mode.
+
+    Args:
+        user_query: The user's question
+        mode: Run mode - "quick", "standard", or "extra_care"
+        context_packet: Optional context from previous run (for reruns)
+        is_rerun: Whether this is a rerun of a previous decision
+        new_input: Optional new input for refinement reruns
+
+    Returns:
+        Tuple of (stage1_results, stage2_results, stage3_result, metadata)
+    """
+    # Get mode configuration
+    if mode not in RUN_MODES:
+        mode = "standard"
+    mode_config = RUN_MODES[mode]
+
+    council_models = mode_config["council_models"]
+    chairman_model = mode_config["chairman_model"]
+    enable_peer_review = mode_config["enable_peer_review"]
+
+    # Build the effective query
+    if is_rerun and context_packet:
+        effective_query = build_rerun_query(user_query, context_packet, new_input)
+    else:
+        effective_query = user_query
+
     # Stage 1: Collect individual responses
-    stage1_results = await stage1_collect_responses(user_query)
+    stage1_results = await stage1_collect_responses(effective_query, council_models)
 
     # If no models responded successfully, return error
     if not stage1_results:
         return [], [], {
             "model": "error",
             "response": "All models failed to respond. Please try again."
-        }, {}
+        }, {"mode": mode}
 
-    # Stage 2: Collect rankings
-    stage2_results, label_to_model = await stage2_collect_rankings(user_query, stage1_results)
+    # Stage 2: Collect rankings (skip if peer review disabled)
+    label_to_model = {}
+    aggregate_rankings = []
+    stage2_results = []
 
-    # Calculate aggregate rankings
-    aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
+    if enable_peer_review:
+        stage2_results, label_to_model = await stage2_collect_rankings(
+            effective_query, stage1_results, council_models
+        )
+        aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
 
     # Stage 3: Synthesize final answer
     stage3_result = await stage3_synthesize_final(
-        user_query,
+        effective_query,
         stage1_results,
-        stage2_results
+        stage2_results,
+        chairman_model
     )
 
     # Prepare metadata
     metadata = {
         "label_to_model": label_to_model,
-        "aggregate_rankings": aggregate_rankings
+        "aggregate_rankings": aggregate_rankings,
+        "mode": mode,
+        "enable_peer_review": enable_peer_review,
+        "credit_cost": mode_config["credit_cost"],
+        "is_rerun": is_rerun
     }
 
     return stage1_results, stage2_results, stage3_result, metadata
+
+
+def build_rerun_query(
+    original_question: str,
+    context_packet: Dict[str, Any],
+    new_input: Optional[str] = None
+) -> str:
+    """
+    Build the query for a rerun, incorporating context from the previous run.
+
+    Args:
+        original_question: The original decision question
+        context_packet: Previous run's TL;DR context
+        new_input: Optional new information or follow-up
+
+    Returns:
+        The constructed query string for the rerun
+    """
+    # Build context summary from previous run
+    context_parts = [f"Original Decision Question: {original_question}"]
+
+    if context_packet.get("recommendation"):
+        context_parts.append(f"Previous Recommendation: {context_packet['recommendation']}")
+    if context_packet.get("confidence"):
+        context_parts.append(f"Previous Confidence: {context_packet['confidence']}")
+    if context_packet.get("key_risks"):
+        context_parts.append(f"Key Risks Identified: {context_packet['key_risks']}")
+    if context_packet.get("tradeoffs"):
+        context_parts.append(f"Tradeoffs: {context_packet['tradeoffs']}")
+    if context_packet.get("flip_condition"):
+        context_parts.append(f"Flip Condition: {context_packet['flip_condition']}")
+
+    context_summary = "\n".join(context_parts)
+
+    if new_input and new_input.strip():
+        # Refinement/follow-up case
+        return f"""{context_summary}
+
+NEW INFORMATION/FOLLOW-UP:
+{new_input}
+
+INSTRUCTION: Update the verdict based on the new input above. Clearly state what changed since the last verdict and provide an updated recommendation."""
+    else:
+        # Second opinion case
+        return f"""{context_summary}
+
+INSTRUCTION: Provide an independent recommendation for this decision. Do NOT assume the previous verdict is correct. If you agree with the previous recommendation, explain why. If you disagree, explain what you would change and why."""
+
+
+def extract_tldr_packet(stage3_response: str) -> Dict[str, Any]:
+    """
+    Extract TL;DR fields from a Stage 3 response for use in reruns.
+
+    This is a best-effort extraction - the response may not have all fields.
+
+    Args:
+        stage3_response: The chairman's response text
+
+    Returns:
+        Dict with available TL;DR fields
+    """
+    packet = {
+        "recommendation": None,
+        "confidence": None,
+        "key_risks": None,
+        "tradeoffs": None,
+        "flip_condition": None,
+        "action_plan": None,
+    }
+
+    # Simple extraction - look for common section headers
+    # This is heuristic and may need refinement based on actual response patterns
+    lines = stage3_response.split('\n')
+
+    for i, line in enumerate(lines):
+        line_lower = line.lower().strip()
+
+        if 'recommendation' in line_lower or 'verdict' in line_lower:
+            # Take next few lines as recommendation
+            packet["recommendation"] = _extract_section(lines, i)
+        elif 'confidence' in line_lower:
+            packet["confidence"] = _extract_section(lines, i)
+        elif 'risk' in line_lower:
+            packet["key_risks"] = _extract_section(lines, i)
+        elif 'tradeoff' in line_lower or 'trade-off' in line_lower:
+            packet["tradeoffs"] = _extract_section(lines, i)
+        elif 'flip' in line_lower or 'reconsider' in line_lower:
+            packet["flip_condition"] = _extract_section(lines, i)
+        elif 'action' in line_lower or 'next step' in line_lower:
+            packet["action_plan"] = _extract_section(lines, i)
+
+    # If we couldn't extract structured data, use a summary of the response
+    if not any(packet.values()):
+        # Take first 500 chars as a summary
+        packet["recommendation"] = stage3_response[:500] + "..." if len(stage3_response) > 500 else stage3_response
+
+    return packet
+
+
+def _extract_section(lines: List[str], header_idx: int, max_lines: int = 5) -> str:
+    """Extract content following a section header."""
+    content_lines = []
+    for i in range(header_idx, min(header_idx + max_lines, len(lines))):
+        line = lines[i].strip()
+        if line:
+            content_lines.append(line)
+        elif content_lines:  # Stop at empty line after content
+            break
+    return ' '.join(content_lines) if content_lines else None

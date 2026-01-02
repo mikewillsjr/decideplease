@@ -56,6 +56,7 @@ input, textarea {
 
 .app {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   width: 100vw;
   overflow: hidden;
@@ -67,6 +68,7 @@ input, textarea {
   display: flex;
   flex: 1;
   overflow: hidden;
+  min-height: 0; /* Important for flex children to scroll properly */
 }
 
 /* Loading screen */

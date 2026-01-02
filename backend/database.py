@@ -75,9 +75,24 @@ async def init_database():
                 stage1 JSONB,
                 stage2 JSONB,
                 stage3 JSONB,
+                mode TEXT DEFAULT 'standard',
+                is_rerun BOOLEAN DEFAULT FALSE,
+                rerun_input TEXT,
+                revision_number INTEGER DEFAULT 0,
+                parent_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
+
+        # Add new columns if they don't exist (for migration)
+        try:
+            await conn.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS mode TEXT DEFAULT 'standard'")
+            await conn.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_rerun BOOLEAN DEFAULT FALSE")
+            await conn.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS rerun_input TEXT")
+            await conn.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS revision_number INTEGER DEFAULT 0")
+            await conn.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS parent_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL")
+        except Exception:
+            pass  # Columns may already exist
 
         # Create payments table for tracking Stripe payments
         await conn.execute("""

@@ -1,0 +1,118 @@
+.revision-history {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg-deep, #050507);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.revision-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.revision-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.revision-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.revision-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.revision-tab {
+  flex: 1;
+  min-width: 140px;
+  max-width: 200px;
+  padding: 10px 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.revision-tab:hover {
+  border-color: var(--primary);
+  background: rgba(93, 93, 255, 0.05);
+}
+
+.revision-tab.active {
+  border-color: var(--primary);
+  background: rgba(93, 93, 255, 0.1);
+}
+
+.revision-tab-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.revision-number {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.revision-type {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.revision-type.refinement {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-green, #10b981);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.revision-type.second-opinion {
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--accent-gold, #fbbf24);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.revision-tab-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.revision-mode {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.revision-time {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+@media (max-width: 600px) {
+  .revision-tabs {
+    flex-direction: column;
+  }
+
+  .revision-tab {
+    max-width: none;
+  }
+}

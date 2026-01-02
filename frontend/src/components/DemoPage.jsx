@@ -312,7 +312,22 @@ export default function DemoPage() {
 
             {authMode === 'signin' ? (
               <>
-                <SignIn afterSignInUrl="/" />
+                <SignIn
+                  routing="virtual"
+                  afterSignInUrl="/"
+                  appearance={{
+                    elements: {
+                      rootBox: { width: '100%' },
+                      card: {
+                        background: 'transparent',
+                        boxShadow: 'none',
+                        border: 'none',
+                        margin: 0,
+                        padding: 0,
+                      },
+                    },
+                  }}
+                />
                 <p className="dp-auth-toggle">
                   Don't have an account?{' '}
                   <button onClick={() => setAuthMode('signup')}>Sign up</button>
@@ -320,7 +335,22 @@ export default function DemoPage() {
               </>
             ) : (
               <>
-                <SignUp afterSignUpUrl="/" />
+                <SignUp
+                  routing="virtual"
+                  afterSignUpUrl="/"
+                  appearance={{
+                    elements: {
+                      rootBox: { width: '100%' },
+                      card: {
+                        background: 'transparent',
+                        boxShadow: 'none',
+                        border: 'none',
+                        margin: 0,
+                        padding: 0,
+                      },
+                    },
+                  }}
+                />
                 <p className="dp-auth-toggle">
                   Already have an account?{' '}
                   <button onClick={() => setAuthMode('signin')}>Sign in</button>

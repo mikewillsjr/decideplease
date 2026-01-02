@@ -2,13 +2,83 @@ import { useState } from 'react';
 import { SignIn, SignUp } from '@clerk/clerk-react';
 import './LandingPage.css';
 
+const DEMOS = [
+  {
+    q: "Should I accept a lower salary at a startup for equity, or take the higher salary job?",
+    rec: "Take the higher salary — unless the startup equity is unusually clear and near-term liquid.",
+    confidence: 76,
+    votes: [
+      { model: "GPT-4", pick: "Higher salary" },
+      { model: "Claude", pick: "Higher salary" },
+      { model: "Gemini", pick: "Startup equity (dissent)" }
+    ],
+    risk: "Equity often ends up worth $0. If the startup fails or dilutes heavily, you paid for hope with years of income.",
+    tradeoff: "Higher salary reduces upside, but increases certainty and optionality.",
+    flip: "If the startup has strong traction, clear terms, and you have 12–18 months runway, equity can win."
+  },
+  {
+    q: "Should I hire a senior employee now or wait 3 months and keep contracting?",
+    rec: "Wait 3 months and keep contracting — unless the role is blocking revenue this month.",
+    confidence: 81,
+    votes: [
+      { model: "GPT-4", pick: "Wait / contract" },
+      { model: "Claude", pick: "Wait / contract" },
+      { model: "Gemini", pick: "Hire now (dissent)" }
+    ],
+    risk: "A bad full-time hire costs more than money—momentum, culture, and time.",
+    tradeoff: "Waiting may slow execution, but reduces long-term payroll risk.",
+    flip: "If you're losing deals due to speed or expertise gaps right now, hiring immediately becomes higher-ROI."
+  },
+  {
+    q: "Migrate to Next.js or stick with React Router?",
+    rec: "Migrate to Next.js — unless SEO is not a priority and team velocity is critical.",
+    confidence: 92,
+    votes: [
+      { model: "GPT-4", pick: "Next.js" },
+      { model: "Claude", pick: "Next.js" },
+      { model: "Gemini", pick: "React Router (dissent)" }
+    ],
+    risk: "Migration complexity may pause feature work for 2-3 sprints.",
+    tradeoff: "Next.js adds SSR/SEO benefits but increases infrastructure complexity.",
+    flip: "If SEO is not a top priority, the verdict flips to React Router to reduce overhead."
+  },
+  {
+    q: "Should I sign this client at a lower price to get the logo, or hold the line?",
+    rec: "Hold the line — unless the deal creates repeatable distribution and a clean case study.",
+    confidence: 83,
+    votes: [
+      { model: "GPT-4", pick: "Hold price" },
+      { model: "Claude", pick: "Hold price" },
+      { model: "Gemini", pick: "Discount for logo (dissent)" }
+    ],
+    risk: "Discounts train the market that your price is negotiable.",
+    tradeoff: "Holding price may lose the deal, but protects positioning and margins.",
+    flip: "If the client guarantees a public case study + referrals and you cap the discount tightly, the logo play can be worth it."
+  }
+];
+
+function getRandomDemo(currentQ = null) {
+  let next = DEMOS[Math.floor(Math.random() * DEMOS.length)];
+  if (DEMOS.length > 1 && currentQ) {
+    while (next.q === currentQ) {
+      next = DEMOS[Math.floor(Math.random() * DEMOS.length)];
+    }
+  }
+  return next;
+}
+
 export default function LandingPage() {
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState('signin');
+  const [currentDemo, setCurrentDemo] = useState(() => getRandomDemo());
 
   const openAuth = (mode) => {
     setAuthMode(mode);
     setShowAuth(true);
+  };
+
+  const handleNextDemo = () => {
+    setCurrentDemo(getRandomDemo(currentDemo.q));
   };
 
   return (
@@ -241,7 +311,10 @@ export default function LandingPage() {
               <p>
                 We force top models to critique each other anonymously. If there's a risk, we find it. If there's a better path, we highlight it.
               </p>
-              <button className="btn-secondary" onClick={() => openAuth('signup')}>
+              <button className="btn-secondary shuffle-btn" onClick={handleNextDemo}>
+                See another decision &#x21bb;
+              </button>
+              <button className="btn-primary" onClick={() => openAuth('signup')}>
                 Run your own decision &rarr;
               </button>
             </div>
@@ -249,37 +322,46 @@ export default function LandingPage() {
             <div className="verdict-card">
               <div className="verdict-header">
                 <span className="verdict-title">Consensus Verdict</span>
-                <span className="verdict-badge">92% CONFIDENCE</span>
+                <span className={`verdict-badge ${currentDemo.confidence >= 80 ? '' : 'warning'}`}>
+                  {currentDemo.confidence}% CONFIDENCE
+                </span>
               </div>
               <div className="verdict-body">
                 <div className="verdict-question">
-                  Q: "Migrate to Next.js or stick with React Router?"
+                  Q: "{currentDemo.q}"
                 </div>
 
                 <h4 className="verdict-recommendation">
                   <span className="v-dot"></span>
-                  Recommendation: Migrate to Next.js
+                  {currentDemo.rec}
                 </h4>
 
-                <div className="insight-box">
-                  <div className="ib-label">Disagreement Summary</div>
-                  <div className="ib-text">
-                    2 models favored Next.js for SEO/Performance. 1 model strongly argued for React Router due to team velocity concerns.
-                  </div>
+                <div className="model-votes">
+                  {currentDemo.votes.map((v, i) => {
+                    const isDissent = v.pick.toLowerCase().includes('dissent');
+                    return (
+                      <div key={i} className={`vote-item ${isDissent ? 'dissent' : ''}`}>
+                        <span className={`vote-dot ${isDissent ? 'dissent' : ''}`}></span>
+                        <span className="vote-model">{v.model}</span>
+                        <span className="vote-pick">{v.pick}</span>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <div className="insight-box risk">
                   <div className="ib-label">Primary Risk</div>
-                  <div className="ib-text">
-                    Migration complexity may pause feature work. If short-term speed is critical, this recommendation fails.
-                  </div>
+                  <div className="ib-text">{currentDemo.risk}</div>
+                </div>
+
+                <div className="insight-box">
+                  <div className="ib-label">Tradeoff</div>
+                  <div className="ib-text">{currentDemo.tradeoff}</div>
                 </div>
 
                 <div className="insight-box flip">
                   <div className="ib-label">Flip Condition</div>
-                  <div className="ib-text">
-                    If SEO is not a top priority, the verdict flips to <strong>React Router</strong> to reduce overhead.
-                  </div>
+                  <div className="ib-text">{currentDemo.flip}</div>
                 </div>
 
                 <div className="verdict-footer">
@@ -350,7 +432,22 @@ export default function LandingPage() {
 
             {authMode === 'signin' ? (
               <>
-                <SignIn afterSignInUrl="/" />
+                <SignIn
+                  routing="virtual"
+                  afterSignInUrl="/"
+                  appearance={{
+                    elements: {
+                      rootBox: { width: '100%' },
+                      card: {
+                        background: 'transparent',
+                        boxShadow: 'none',
+                        border: 'none',
+                        margin: 0,
+                        padding: 0,
+                      },
+                    },
+                  }}
+                />
                 <p className="auth-toggle">
                   Don't have an account?{' '}
                   <button onClick={() => setAuthMode('signup')}>Sign up</button>
@@ -358,7 +455,22 @@ export default function LandingPage() {
               </>
             ) : (
               <>
-                <SignUp afterSignUpUrl="/" />
+                <SignUp
+                  routing="virtual"
+                  afterSignUpUrl="/"
+                  appearance={{
+                    elements: {
+                      rootBox: { width: '100%' },
+                      card: {
+                        background: 'transparent',
+                        boxShadow: 'none',
+                        border: 'none',
+                        margin: 0,
+                        padding: 0,
+                      },
+                    },
+                  }}
+                />
                 <p className="auth-toggle">
                   Already have an account?{' '}
                   <button onClick={() => setAuthMode('signin')}>Sign in</button>

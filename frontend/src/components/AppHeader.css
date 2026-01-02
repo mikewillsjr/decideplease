@@ -1,0 +1,255 @@
+/* App Header - Unified Navigation */
+
+.app-header {
+  height: var(--header-height);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+/* Left side - Logo and Nav */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--text-main);
+}
+
+.header-mark {
+  font-size: 24px;
+  color: var(--primary);
+}
+
+.header-brand {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.header-nav-link {
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+
+.header-nav-link:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.header-nav-link.active {
+  color: var(--text-main);
+  background: rgba(93, 93, 255, 0.1);
+}
+
+/* Right side - Credits and User */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Credits */
+.credits-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+.credits-icon {
+  font-size: 14px;
+}
+
+.credits-value {
+  font-weight: 600;
+}
+
+.buy-credits-btn {
+  background: var(--accent-gold);
+  color: black;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 4px;
+}
+
+.buy-credits-btn:hover {
+  background: #fcd34d;
+  transform: translateY(-1px);
+}
+
+.buy-credits-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* User Menu */
+.user-menu-container {
+  position: relative;
+}
+
+.user-menu-trigger {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.user-avatar {
+  width: 34px;
+  height: 34px;
+  background: linear-gradient(135deg, var(--primary), #8b5cf6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: white;
+  font-size: 14px;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+}
+
+.user-menu-trigger:hover .user-avatar {
+  border-color: var(--primary);
+  transform: scale(1.05);
+}
+
+.user-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+.user-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  min-width: 200px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.user-menu-email {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.02);
+  word-break: break-all;
+}
+
+.user-menu-divider {
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.user-menu-item {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 14px;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: background 0.15s;
+  text-decoration: none;
+}
+
+.user-menu-item:hover {
+  background: var(--bg-panel-hover);
+}
+
+.user-menu-item.danger {
+  color: var(--accent-danger);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .app-header {
+    padding: 0 16px;
+  }
+
+  .header-left {
+    gap: 16px;
+  }
+
+  .header-brand {
+    display: none;
+  }
+
+  .header-nav {
+    gap: 2px;
+  }
+
+  .header-nav-link {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  .credits-display {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .credits-icon {
+    display: none;
+  }
+
+  .buy-credits-btn {
+    padding: 3px 8px;
+    font-size: 10px;
+  }
+
+  .user-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-nav-link {
+    padding: 6px 8px;
+  }
+}
