@@ -50,16 +50,18 @@ export default function ChatInterface({
     );
   }
 
+  const messages = conversation.messages || [];
+
   return (
     <div className="chat-interface">
       <div className="messages-container">
-        {conversation.messages.length === 0 ? (
+        {messages.length === 0 ? (
           <div className="empty-state">
             <h2>Start a conversation</h2>
             <p>Ask a question to consult the DecidePlease</p>
           </div>
         ) : (
-          conversation.messages.map((msg, index) => (
+          messages.map((msg, index) => (
             <div key={index} className="message-group">
               {msg.role === 'user' ? (
                 <div className="user-message">
