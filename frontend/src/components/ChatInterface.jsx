@@ -69,7 +69,7 @@ export default function ChatInterface({
             />
             <div className="input-footer">
               <div className="model-badges">
-                GPT-4o • Claude 3.5 • Gemini 1.5
+                GPT-5 • Claude 4.5 • Gemini 3 • Grok 4 • DeepSeek
               </div>
               <button
                 type="submit"
