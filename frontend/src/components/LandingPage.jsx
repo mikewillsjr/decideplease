@@ -64,6 +64,30 @@ export default function LandingPage() {
           </div>
 
           <p className="hero-note">No credit card required. Instant access.</p>
+
+          {/* Council Visual */}
+          <div className="council-visual">
+            <div className="council-arena">
+              <div className="model-node chatgpt">
+                <span className="node-label">ChatGPT</span>
+              </div>
+              <div className="model-node claude">
+                <span className="node-label">Claude</span>
+              </div>
+              <div className="model-node gemini">
+                <span className="node-label">Gemini</span>
+              </div>
+              <div className="model-node grok">
+                <span className="node-label">Grok</span>
+              </div>
+              <div className="model-node deepseek">
+                <span className="node-label">DeepSeek</span>
+              </div>
+              <div className="council-center">
+                <span>Your Answer</span>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

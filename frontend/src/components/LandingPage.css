@@ -220,6 +220,164 @@
 .hero-note {
   font-size: 0.8rem;
   color: #555;
+  margin-bottom: 60px;
+}
+
+/* Council Visual */
+.council-visual {
+  margin-top: 40px;
+  display: flex;
+  justify-content: center;
+}
+
+.council-arena {
+  position: relative;
+  width: 420px;
+  height: 380px;
+}
+
+.model-node {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid;
+  transition: box-shadow 0.3s;
+}
+
+.model-node:hover {
+  z-index: 10;
+}
+
+.node-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Model-specific colors */
+.model-node.chatgpt {
+  background: rgba(16, 163, 127, 0.15);
+  border-color: #10a37f;
+  color: #10a37f;
+  box-shadow: 0 0 30px rgba(16, 163, 127, 0.4);
+  animation: wanderChatGPT 18s ease-in-out infinite;
+}
+
+.model-node.claude {
+  background: rgba(212, 165, 116, 0.15);
+  border-color: #d4a574;
+  color: #d4a574;
+  box-shadow: 0 0 30px rgba(212, 165, 116, 0.4);
+  animation: wanderClaude 22s ease-in-out infinite;
+}
+
+.model-node.gemini {
+  background: rgba(66, 133, 244, 0.15);
+  border-color: #4285f4;
+  color: #4285f4;
+  box-shadow: 0 0 30px rgba(66, 133, 244, 0.4);
+  animation: wanderGemini 20s ease-in-out infinite;
+}
+
+.model-node.grok {
+  background: rgba(29, 161, 242, 0.15);
+  border-color: #1da1f2;
+  color: #1da1f2;
+  box-shadow: 0 0 30px rgba(29, 161, 242, 0.4);
+  animation: wanderGrok 24s ease-in-out infinite;
+}
+
+.model-node.deepseek {
+  background: rgba(124, 58, 237, 0.15);
+  border-color: #7c3aed;
+  color: #7c3aed;
+  box-shadow: 0 0 30px rgba(124, 58, 237, 0.4);
+  animation: wanderDeepSeek 19s ease-in-out infinite;
+}
+
+.council-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 110px;
+  height: 110px;
+  background: var(--primary);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 0 60px rgba(93, 93, 255, 0.5);
+  z-index: 5;
+}
+
+/* Random wandering animations - each model roams differently */
+@keyframes wanderChatGPT {
+  0% { top: 0; left: 170px; }
+  10% { top: 25px; left: 220px; }
+  20% { top: 60px; left: 280px; }
+  30% { top: 40px; left: 320px; }
+  40% { top: 80px; left: 290px; }
+  50% { top: 50px; left: 240px; }
+  60% { top: 20px; left: 180px; }
+  70% { top: 45px; left: 130px; }
+  80% { top: 30px; left: 100px; }
+  90% { top: 10px; left: 140px; }
+  100% { top: 0; left: 170px; }
+}
+
+@keyframes wanderClaude {
+  0% { top: 80px; right: 0; left: auto; }
+  12% { top: 60px; right: 30px; }
+  25% { top: 100px; right: 60px; }
+  37% { top: 150px; right: 40px; }
+  50% { top: 130px; right: 10px; }
+  62% { top: 90px; right: -10px; }
+  75% { top: 110px; right: 20px; }
+  87% { top: 70px; right: 40px; }
+  100% { top: 80px; right: 0; left: auto; }
+}
+
+@keyframes wanderGemini {
+  0% { bottom: 20px; right: 60px; top: auto; left: auto; }
+  15% { bottom: 50px; right: 100px; }
+  30% { bottom: 80px; right: 140px; }
+  45% { bottom: 60px; right: 110px; }
+  60% { bottom: 30px; right: 80px; }
+  75% { bottom: 10px; right: 40px; }
+  90% { bottom: 40px; right: 30px; }
+  100% { bottom: 20px; right: 60px; top: auto; left: auto; }
+}
+
+@keyframes wanderGrok {
+  0% { bottom: 20px; left: 60px; top: auto; right: auto; }
+  14% { bottom: 40px; left: 30px; }
+  28% { bottom: 70px; left: 50px; }
+  42% { bottom: 100px; left: 80px; }
+  56% { bottom: 80px; left: 120px; }
+  70% { bottom: 50px; left: 100px; }
+  84% { bottom: 30px; left: 70px; }
+  100% { bottom: 20px; left: 60px; top: auto; right: auto; }
+}
+
+@keyframes wanderDeepSeek {
+  0% { top: 80px; left: 0; right: auto; }
+  16% { top: 120px; left: 20px; }
+  33% { top: 160px; left: 50px; }
+  50% { top: 140px; left: 80px; }
+  66% { top: 100px; left: 60px; }
+  83% { top: 70px; left: 30px; }
+  100% { top: 80px; left: 0; right: auto; }
 }
 
 /* Trust Strip */
@@ -628,5 +786,15 @@
   .auth-modal-content {
     padding: 24px;
     border-radius: 16px;
+  }
+
+  .council-visual {
+    margin-top: 30px;
+  }
+
+  .council-arena {
+    width: 300px;
+    height: 280px;
+    transform: scale(0.85);
   }
 }
