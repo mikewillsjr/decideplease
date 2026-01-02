@@ -5,7 +5,15 @@ import './Stage1.css';
 export default function Stage1({ responses }) {
   const [activeTab, setActiveTab] = useState(0);
 
-  if (!responses || responses.length === 0) {
+  // Safety check for invalid data
+  if (!responses || !Array.isArray(responses) || responses.length === 0) {
+    return null;
+  }
+
+  const safeActiveTab = Math.min(activeTab, responses.length - 1);
+  const currentResponse = responses[safeActiveTab];
+
+  if (!currentResponse) {
     return null;
   }
 
@@ -17,18 +25,18 @@ export default function Stage1({ responses }) {
         {responses.map((resp, index) => (
           <button
             key={index}
-            className={`tab ${activeTab === index ? 'active' : ''}`}
+            className={`tab ${safeActiveTab === index ? 'active' : ''}`}
             onClick={() => setActiveTab(index)}
           >
-            {resp.model.split('/')[1] || resp.model}
+            {resp?.model?.split('/')[1] || resp?.model || `Model ${index + 1}`}
           </button>
         ))}
       </div>
 
       <div className="tab-content">
-        <div className="model-name">{responses[activeTab].model}</div>
+        <div className="model-name">{currentResponse.model || 'Unknown Model'}</div>
         <div className="response-text markdown-content">
-          <ReactMarkdown>{responses[activeTab].response}</ReactMarkdown>
+          <ReactMarkdown>{currentResponse.response || 'No response available'}</ReactMarkdown>
         </div>
       </div>
     </div>

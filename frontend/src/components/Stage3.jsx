@@ -2,7 +2,8 @@ import ReactMarkdown from 'react-markdown';
 import './Stage3.css';
 
 export default function Stage3({ finalResponse }) {
-  if (!finalResponse) {
+  // Safety check for invalid data
+  if (!finalResponse || typeof finalResponse !== 'object') {
     return null;
   }
 
@@ -11,10 +12,10 @@ export default function Stage3({ finalResponse }) {
       <h3 className="stage-title">Stage 3: Final Council Answer</h3>
       <div className="final-response">
         <div className="chairman-label">
-          Chairman: {finalResponse.model.split('/')[1] || finalResponse.model}
+          Chairman: {finalResponse.model?.split('/')[1] || finalResponse.model || 'Unknown'}
         </div>
         <div className="final-text markdown-content">
-          <ReactMarkdown>{finalResponse.response}</ReactMarkdown>
+          <ReactMarkdown>{finalResponse.response || 'No response available'}</ReactMarkdown>
         </div>
       </div>
     </div>

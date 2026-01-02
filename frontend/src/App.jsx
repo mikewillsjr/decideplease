@@ -101,9 +101,16 @@ function App() {
   const loadConversation = async (id) => {
     try {
       const conv = await api.getConversation(id);
+      console.log('[App] Loaded conversation:', conv);
+      // Ensure messages is always an array
+      if (conv && !conv.messages) {
+        conv.messages = [];
+      }
       setCurrentConversation(conv);
     } catch (error) {
       console.error('Failed to load conversation:', error);
+      // Set empty conversation on error to prevent crash
+      setCurrentConversation({ id, messages: [], title: 'Error loading' });
     }
   };
 

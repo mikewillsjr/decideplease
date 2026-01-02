@@ -17,7 +17,15 @@ function deAnonymizeText(text, labelToModel) {
 export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
   const [activeTab, setActiveTab] = useState(0);
 
-  if (!rankings || rankings.length === 0) {
+  // Safety check for invalid data
+  if (!rankings || !Array.isArray(rankings) || rankings.length === 0) {
+    return null;
+  }
+
+  const safeActiveTab = Math.min(activeTab, rankings.length - 1);
+  const currentRanking = rankings[safeActiveTab];
+
+  if (!currentRanking) {
     return null;
   }
 
@@ -35,30 +43,31 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
         {rankings.map((rank, index) => (
           <button
             key={index}
-            className={`tab ${activeTab === index ? 'active' : ''}`}
+            className={`tab ${safeActiveTab === index ? 'active' : ''}`}
             onClick={() => setActiveTab(index)}
           >
-            {rank.model.split('/')[1] || rank.model}
+            {rank?.model?.split('/')[1] || rank?.model || `Model ${index + 1}`}
           </button>
         ))}
       </div>
 
       <div className="tab-content">
         <div className="ranking-model">
-          {rankings[activeTab].model}
+          {currentRanking.model || 'Unknown Model'}
         </div>
         <div className="ranking-content markdown-content">
           <ReactMarkdown>
-            {deAnonymizeText(rankings[activeTab].ranking, labelToModel)}
+            {deAnonymizeText(currentRanking.ranking || '', labelToModel)}
           </ReactMarkdown>
         </div>
 
-        {rankings[activeTab].parsed_ranking &&
-         rankings[activeTab].parsed_ranking.length > 0 && (
+        {currentRanking.parsed_ranking &&
+         Array.isArray(currentRanking.parsed_ranking) &&
+         currentRanking.parsed_ranking.length > 0 && (
           <div className="parsed-ranking">
             <strong>Extracted Ranking:</strong>
             <ol>
-              {rankings[activeTab].parsed_ranking.map((label, i) => (
+              {currentRanking.parsed_ranking.map((label, i) => (
                 <li key={i}>
                   {labelToModel && labelToModel[label]
                     ? labelToModel[label].split('/')[1] || labelToModel[label]
