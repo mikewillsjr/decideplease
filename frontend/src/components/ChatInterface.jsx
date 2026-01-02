@@ -42,13 +42,52 @@ export default function ChatInterface({
     }
   };
 
+  const handleSuggestionClick = (suggestion) => {
+    setInput(suggestion);
+  };
+
   if (!conversation) {
     return (
       <div className="chat-interface">
-        <div className="empty-state">
-          <h2>Welcome to DecidePlease</h2>
-          <p>Create a new conversation to get started</p>
+        <div className="messages-container">
+          <div className="empty-state">
+            <h2>What decision are you making?</h2>
+            <p>Ask the question where being wrong is expensive.</p>
+          </div>
         </div>
+
+        <form className="input-form" onSubmit={handleSubmit}>
+          <div className="input-wrapper">
+            <textarea
+              className="message-input"
+              placeholder="e.g. Should I incorporate in Delaware or Wyoming for a bootstrapped SaaS?"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isLoading}
+              rows={2}
+            />
+            <div className="input-footer">
+              <div className="model-badges">
+                GPT-4o • Claude 3.5 • Gemini 1.5
+              </div>
+              <button
+                type="submit"
+                className="send-button"
+                disabled={!input.trim() || isLoading}
+              >
+                Run Decision
+              </button>
+            </div>
+          </div>
+          <div className="micro-strip">
+            <span>Verdict</span>
+            <span className="ms-item"><span className="ms-dot"></span>Risks</span>
+            <span className="ms-item"><span className="ms-dot"></span>Tradeoffs</span>
+            <span className="ms-item"><span className="ms-dot"></span>Flip Conditions</span>
+            <span className="ms-item"><span className="ms-dot"></span>Action Plan</span>
+          </div>
+        </form>
       </div>
     );
   }
@@ -59,14 +98,14 @@ export default function ChatInterface({
       <div className="chat-interface">
         <div className="load-error-state">
           <div className="error-icon">!</div>
-          <h2>Failed to load conversation</h2>
-          <p>There was a problem loading this conversation. You can try again or delete it.</p>
+          <h2>Failed to load decision</h2>
+          <p>There was a problem loading this decision. You can try again or delete it.</p>
           <div className="error-actions">
             <button className="retry-btn" onClick={onRetryLoad}>
               Try Again
             </button>
             <button className="delete-btn" onClick={onDeleteConversation}>
-              Delete Conversation
+              Delete Decision
             </button>
           </div>
         </div>
@@ -81,8 +120,41 @@ export default function ChatInterface({
       <div className="messages-container">
         {messages.length === 0 ? (
           <div className="empty-state">
-            <h2>Start a conversation</h2>
-            <p>Ask a question to consult the DecidePlease</p>
+            <h2>What decision are you making?</h2>
+            <p>Ask the question where being wrong is expensive.</p>
+
+            <div className="suggestion-grid">
+              <button
+                className="suggestion-card"
+                onClick={() => handleSuggestionClick("Should I use React Native or Flutter for a fintech app?")}
+              >
+                <span className="sug-icon">🧠</span>
+                <div className="sug-text">
+                  <strong>Technical Stack</strong>
+                  React Native vs Flutter for fintech?
+                </div>
+              </button>
+              <button
+                className="suggestion-card"
+                onClick={() => handleSuggestionClick("Analyze this contract clause for gaps and risks.")}
+              >
+                <span className="sug-icon">⚖️</span>
+                <div className="sug-text">
+                  <strong>Legal / Risk</strong>
+                  Analyze this liability clause for gaps.
+                </div>
+              </button>
+              <button
+                className="suggestion-card"
+                onClick={() => handleSuggestionClick("Should I hire a VP of Sales or 2 Account Executives first?")}
+              >
+                <span className="sug-icon">💼</span>
+                <div className="sug-text">
+                  <strong>Hiring Strategy</strong>
+                  Hire a VP of Sales or 2 AEs first?
+                </div>
+              </button>
+            </div>
           </div>
         ) : (
           messages.map((msg, index) => (
@@ -172,22 +244,29 @@ export default function ChatInterface({
       )}
 
       <form className="input-form" onSubmit={handleSubmit}>
-        <textarea
-          className="message-input"
-          placeholder="Ask your question... (Shift+Enter for new line, Enter to send)"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isLoading}
-          rows={3}
-        />
-        <button
-          type="submit"
-          className="send-button"
-          disabled={!input.trim() || isLoading}
-        >
-          Send
-        </button>
+        <div className="input-wrapper">
+          <textarea
+            className="message-input"
+            placeholder="Refine this decision or ask a follow-up..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={isLoading}
+            rows={2}
+          />
+          <div className="input-footer">
+            <div className="model-badges">
+              GPT-4o • Claude 3.5 • Gemini 1.5
+            </div>
+            <button
+              type="submit"
+              className="send-button"
+              disabled={!input.trim() || isLoading}
+            >
+              Run Decision
+            </button>
+          </div>
+        </div>
       </form>
     </div>
   );

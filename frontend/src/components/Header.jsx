@@ -29,16 +29,11 @@ export default function Header({
 
   return (
     <header className="app-header">
-      <a href="/" className="header-left header-logo-link">
-        <span className="header-logo-icon">D</span>
-        <span className="header-logo-text">DecidePlease</span>
-      </a>
-
       <div className="header-right">
         {/* Credits Display */}
-        <div className="header-credits">
-          <span className="credits-label">Credits:</span>
-          <span className="credits-value">{credits ?? '...'}</span>
+        <div className="credits-display">
+          <span className="credits-icon">&#x27e1;</span>
+          <span className="credits-value">{credits ?? '...'} Credits</span>
           {creditPackInfo?.stripe_configured && (
             <button
               className="buy-credits-btn"
