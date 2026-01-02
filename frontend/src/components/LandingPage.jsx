@@ -27,13 +27,13 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section className="hero">
-        <div className="hero-badge">Powered by 4 Leading AI Models</div>
+        <div className="hero-badge">Powered by 5 Leading AI Models</div>
         <h1 className="hero-title">
           Don't ask <em>one</em> AI.<br />
           <span className="title-highlight">Consult the council.</span>
         </h1>
         <p className="hero-subtitle">
-          Get answers vetted by GPT-5.1, Claude, Gemini & Grok working together.
+          Get answers vetted by GPT-5.2, Claude Opus 4.5, Gemini 3 Pro, Grok 4.1 & DeepSeek V3.2 working together.
           They debate. They rank. They synthesize. You get the truth.
         </p>
         <div className="hero-cta-group">
@@ -49,7 +49,7 @@ export default function LandingPage() {
         <div className="hero-visual">
           <div className="council-ring">
             <div className="model-node" style={{ '--i': 0 }}>
-              <span className="node-label">GPT-5.1</span>
+              <span className="node-label">GPT-5.2</span>
             </div>
             <div className="model-node" style={{ '--i': 1 }}>
               <span className="node-label">Claude</span>
@@ -59,6 +59,9 @@ export default function LandingPage() {
             </div>
             <div className="model-node" style={{ '--i': 3 }}>
               <span className="node-label">Grok</span>
+            </div>
+            <div className="model-node" style={{ '--i': 4 }}>
+              <span className="node-label">DeepSeek</span>
             </div>
             <div className="council-center">
               <span>Your Answer</span>
@@ -72,7 +75,7 @@ export default function LandingPage() {
         <div className="section-header">
           <span className="section-number">01</span>
           <h2>How It Works</h2>
-          <p>Three stages. Four models. One superior answer.</p>
+          <p>Three stages. Five models. One superior answer.</p>
         </div>
 
         <div className="stages">
@@ -80,8 +83,9 @@ export default function LandingPage() {
             <div className="stage-number">1</div>
             <div className="stage-content">
               <h3>Independent Analysis</h3>
-              <p>Your question goes to all four AI models simultaneously. Each responds without seeing the others - pure, unbiased perspectives.</p>
+              <p>Your question goes to all five AI models simultaneously. Each responds without seeing the others - pure, unbiased perspectives.</p>
               <div className="stage-visual">
+                <div className="sv-dot"></div>
                 <div className="sv-dot"></div>
                 <div className="sv-dot"></div>
                 <div className="sv-dot"></div>
@@ -181,7 +185,7 @@ export default function LandingPage() {
             </div>
             <ul className="features">
               <li>5 council queries</li>
-              <li>All 4 AI models</li>
+              <li>All 5 AI models</li>
               <li>Full 3-stage process</li>
               <li>No credit card required</li>
             </ul>
@@ -201,7 +205,7 @@ export default function LandingPage() {
             </div>
             <ul className="features">
               <li>20 council queries</li>
-              <li>All 4 AI models</li>
+              <li>All 5 AI models</li>
               <li>Full 3-stage process</li>
               <li>Credits never expire</li>
               <li>Buy anytime you need more</li>
@@ -214,7 +218,7 @@ export default function LandingPage() {
 
         <p className="pricing-note">
           That's just $0.25 per query - less than a single premium ChatGPT request,
-          but with 4 models working together.
+          but with 5 models working together.
         </p>
       </section>
 
