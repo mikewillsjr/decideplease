@@ -8,6 +8,18 @@ from uuid import UUID
 from .database import get_connection
 
 
+def parse_json_field(value):
+    """Parse a JSON field that might be a string or already parsed."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return value
+    return value
+
+
 async def create_conversation(conversation_id: str, user_id: str) -> Dict[str, Any]:
     """
     Create a new conversation.
@@ -91,9 +103,9 @@ async def get_conversation(conversation_id: str, user_id: str) -> Optional[Dict[
 
                 message_list.append({
                     "role": "assistant",
-                    "stage1": msg["stage1"],
-                    "stage2": msg["stage2"],
-                    "stage3": msg["stage3"]
+                    "stage1": parse_json_field(msg["stage1"]),
+                    "stage2": parse_json_field(msg["stage2"]),
+                    "stage3": parse_json_field(msg["stage3"])
                 })
 
         return {
