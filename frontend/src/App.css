@@ -7,7 +7,7 @@
 }
 
 :root {
-  /* Core Palette - Dark Mode Executive */
+  /* Core Palette - Dark Mode Executive (default) */
   --bg-deep: #050507;
   --bg-panel: #0e0e12;
   --bg-panel-hover: #181820;
@@ -26,10 +26,39 @@
   --text-muted: #9ca3af;
   --text-dim: #52525b;
 
+  /* Header specific */
+  --header-bg: rgba(5, 5, 7, 0.85);
+  --header-border: rgba(255, 255, 255, 0.06);
+
   /* Dimensions */
   --sidebar-width: 320px;
   --header-height: 60px;
   --radius-md: 8px;
+}
+
+/* Light Mode Theme */
+[data-theme="light"] {
+  --bg-deep: #f8f9fa;
+  --bg-panel: #ffffff;
+  --bg-panel-hover: #f0f1f3;
+  --border-subtle: #e5e7eb;
+
+  /* Accents stay similar but slightly adjusted */
+  --primary: #4f46e5;
+  --primary-glow: rgba(79, 70, 229, 0.15);
+  --accent-gold: #d97706;
+  --accent-green: #059669;
+  --accent-gray: #6b7280;
+  --accent-danger: #dc2626;
+
+  /* Text */
+  --text-main: #111827;
+  --text-muted: #6b7280;
+  --text-dim: #9ca3af;
+
+  /* Header - use a subtle gray instead of white to show the logo */
+  --header-bg: rgba(243, 244, 246, 0.9);
+  --header-border: rgba(0, 0, 0, 0.08);
 }
 
 body {

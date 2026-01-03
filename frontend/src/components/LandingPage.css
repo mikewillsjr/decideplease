@@ -33,6 +33,24 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* Light Mode for Landing Page */
+[data-theme="light"] .landing {
+  --bg-deep: #f8f9fa;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f0f1f3;
+  --border-subtle: #e5e7eb;
+  --border-highlight: #d1d5db;
+
+  --primary: #4f46e5;
+  --primary-dim: rgba(79, 70, 229, 0.1);
+  --accent-gold: #d97706;
+  --accent-green: #059669;
+  --accent-danger: #dc2626;
+
+  --text-main: #111827;
+  --text-muted: #6b7280;
+}
+
 .landing h1,
 .landing h2,
 .landing h3,
@@ -42,7 +60,7 @@
 
 /* Utilities */
 .text-gradient {
-  background: linear-gradient(to right, #fff, #94a3b8);
+  background: linear-gradient(to right, var(--text-main), var(--text-muted));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -76,9 +94,9 @@
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.05);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(128, 128, 128, 0.08);
+  color: var(--text-main);
+  border: 1px solid var(--border-subtle);
   padding: 10px 20px;
   border-radius: var(--radius-md);
   font-weight: 500;
@@ -91,8 +109,8 @@
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(128, 128, 128, 0.15);
+  border-color: var(--border-highlight);
 }
 
 .btn-link {
@@ -107,7 +125,7 @@
 }
 
 .btn-link:hover {
-  color: white;
+  color: var(--text-main);
   text-decoration: underline;
 }
 
