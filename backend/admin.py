@@ -298,6 +298,38 @@ async def adjust_user_credits(
         }
 
 
+@router.post("/users/set-credits-by-email")
+async def set_credits_by_email(
+    email: str,
+    credits: int,
+    admin: dict = Depends(require_admin)
+):
+    """Set a user's credits by email address."""
+    async with get_connection() as conn:
+        user = await conn.fetchrow(
+            "SELECT id, email, credits FROM users WHERE LOWER(email) = LOWER($1)",
+            email
+        )
+
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User not found: {email}")
+
+        previous_credits = user["credits"]
+
+        await conn.execute(
+            "UPDATE users SET credits = $1 WHERE id = $2",
+            credits,
+            user["id"]
+        )
+
+        return {
+            "user_id": user["id"],
+            "email": user["email"],
+            "previous_credits": previous_credits,
+            "new_credits": credits
+        }
+
+
 @router.get("/payments", response_model=List[RecentPayment])
 async def list_payments(
     limit: int = 50,
