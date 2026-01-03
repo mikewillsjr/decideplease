@@ -37,5 +37,4 @@ DecidePlease uses a REST API with the following key endpoints:
 
 ## Contact
 
-For support: support@decideplease.com
-For privacy inquiries: privacy@decideplease.com
+For inquiries: hello@decideplease.com

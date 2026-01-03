@@ -15,7 +15,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from . import storage_pg as storage
-from .database import init_database, close_pool
+from .database import init_database, close_pool, get_connection
 from .auth_custom import (
     get_current_user,
     hash_password,
@@ -391,6 +391,122 @@ async def reset_password(request: Request, reset_request: ResetPasswordRequest):
     asyncio.create_task(send_password_changed_email(user["email"]))
 
     return {"message": "Password has been reset successfully. You can now log in with your new password."}
+
+
+class UpdateEmailRequest(BaseModel):
+    new_email: str
+    current_password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@app.post("/api/auth/update-email")
+async def update_email(request: UpdateEmailRequest, user: dict = Depends(get_current_user)):
+    """Update user's email address."""
+    # Get current user
+    current_user = await storage.get_user_by_id(user["user_id"])
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Verify current password
+    if not current_user.get("password_hash"):
+        raise HTTPException(status_code=400, detail="Cannot change email for OAuth accounts")
+
+    if not verify_password(request.current_password, current_user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    # Check if new email is already in use
+    existing = await storage.get_user_by_email(request.new_email)
+    if existing and existing["id"] != user["user_id"]:
+        raise HTTPException(status_code=400, detail="Email already in use")
+
+    # Update email directly (for now, we skip verification for simplicity)
+    async with get_connection() as conn:
+        await conn.execute(
+            "UPDATE users SET email = $1 WHERE id = $2",
+            request.new_email,
+            user["user_id"]
+        )
+
+    return {"message": "Email updated successfully"}
+
+
+@app.post("/api/auth/change-password")
+async def change_password(request: ChangePasswordRequest, user: dict = Depends(get_current_user)):
+    """Change user's password."""
+    # Get current user
+    current_user = await storage.get_user_by_id(user["user_id"])
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Verify current password
+    if not current_user.get("password_hash"):
+        raise HTTPException(status_code=400, detail="Cannot change password for OAuth accounts")
+
+    if not verify_password(request.current_password, current_user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    # Validate new password
+    if len(request.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    # Update password
+    new_hash = hash_password(request.new_password)
+    await storage.update_user_password(user["user_id"], new_hash)
+
+    # Send confirmation email
+    from .email import send_password_changed_email
+    asyncio.create_task(send_password_changed_email(current_user["email"]))
+
+    return {"message": "Password changed successfully"}
+
+
+@app.delete("/api/auth/delete-account")
+async def delete_account(user: dict = Depends(get_current_user)):
+    """Delete user's own account and all data."""
+    user_id = user["user_id"]
+
+    async with get_connection() as conn:
+        # Delete in order: messages -> conversations -> payments -> user
+        conv_ids = await conn.fetch(
+            "SELECT id FROM conversations WHERE user_id = $1",
+            user_id
+        )
+        conv_id_list = [row["id"] for row in conv_ids]
+
+        if conv_id_list:
+            await conn.execute(
+                "DELETE FROM messages WHERE conversation_id = ANY($1)",
+                conv_id_list
+            )
+
+        await conn.execute(
+            "DELETE FROM conversations WHERE user_id = $1",
+            user_id
+        )
+
+        try:
+            await conn.execute(
+                "DELETE FROM payments WHERE user_id = $1",
+                user_id
+            )
+        except:
+            pass
+
+        try:
+            await conn.execute(
+                "DELETE FROM password_reset_tokens WHERE user_id = $1",
+                user_id
+            )
+        except:
+            pass
+
+        await conn.execute("DELETE FROM users WHERE id = $1", user_id)
+
+    return {"message": "Account deleted successfully"}
 
 
 @app.get("/api/user", response_model=UserInfo)

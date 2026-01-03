@@ -356,6 +356,58 @@ export const api = {
     return response.json();
   },
 
+  // ============== User Settings API ==============
+
+  /**
+   * Update user's email address.
+   */
+  async updateEmail(newEmail, currentPassword) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/auth/update-email`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ new_email: newEmail, current_password: currentPassword }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to update email');
+    }
+    return response.json();
+  },
+
+  /**
+   * Change user's password.
+   */
+  async changePassword(currentPassword, newPassword) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/auth/change-password`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to change password');
+    }
+    return response.json();
+  },
+
+  /**
+   * Delete user's own account.
+   */
+  async deleteAccount() {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/auth/delete-account`, {
+      method: 'DELETE',
+      headers,
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to delete account');
+    }
+    return response.json();
+  },
+
   // ============== Admin API ==============
 
   /**
