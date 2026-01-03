@@ -75,6 +75,35 @@
   text-align: center;
 }
 
+.auth-success {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.auth-forgot-link {
+  text-align: right;
+  margin-top: -8px;
+}
+
+.auth-forgot-link button {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.auth-forgot-link button:hover {
+  color: #5d5dff;
+  text-decoration: underline;
+}
+
 .auth-field {
   display: flex;
   flex-direction: column;

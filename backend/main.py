@@ -4,12 +4,15 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import uuid
 import json
 import asyncio
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from . import storage_pg as storage
 from .database import init_database, close_pool
@@ -25,6 +28,7 @@ from .auth_custom import (
     RefreshRequest,
     AuthResponse,
     OAUTH_ENABLED,
+    JWT_SECRET,
 )
 from .payments import (
     create_checkout_session,
@@ -61,6 +65,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="DecidePlease API", lifespan=lifespan)
 
+# Rate limiting configuration
+# Uses IP address for rate limiting key
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # CORS configuration
 # In production, set CORS_ORIGINS env var (comma-separated)
 # In development, defaults to localhost
@@ -74,6 +84,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request body size limit (100KB max for regular requests)
+MAX_BODY_SIZE = 100 * 1024  # 100KB
+MAX_QUERY_LENGTH = 10000  # 10,000 characters max for user queries
+
+@app.middleware("http")
+async def limit_request_size(request: Request, call_next):
+    """Middleware to limit request body size."""
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_BODY_SIZE:
+        return JSONResponse(
+            status_code=413,
+            content={"detail": "Request body too large. Maximum size is 100KB."}
+        )
+    return await call_next(request)
 
 # Include admin router
 app.include_router(admin_router)
@@ -141,20 +166,21 @@ async def root():
 # ============== Authentication Endpoints ==============
 
 @app.post("/api/auth/register")
-async def register(request: RegisterRequest):
+@limiter.limit("5/minute")
+async def register(request: Request, reg_request: RegisterRequest):
     """
     Register a new user with email and password.
     Returns access and refresh tokens.
     """
     # Validate password strength
-    if len(request.password) < 8:
+    if len(reg_request.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
     # Hash password and create user
-    password_hash = hash_password(request.password)
+    password_hash = hash_password(reg_request.password)
 
     try:
-        user = await storage.create_user_with_password(request.email, password_hash)
+        user = await storage.create_user_with_password(reg_request.email, password_hash)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -176,13 +202,14 @@ async def register(request: RegisterRequest):
 
 
 @app.post("/api/auth/login")
-async def login(request: LoginRequest):
+@limiter.limit("5/minute")
+async def login(request: Request, login_request: LoginRequest):
     """
     Login with email and password.
     Returns access and refresh tokens.
     """
     # Get user by email
-    user = await storage.get_user_by_email(request.email)
+    user = await storage.get_user_by_email(login_request.email)
 
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -195,7 +222,7 @@ async def login(request: LoginRequest):
         )
 
     # Verify password
-    if not verify_password(request.password, user["password_hash"]):
+    if not verify_password(login_request.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     # Generate tokens
@@ -267,6 +294,97 @@ async def get_oauth_providers():
     return {"providers": [], "oauth_enabled": False}
 
 
+class ForgotPasswordRequest(BaseModel):
+    """Request to initiate password reset."""
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request to reset password with token."""
+    token: str
+    password: str
+
+
+@app.post("/api/auth/forgot-password")
+@limiter.limit("3/minute")
+async def forgot_password(request: Request, forgot_request: ForgotPasswordRequest):
+    """
+    Request a password reset email.
+    Always returns success to prevent email enumeration.
+    """
+    from .email import send_password_reset_email
+    import secrets
+
+    email = forgot_request.email.lower().strip()
+
+    # Check if user exists
+    user = await storage.get_user_by_email(email)
+
+    if user and user.get("password_hash"):
+        # Generate a password reset token (JWT with short expiry)
+        from datetime import datetime, timedelta, timezone
+        from jose import jwt
+
+        reset_token = jwt.encode(
+            {
+                "sub": user["id"],
+                "email": email,
+                "type": "password_reset",
+                "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+                "jti": secrets.token_urlsafe(16),
+            },
+            JWT_SECRET,
+            algorithm="HS256"
+        )
+
+        # Send reset email
+        await send_password_reset_email(email, reset_token)
+
+    # Always return success to prevent email enumeration
+    return {"message": "If an account exists with this email, a password reset link has been sent."}
+
+
+@app.post("/api/auth/reset-password")
+@limiter.limit("5/minute")
+async def reset_password(request: Request, reset_request: ResetPasswordRequest):
+    """
+    Reset password using a valid reset token.
+    """
+    from jose import jwt, JWTError
+
+    # Validate password strength
+    if len(reset_request.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    # Verify token
+    try:
+        payload = jwt.decode(reset_request.token, JWT_SECRET, algorithms=["HS256"])
+
+        # Check token type
+        if payload.get("type") != "password_reset":
+            raise HTTPException(status_code=400, detail="Invalid reset token")
+
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Invalid reset token")
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=400, detail="Reset link has expired. Please request a new one.")
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+
+    # Get user and verify they still exist
+    user = await storage.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+
+    # Hash new password and update
+    new_password_hash = hash_password(reset_request.password)
+    await storage.update_user_password(user_id, new_password_hash)
+
+    return {"message": "Password has been reset successfully. You can now log in with your new password."}
+
+
 @app.get("/api/user", response_model=UserInfo)
 async def get_user_info(user: dict = Depends(get_current_user)):
     """Get current user information including credits."""
@@ -323,15 +441,24 @@ async def delete_conversation(
 
 
 @app.post("/api/conversations/{conversation_id}/message")
+@limiter.limit("3/minute")
 async def send_message(
+    request: Request,
     conversation_id: str,
-    request: SendMessageRequest,
+    msg_request: SendMessageRequest,
     user: dict = Depends(get_current_user)
 ):
     """
     Send a message and run the 3-stage council process.
     Returns the complete response with all stages.
     """
+    # Validate query length
+    if len(msg_request.content) > MAX_QUERY_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Query too long. Maximum length is {MAX_QUERY_LENGTH} characters."
+        )
+
     # Check if conversation exists and belongs to user
     conversation = await storage.get_conversation(conversation_id, user["user_id"])
     if conversation is None:
@@ -353,16 +480,16 @@ async def send_message(
     is_first_message = len(conversation["messages"]) == 0
 
     # Add user message
-    await storage.add_user_message(conversation_id, request.content)
+    await storage.add_user_message(conversation_id, msg_request.content)
 
     # If this is the first message, generate a title
     if is_first_message:
-        title = await generate_conversation_title(request.content)
+        title = await generate_conversation_title(msg_request.content)
         await storage.update_conversation_title(conversation_id, title)
 
     # Run the 3-stage council process
     stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
-        request.content
+        msg_request.content
     )
 
     # Add assistant message with all stages
@@ -526,9 +653,11 @@ async def _process_council_request(
 
 
 @app.post("/api/conversations/{conversation_id}/message/stream")
+@limiter.limit("3/minute")
 async def send_message_stream(
+    request: Request,
     conversation_id: str,
-    request: SendMessageRequest,
+    msg_request: SendMessageRequest,
     user: dict = Depends(get_current_user)
 ):
     """
@@ -536,8 +665,15 @@ async def send_message_stream(
     Returns Server-Sent Events as each stage completes.
     Processing continues in background even if client disconnects.
     """
+    # Validate query length
+    if len(msg_request.content) > MAX_QUERY_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Query too long. Maximum length is {MAX_QUERY_LENGTH} characters."
+        )
+
     # Validate mode
-    mode = request.mode if request.mode in RUN_MODES else "standard"
+    mode = msg_request.mode if msg_request.mode in RUN_MODES else "standard"
     mode_config = RUN_MODES[mode]
     credit_cost = mode_config["credit_cost"]
 
@@ -570,7 +706,7 @@ async def send_message_stream(
     # Start background processing task
     task = asyncio.create_task(_process_council_request(
         conversation_id,
-        request.content,
+        msg_request.content,
         user["user_id"],
         is_first_message,
         event_queue,

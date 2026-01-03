@@ -436,6 +436,26 @@ async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+async def update_user_password(user_id: str, password_hash: str) -> bool:
+    """
+    Update a user's password hash.
+
+    Args:
+        user_id: User ID
+        password_hash: New bcrypt password hash
+
+    Returns:
+        True if updated, False if user not found
+    """
+    async with get_connection() as conn:
+        result = await conn.execute(
+            "UPDATE users SET password_hash = $1 WHERE id = $2",
+            password_hash,
+            user_id
+        )
+        return result == "UPDATE 1"
+
+
 async def get_user_credits(user_id: str) -> int:
     """
     Get the current credit balance for a user.

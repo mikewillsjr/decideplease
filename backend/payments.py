@@ -18,7 +18,7 @@ PRICE_DISPLAY = os.getenv("PRICE_DISPLAY", "$5.00")
 
 # Statement descriptor - what appears on customer credit card statements
 # Max 22 characters, must be ASCII, no special characters except space
-STATEMENT_DESCRIPTOR = os.getenv("STRIPE_STATEMENT_DESCRIPTOR", "BLOG ON DECK")
+STATEMENT_DESCRIPTOR = os.getenv("STRIPE_STATEMENT_DESCRIPTOR", "DECIDEPLEASE")
 
 
 async def create_checkout_session(user_id: str, user_email: str, success_url: str, cancel_url: str) -> dict:
@@ -106,9 +106,7 @@ def get_credit_pack_info() -> dict:
 
 async def send_payment_email(email: str, event_type: str, amount: int, credits: int):
     """
-    Send custom payment emails branded for Blog on Deck / DecidePlease.
-
-    TODO: Implement with your email provider (SendGrid, Postmark, AWS SES, etc.)
+    Send custom payment emails branded for DecidePlease using Resend.
 
     Args:
         email: Customer email address
@@ -116,12 +114,14 @@ async def send_payment_email(email: str, event_type: str, amount: int, credits: 
         amount: Amount in cents
         credits: Number of credits purchased/refunded
     """
-    # Placeholder - implement when ready
-    # Example with SendGrid:
-    # import sendgrid
-    # sg = sendgrid.SendGridAPIClient(api_key=os.getenv('SENDGRID_API_KEY'))
-    # ...
-    print(f"[EMAIL] Would send {event_type} email to {email}: ${amount/100:.2f}, {credits} credits")
+    from .email import send_purchase_confirmation_email, send_refund_notification_email
+
+    if event_type == 'purchase':
+        await send_purchase_confirmation_email(email, amount, credits)
+    elif event_type == 'refund':
+        await send_refund_notification_email(email, amount, credits)
+    else:
+        print(f"[EMAIL] Unknown event type: {event_type}")
 
 
 async def handle_refund(charge_id: str, amount_refunded: int, user_email: str):

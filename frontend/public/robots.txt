@@ -1,0 +1,20 @@
+# DecidePlease Robots.txt
+# https://decideplease.com
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://decideplease.com/sitemap.xml
+
+# Crawl-delay for polite bots
+Crawl-delay: 1
+
+# Block sensitive paths
+Disallow: /api/
+Disallow: /admin/
+Disallow: /reset-password
+
+# Allow important pages
+Allow: /privacy
+Allow: /terms

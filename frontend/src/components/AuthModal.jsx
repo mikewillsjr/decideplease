@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import './AuthModal.css';
 
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 export default function AuthModal({ isOpen, onClose, initialMode = 'login' }) {
-  const [mode, setMode] = useState(initialMode); // 'login' or 'register'
+  const [mode, setMode] = useState(initialMode); // 'login', 'register', or 'forgot'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const { login, register } = useAuth();
@@ -17,10 +20,25 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setIsLoading(true);
 
     try {
-      if (mode === 'register') {
+      if (mode === 'forgot') {
+        // Send forgot password request
+        const response = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.detail || 'Failed to send reset email');
+        }
+        setSuccess('If an account exists with this email, a password reset link has been sent.');
+        setIsLoading(false);
+        return;
+      } else if (mode === 'register') {
         // Validate password match
         if (password !== confirmPassword) {
           setError('Passwords do not match');
@@ -46,9 +64,10 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }) {
     }
   };
 
-  const switchMode = () => {
-    setMode(mode === 'login' ? 'register' : 'login');
+  const switchMode = (newMode) => {
+    setMode(newMode);
     setError('');
+    setSuccess('');
     setPassword('');
     setConfirmPassword('');
   };
@@ -64,12 +83,21 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }) {
         </button>
 
         <div className="auth-modal-header">
-          <h2>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h2>
-          <p>{mode === 'login' ? 'Sign in to continue' : 'Get 5 free credits to start'}</p>
+          <h2>
+            {mode === 'login' ? 'Welcome back' :
+             mode === 'register' ? 'Create your account' :
+             'Reset your password'}
+          </h2>
+          <p>
+            {mode === 'login' ? 'Sign in to continue' :
+             mode === 'register' ? 'Get 5 free credits to start' :
+             'Enter your email to receive a reset link'}
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="auth-form">
           {error && <div className="auth-error">{error}</div>}
+          {success && <div className="auth-success">{success}</div>}
 
           <div className="auth-field">
             <label htmlFor="email">Email</label>
@@ -84,18 +112,20 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }) {
             />
           </div>
 
-          <div className="auth-field">
-            <label htmlFor="password">Password</label>
-            <input
-              type="password"
-              id="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={mode === 'register' ? 'At least 8 characters' : 'Your password'}
-              required
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-            />
-          </div>
+          {mode !== 'forgot' && (
+            <div className="auth-field">
+              <label htmlFor="password">Password</label>
+              <input
+                type="password"
+                id="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={mode === 'register' ? 'At least 8 characters' : 'Your password'}
+                required
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              />
+            </div>
+          )}
 
           {mode === 'register' && (
             <div className="auth-field">
@@ -112,20 +142,32 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }) {
             </div>
           )}
 
+          {mode === 'login' && (
+            <div className="auth-forgot-link">
+              <button type="button" onClick={() => switchMode('forgot')}>
+                Forgot your password?
+              </button>
+            </div>
+          )}
+
           <button
             type="submit"
             className="auth-submit"
-            disabled={isLoading}
+            disabled={isLoading || (mode === 'forgot' && success)}
           >
             {isLoading ? (
               <span className="auth-loading">
                 <svg className="auth-spinner" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none" strokeDasharray="32" strokeLinecap="round" />
                 </svg>
-                {mode === 'login' ? 'Signing in...' : 'Creating account...'}
+                {mode === 'login' ? 'Signing in...' :
+                 mode === 'register' ? 'Creating account...' :
+                 'Sending...'}
               </span>
             ) : (
-              mode === 'login' ? 'Sign in' : 'Create account'
+              mode === 'login' ? 'Sign in' :
+              mode === 'register' ? 'Create account' :
+              'Send reset link'
             )}
           </button>
         </form>
@@ -134,12 +176,17 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }) {
           {mode === 'login' ? (
             <>
               Don&apos;t have an account?{' '}
-              <button type="button" onClick={switchMode}>Sign up</button>
+              <button type="button" onClick={() => switchMode('register')}>Sign up</button>
+            </>
+          ) : mode === 'register' ? (
+            <>
+              Already have an account?{' '}
+              <button type="button" onClick={() => switchMode('login')}>Sign in</button>
             </>
           ) : (
             <>
-              Already have an account?{' '}
-              <button type="button" onClick={switchMode}>Sign in</button>
+              Remember your password?{' '}
+              <button type="button" onClick={() => switchMode('login')}>Sign in</button>
             </>
           )}
         </div>

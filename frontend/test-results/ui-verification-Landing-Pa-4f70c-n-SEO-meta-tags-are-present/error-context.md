@@ -1,0 +1,196 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "⬡ DecidePlease" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e8]: ⬡
+          - generic [ref=e9]: DecidePlease
+        - navigation [ref=e10]:
+          - button "Examples" [ref=e11] [cursor=pointer]
+          - button "Pricing" [ref=e12] [cursor=pointer]
+          - link "Blog" [ref=e13] [cursor=pointer]:
+            - /url: /blog
+      - generic [ref=e14]:
+        - button "Log in" [ref=e15] [cursor=pointer]
+        - button "Try Free" [ref=e16] [cursor=pointer]
+  - generic [ref=e18]:
+    - heading "One Decision. Five Models. One Clear Answer." [level=1] [ref=e19]:
+      - text: One Decision.
+      - text: Five Models.
+      - text: One Clear Answer.
+    - paragraph [ref=e20]:
+      - text: You ask once. Multiple top-tier models disagree on your behalf.
+      - text: You get one consensus verdict, identified risks, and clear next steps.
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]: ✓
+        - text: Consensus verdict with confidence score
+      - generic [ref=e24]:
+        - generic [ref=e25]: ✓
+        - text: Key risks & counterarguments surfaced
+      - generic [ref=e26]:
+        - generic [ref=e27]: ✓
+        - text: Clear next steps you can act on
+    - button "Get 5 Free Credits" [ref=e29] [cursor=pointer]
+    - paragraph [ref=e30]: No credit card required. Instant access.
+    - generic [ref=e32]:
+      - generic [ref=e34]: ChatGPT
+      - generic [ref=e36]: Claude
+      - generic [ref=e38]: Gemini
+      - generic [ref=e40]: Grok
+      - generic [ref=e42]: DeepSeek
+      - generic [ref=e44]: Your Answer
+  - generic [ref=e46]:
+    - generic [ref=e47]: "Used for high-stakes decisions like:"
+    - generic [ref=e48]:
+      - generic [ref=e49]: Technical Architecture
+      - generic [ref=e50]: Legal Clause Review
+      - generic [ref=e51]: Candidate Evaluation
+      - generic [ref=e52]: Vendor Selection
+      - generic [ref=e53]: Conflicting Research
+  - generic [ref=e54]:
+    - generic [ref=e55]:
+      - link "Skip to demo" [ref=e56] [cursor=pointer]:
+        - /url: "#demo"
+        - text: Skip to demo ↓
+      - generic [ref=e57]:
+        - link "See pricing" [ref=e58] [cursor=pointer]:
+          - /url: "#pricing"
+        - button "Try 5 free queries" [ref=e59] [cursor=pointer]
+    - generic [ref=e60]:
+      - generic [ref=e61]:
+        - generic [ref=e62]: ✓
+        - generic [ref=e63]: One clear verdict
+      - generic [ref=e64]:
+        - generic [ref=e65]: ⚠
+        - generic [ref=e66]: Risks surfaced
+      - generic [ref=e67]:
+        - generic [ref=e68]: ⚖
+        - generic [ref=e69]: Dissent preserved
+      - generic [ref=e70]:
+        - generic [ref=e71]: →
+        - generic [ref=e72]: Next steps ready
+    - generic [ref=e74]:
+      - generic [ref=e75]:
+        - heading "How It Works" [level=2] [ref=e76]
+        - generic [ref=e77]:
+          - generic [ref=e78]: "1"
+          - generic [ref=e79]:
+            - heading "You ask once" [level=3] [ref=e80]
+            - paragraph [ref=e81]: Describe your decision, tradeoff, or question. No prompt engineering required.
+        - generic [ref=e82]:
+          - generic [ref=e83]: "2"
+          - generic [ref=e84]:
+            - heading "5 models deliberate" [level=3] [ref=e85]
+            - paragraph [ref=e86]: GPT, Claude, Gemini, Grok, and DeepSeek each form independent opinions on your question.
+        - generic [ref=e87]:
+          - generic [ref=e88]: "3"
+          - generic [ref=e89]:
+            - heading "Anonymous peer review" [level=3] [ref=e90]
+            - paragraph [ref=e91]: Each model critiques the others without knowing who wrote what. No favoritism. Pure merit.
+        - generic [ref=e92]:
+          - generic [ref=e93]: "4"
+          - generic [ref=e94]:
+            - heading "One verdict emerges" [level=3] [ref=e95]
+            - paragraph [ref=e96]: A chairman model synthesizes consensus, flags dissent, and delivers actionable next steps.
+      - generic [ref=e98]:
+        - generic [ref=e99]: Example Output
+        - generic [ref=e100]:
+          - generic [ref=e101]: Consensus Verdict
+          - generic [ref=e102]: 92% CONFIDENCE
+        - generic [ref=e103]:
+          - generic [ref=e104]: "Q: \"Migrate to Next.js or stick with React Router?\""
+          - 'heading "Recommendation: Migrate to Next.js" [level=4] [ref=e105]': "Recommendation: Migrate to Next.js"
+          - generic [ref=e107]:
+            - generic [ref=e108]:
+              - generic [ref=e109]: GPT-4
+              - generic [ref=e110]: Next.js
+            - generic [ref=e111]:
+              - generic [ref=e112]: Claude
+              - generic [ref=e113]: Next.js
+            - generic [ref=e114]:
+              - generic [ref=e115]: Gemini
+              - generic [ref=e116]: React Router (dissent)
+          - generic [ref=e117]:
+            - generic [ref=e118]: Primary Risk
+            - generic [ref=e119]: Migration complexity may pause feature work for 2-3 sprints.
+          - generic [ref=e120]:
+            - generic [ref=e121]: Flip Condition
+            - generic [ref=e122]:
+              - text: If SEO is not critical, verdict flips to
+              - strong [ref=e123]: React Router
+              - text: .
+  - generic [ref=e126]:
+    - generic [ref=e127]:
+      - heading "When it matters, don't rely on one opinion." [level=2] [ref=e128]
+      - paragraph [ref=e129]: Single models often confirm your bias. The Council is built to challenge it.
+      - paragraph [ref=e130]: We force top models to critique each other anonymously. If there's a risk, we find it. If there's a better path, we highlight it.
+      - button "See another decision ↻" [ref=e131] [cursor=pointer]
+      - button "Run your own decision →" [ref=e132] [cursor=pointer]
+    - generic [ref=e133]:
+      - generic [ref=e134]:
+        - generic [ref=e135]: Consensus Verdict
+        - generic [ref=e136]: 92% CONFIDENCE
+      - generic [ref=e137]:
+        - generic [ref=e138]: "Q: \"Migrate to Next.js or stick with React Router?\""
+        - heading "Migrate to Next.js — unless SEO is not a priority and team velocity is critical." [level=4] [ref=e139]: Migrate to Next.js — unless SEO is not a priority and team velocity is critical.
+        - generic [ref=e141]:
+          - generic [ref=e142]:
+            - generic [ref=e144]: GPT-4
+            - generic [ref=e145]: Next.js
+          - generic [ref=e146]:
+            - generic [ref=e148]: Claude
+            - generic [ref=e149]: Next.js
+          - generic [ref=e150]:
+            - generic [ref=e152]: Gemini
+            - generic [ref=e153]: React Router (dissent)
+        - generic [ref=e154]:
+          - generic [ref=e155]: Primary Risk
+          - generic [ref=e156]: Migration complexity may pause feature work for 2-3 sprints.
+        - generic [ref=e157]:
+          - generic [ref=e158]: Tradeoff
+          - generic [ref=e159]: Next.js adds SSR/SEO benefits but increases infrastructure complexity.
+        - generic [ref=e160]:
+          - generic [ref=e161]: Flip Condition
+          - generic [ref=e162]: If SEO is not a top priority, the verdict flips to React Router to reduce overhead.
+        - generic [ref=e163]: "Consulted: Top-tier Language Models (GPT, Claude, Gemini)"
+  - generic [ref=e165]:
+    - generic [ref=e166]:
+      - heading "Pricing" [level=2] [ref=e167]
+      - paragraph [ref=e168]:
+        - strong [ref=e169]: 1 credit = 1 Council Run
+        - text: (Multi-model debate + Verdict + Action Plan)
+    - generic [ref=e170]:
+      - generic [ref=e171]:
+        - heading "Trial" [level=3] [ref=e172]
+        - generic [ref=e173]: $0
+        - generic [ref=e174]: 5 credits included
+        - button "Try Free" [ref=e175] [cursor=pointer]
+      - generic [ref=e176]:
+        - generic [ref=e177]: POPULAR
+        - heading "Starter" [level=3] [ref=e178]
+        - generic [ref=e179]: $5
+        - generic [ref=e180]: 20 credits (never expire)
+        - button "Get Starter" [ref=e181] [cursor=pointer]
+      - generic [ref=e182]:
+        - heading "Pro" [level=3] [ref=e183]
+        - generic [ref=e184]: $15
+        - generic [ref=e185]: 100 credits
+        - button "Get Pro" [ref=e186] [cursor=pointer]
+  - contentinfo [ref=e187]:
+    - generic [ref=e188]:
+      - generic [ref=e190]: © 2026 DecidePlease
+      - navigation [ref=e191]:
+        - link "Home" [ref=e192] [cursor=pointer]:
+          - /url: /
+        - link "Blog" [ref=e193] [cursor=pointer]:
+          - /url: /blog
+        - link "Privacy" [ref=e194] [cursor=pointer]:
+          - /url: /privacy
+        - link "Terms" [ref=e195] [cursor=pointer]:
+          - /url: /terms
+```

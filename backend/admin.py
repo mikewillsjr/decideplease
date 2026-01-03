@@ -62,9 +62,13 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
     """
     user_email = user.get("email", "").lower()
 
-    # Development mode bypass
+    # Development mode bypass - only on localhost for safety
     if os.getenv("DEVELOPMENT_MODE") == "true":
-        return user
+        # Only allow bypass in actual local development
+        is_local = not os.getenv("RENDER") and not os.getenv("PRODUCTION")
+        if is_local:
+            print(f"[WARNING] Admin bypass active for {user_email} (DEVELOPMENT_MODE=true)")
+            return user
 
     if not ADMIN_EMAILS:
         raise HTTPException(
@@ -427,9 +431,11 @@ async def check_admin_access(user: dict = Depends(get_current_user)):
     """Check if current user has admin access."""
     user_email = user.get("email", "").lower()
 
-    # Development mode bypass
+    # Development mode bypass - only on localhost for safety
     if os.getenv("DEVELOPMENT_MODE") == "true":
-        return {"is_admin": True, "email": user_email}
+        is_local = not os.getenv("RENDER") and not os.getenv("PRODUCTION")
+        if is_local:
+            return {"is_admin": True, "email": user_email, "dev_mode": True}
 
     is_admin = user_email in ADMIN_EMAILS
     return {"is_admin": is_admin, "email": user_email}

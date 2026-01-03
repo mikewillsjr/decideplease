@@ -11,10 +11,37 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 
 # Configuration
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
+_DEFAULT_JWT_SECRET = "dev-secret-change-in-production"
+JWT_SECRET = os.getenv("JWT_SECRET", _DEFAULT_JWT_SECRET)
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 REFRESH_TOKEN_EXPIRE_DAYS = 30
+
+# Validate JWT_SECRET in production
+def validate_jwt_secret():
+    """
+    Validate that JWT_SECRET is properly configured in production.
+    Raises RuntimeError if using default secret in production environment.
+    """
+    is_production = (
+        os.getenv("RENDER") == "true" or  # Render.com
+        os.getenv("PRODUCTION") == "true" or
+        os.getenv("NODE_ENV") == "production" or
+        os.getenv("ENVIRONMENT") == "production"
+    )
+
+    if is_production and JWT_SECRET == _DEFAULT_JWT_SECRET:
+        raise RuntimeError(
+            "SECURITY ERROR: JWT_SECRET environment variable is not set! "
+            "You must set a secure JWT_SECRET in production. "
+            "Generate one with: openssl rand -hex 32"
+        )
+
+    if JWT_SECRET == _DEFAULT_JWT_SECRET:
+        print("[WARNING] Using default JWT_SECRET - only acceptable in development!")
+
+# Run validation on module load
+validate_jwt_secret()
 
 # OAuth feature flag (disabled for now)
 OAUTH_ENABLED = os.getenv("OAUTH_ENABLED", "false").lower() == "true"

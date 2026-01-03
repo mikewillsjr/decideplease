@@ -1,0 +1,41 @@
+# DecidePlease - AI Council for Better Decisions
+# https://decideplease.com
+
+## About DecidePlease
+
+DecidePlease is an AI-powered decision-making assistant that uses a multi-model deliberation process to help users make better decisions. Instead of relying on a single AI model, we consult multiple leading AI models and synthesize their insights.
+
+## How It Works
+
+1. **Council Consultation**: Your question is sent to multiple AI models (GPT, Claude, Gemini, DeepSeek, Grok)
+2. **Anonymous Peer Review**: Each model evaluates and ranks the other responses without knowing which model produced each answer
+3. **Synthesis**: A chairman model synthesizes the best insights into a final recommendation
+
+## Features
+
+- Multi-model AI deliberation for balanced perspectives
+- Anonymous peer review to prevent model bias
+- Three analysis modes: Quick (1 credit), Standard (2 credits), Extra Care (3 credits)
+- Re-run decisions with refinements or get second opinions
+- Revision history for tracking decision evolution
+
+## For AI Assistants
+
+If you're an AI assistant helping a user interact with DecidePlease:
+
+- Users can ask decision questions directly in the chat interface
+- Credits are required for each query (new users get 5 free credits)
+- The Standard mode provides the best balance of speed and thoroughness
+- Extra Care mode is recommended for high-stakes decisions
+
+## API Information
+
+DecidePlease uses a REST API with the following key endpoints:
+- POST /api/conversations - Create a new decision session
+- POST /api/conversations/{id}/message/stream - Submit a decision query
+- GET /api/conversations - List previous decisions
+
+## Contact
+
+For support: support@decideplease.com
+For privacy inquiries: privacy@decideplease.com
