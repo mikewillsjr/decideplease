@@ -288,10 +288,10 @@ async def delete_conversation(conversation_id: str, user_id: str) -> bool:
 
 async def get_or_create_user(user_id: str, email: str) -> Dict[str, Any]:
     """
-    Get a user by Clerk ID, or create if doesn't exist.
+    Get a user by ID, or create if doesn't exist.
 
     Args:
-        user_id: Clerk user ID
+        user_id: User ID
         email: User's email address
 
     Returns:
@@ -300,7 +300,7 @@ async def get_or_create_user(user_id: str, email: str) -> Dict[str, Any]:
     async with get_connection() as conn:
         # Try to get existing user
         row = await conn.fetchrow(
-            "SELECT id, email, credits FROM users WHERE id = $1",
+            "SELECT id, email, credits, email_verified FROM users WHERE id = $1",
             user_id
         )
 
@@ -308,14 +308,15 @@ async def get_or_create_user(user_id: str, email: str) -> Dict[str, Any]:
             return {
                 "id": row["id"],
                 "email": row["email"],
-                "credits": row["credits"]
+                "credits": row["credits"],
+                "email_verified": row["email_verified"] or False
             }
 
         # Create new user with 5 free credits
         await conn.execute(
             """
-            INSERT INTO users (id, email, credits, created_at)
-            VALUES ($1, $2, 5, NOW())
+            INSERT INTO users (id, email, credits, auth_provider, created_at)
+            VALUES ($1, $2, 5, 'email', NOW())
             ON CONFLICT (id) DO NOTHING
             """,
             user_id,
@@ -325,8 +326,114 @@ async def get_or_create_user(user_id: str, email: str) -> Dict[str, Any]:
         return {
             "id": user_id,
             "email": email,
-            "credits": 5
+            "credits": 5,
+            "email_verified": False
         }
+
+
+async def create_user_with_password(email: str, password_hash: str) -> Dict[str, Any]:
+    """
+    Create a new user with email/password authentication.
+
+    Args:
+        email: User's email address
+        password_hash: Bcrypt hashed password
+
+    Returns:
+        User dict with id, email, credits
+
+    Raises:
+        Exception if email already exists
+    """
+    import uuid
+    user_id = str(uuid.uuid4())
+
+    async with get_connection() as conn:
+        # Check if email already exists
+        existing = await conn.fetchrow(
+            "SELECT id FROM users WHERE email = $1",
+            email.lower()
+        )
+        if existing:
+            raise ValueError("Email already registered")
+
+        await conn.execute(
+            """
+            INSERT INTO users (id, email, password_hash, auth_provider, credits, created_at)
+            VALUES ($1, $2, $3, 'email', 5, NOW())
+            """,
+            user_id,
+            email.lower(),
+            password_hash
+        )
+
+        return {
+            "id": user_id,
+            "email": email.lower(),
+            "credits": 5,
+            "email_verified": False
+        }
+
+
+async def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+    """
+    Get a user by email address.
+
+    Args:
+        email: User's email address
+
+    Returns:
+        User dict or None if not found
+    """
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, email, password_hash, credits, email_verified, auth_provider
+            FROM users WHERE email = $1
+            """,
+            email.lower()
+        )
+
+        if row:
+            return {
+                "id": row["id"],
+                "email": row["email"],
+                "password_hash": row["password_hash"],
+                "credits": row["credits"],
+                "email_verified": row["email_verified"] or False,
+                "auth_provider": row["auth_provider"] or "email"
+            }
+        return None
+
+
+async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get a user by ID.
+
+    Args:
+        user_id: User ID
+
+    Returns:
+        User dict or None if not found
+    """
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, email, credits, email_verified, auth_provider
+            FROM users WHERE id = $1
+            """,
+            user_id
+        )
+
+        if row:
+            return {
+                "id": row["id"],
+                "email": row["email"],
+                "credits": row["credits"],
+                "email_verified": row["email_verified"] or False,
+                "auth_provider": row["auth_provider"] or "email"
+            }
+        return None
 
 
 async def get_user_credits(user_id: str) -> int:

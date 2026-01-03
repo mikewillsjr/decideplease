@@ -13,7 +13,19 @@ import asyncio
 
 from . import storage_pg as storage
 from .database import init_database, close_pool
-from .auth import get_current_user
+from .auth_custom import (
+    get_current_user,
+    hash_password,
+    verify_password,
+    create_access_token,
+    create_refresh_token,
+    verify_token,
+    RegisterRequest,
+    LoginRequest,
+    RefreshRequest,
+    AuthResponse,
+    OAUTH_ENABLED,
+)
 from .payments import (
     create_checkout_session,
     verify_webhook_signature,
@@ -124,6 +136,135 @@ class CreditPackInfo(BaseModel):
 async def root():
     """Health check endpoint."""
     return {"status": "ok", "service": "DecidePlease API"}
+
+
+# ============== Authentication Endpoints ==============
+
+@app.post("/api/auth/register")
+async def register(request: RegisterRequest):
+    """
+    Register a new user with email and password.
+    Returns access and refresh tokens.
+    """
+    # Validate password strength
+    if len(request.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    # Hash password and create user
+    password_hash = hash_password(request.password)
+
+    try:
+        user = await storage.create_user_with_password(request.email, password_hash)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Generate tokens
+    access_token = create_access_token(user["id"], user["email"])
+    refresh_token = create_refresh_token(user["id"])
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "credits": user["credits"],
+            "email_verified": user["email_verified"]
+        }
+    }
+
+
+@app.post("/api/auth/login")
+async def login(request: LoginRequest):
+    """
+    Login with email and password.
+    Returns access and refresh tokens.
+    """
+    # Get user by email
+    user = await storage.get_user_by_email(request.email)
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    # Check if user has a password (might be OAuth-only user)
+    if not user.get("password_hash"):
+        raise HTTPException(
+            status_code=401,
+            detail="This account uses social login. Please sign in with your social provider."
+        )
+
+    # Verify password
+    if not verify_password(request.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    # Generate tokens
+    access_token = create_access_token(user["id"], user["email"])
+    refresh_token = create_refresh_token(user["id"])
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "credits": user["credits"],
+            "email_verified": user["email_verified"]
+        }
+    }
+
+
+@app.post("/api/auth/refresh")
+async def refresh_token(request: RefreshRequest):
+    """
+    Refresh an access token using a refresh token.
+    """
+    # Verify refresh token
+    payload = verify_token(request.refresh_token, token_type="refresh")
+
+    # Get user
+    user = await storage.get_user_by_id(payload["sub"])
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    # Generate new access token
+    access_token = create_access_token(user["id"], user["email"])
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
+
+@app.get("/api/auth/me")
+async def get_current_user_info(user: dict = Depends(get_current_user)):
+    """
+    Get the current authenticated user's information.
+    """
+    user_data = await storage.get_user_by_id(user["user_id"])
+    if not user_data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "id": user_data["id"],
+        "email": user_data["email"],
+        "credits": user_data["credits"],
+        "email_verified": user_data["email_verified"]
+    }
+
+
+@app.get("/api/auth/oauth/providers")
+async def get_oauth_providers():
+    """
+    Get list of available OAuth providers.
+    Returns empty list if OAuth is disabled.
+    """
+    if not OAUTH_ENABLED:
+        return {"providers": [], "oauth_enabled": False}
+
+    # Return enabled providers (none for now)
+    return {"providers": [], "oauth_enabled": False}
 
 
 @app.get("/api/user", response_model=UserInfo)

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth, useUser, useClerk } from '@clerk/clerk-react';
+import { useAuth } from './contexts/AuthContext';
 import UnifiedHeader from './components/UnifiedHeader';
 import UnifiedFooter from './components/UnifiedFooter';
 import Sidebar from './components/Sidebar';
@@ -10,9 +10,7 @@ import { api, setAuthTokenGetter } from './api';
 import './App.css';
 
 function App() {
-  const { isLoaded, isSignedIn, getToken } = useAuth();
-  const { user } = useUser();
-  const { signOut } = useClerk();
+  const { isLoading: authLoading, isAuthenticated, user, logout, getAccessToken, refreshUser } = useAuth();
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
@@ -26,21 +24,21 @@ function App() {
 
   // Set up auth token getter for API calls
   useEffect(() => {
-    if (isLoaded && isSignedIn) {
-      setAuthTokenGetter(() => getToken());
+    if (isAuthenticated) {
+      setAuthTokenGetter(() => getAccessToken());
     }
-  }, [isLoaded, isSignedIn, getToken]);
+  }, [isAuthenticated, getAccessToken]);
 
-  // Load conversations and user info when signed in
+  // Load conversations and user info when authenticated
   useEffect(() => {
-    if (isSignedIn) {
+    if (isAuthenticated) {
       loadConversations();
       loadUserInfo();
       loadCreditPackInfo();
       checkPaymentStatus();
       checkAdminAccess();
     }
-  }, [isSignedIn]);
+  }, [isAuthenticated]);
 
   const checkAdminAccess = async () => {
     try {
@@ -53,10 +51,10 @@ function App() {
 
   // Load conversation details when selected
   useEffect(() => {
-    if (currentConversationId && isSignedIn) {
+    if (currentConversationId && isAuthenticated) {
       loadConversation(currentConversationId);
     }
-  }, [currentConversationId, isSignedIn]);
+  }, [currentConversationId, isAuthenticated]);
 
   const loadUserInfo = async () => {
     try {
@@ -83,7 +81,10 @@ function App() {
 
     if (paymentStatus === 'success') {
       // Reload user info to get updated credits
-      setTimeout(() => loadUserInfo(), 1000);
+      setTimeout(() => {
+        loadUserInfo();
+        refreshUser();
+      }, 1000);
       // Clear the URL param
       window.history.replaceState({}, '', window.location.pathname);
     } else if (paymentStatus === 'cancelled') {
@@ -480,13 +481,13 @@ function App() {
     }
   };
 
-  // Show nothing while Clerk is loading (prevents flash)
-  if (!isLoaded) {
+  // Show nothing while auth is loading (prevents flash)
+  if (authLoading) {
     return null;
   }
 
-  // Show landing page when not signed in
-  if (!isSignedIn) {
+  // Show landing page when not authenticated
+  if (!isAuthenticated) {
     return <LandingPage />;
   }
 
@@ -495,12 +496,12 @@ function App() {
       <UnifiedHeader
         isSignedIn={true}
         credits={credits}
-        userEmail={user?.primaryEmailAddress?.emailAddress}
+        userEmail={user?.email}
         creditPackInfo={creditPackInfo}
         onCreditsUpdated={loadUserInfo}
         isAdmin={isAdmin}
         onOpenAdmin={() => setShowAdminPanel(true)}
-        onSignOut={signOut}
+        onSignOut={logout}
       />
       <div className="app-body">
         <Sidebar

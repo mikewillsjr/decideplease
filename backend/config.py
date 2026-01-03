@@ -60,3 +60,12 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # Data directory for conversation storage
 DATA_DIR = "data/conversations"
+
+# ============== Auth Configuration ==============
+AUTH_CONFIG = {
+    "jwt_secret": os.getenv("JWT_SECRET", "dev-secret-change-in-production"),
+    "jwt_algorithm": "HS256",
+    "access_token_expire_minutes": 60 * 24,  # 24 hours
+    "refresh_token_expire_days": 30,
+    "oauth_enabled": os.getenv("OAUTH_ENABLED", "false").lower() == "true",
+}

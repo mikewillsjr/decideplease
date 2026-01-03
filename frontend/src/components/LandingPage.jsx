@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { SignIn, SignUp } from '@clerk/clerk-react';
 import UnifiedHeader from './UnifiedHeader';
 import UnifiedFooter from './UnifiedFooter';
+import AuthModal from './AuthModal';
 import './LandingPage.css';
 
 const DEMOS = [
@@ -409,65 +409,11 @@ export default function LandingPage() {
       <UnifiedFooter />
 
       {/* Auth Modal */}
-      {showAuth && (
-        <div className="auth-modal" onClick={() => setShowAuth(false)}>
-          <div className="auth-modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="auth-close" onClick={() => setShowAuth(false)}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
-            {authMode === 'signin' ? (
-              <>
-                <SignIn
-                  routing="virtual"
-                  afterSignInUrl="/"
-                  appearance={{
-                    elements: {
-                      rootBox: { width: '100%' },
-                      card: {
-                        background: 'transparent',
-                        boxShadow: 'none',
-                        border: 'none',
-                        margin: 0,
-                        padding: 0,
-                      },
-                    },
-                  }}
-                />
-                <p className="auth-toggle">
-                  Don't have an account?{' '}
-                  <button onClick={() => setAuthMode('signup')}>Sign up</button>
-                </p>
-              </>
-            ) : (
-              <>
-                <SignUp
-                  routing="virtual"
-                  afterSignUpUrl="/"
-                  appearance={{
-                    elements: {
-                      rootBox: { width: '100%' },
-                      card: {
-                        background: 'transparent',
-                        boxShadow: 'none',
-                        border: 'none',
-                        margin: 0,
-                        padding: 0,
-                      },
-                    },
-                  }}
-                />
-                <p className="auth-toggle">
-                  Already have an account?{' '}
-                  <button onClick={() => setAuthMode('signin')}>Sign in</button>
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <AuthModal
+        isOpen={showAuth}
+        onClose={() => setShowAuth(false)}
+        initialMode={authMode === 'signin' ? 'login' : 'register'}
+      />
     </div>
   );
 }

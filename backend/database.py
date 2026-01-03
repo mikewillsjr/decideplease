@@ -45,15 +45,28 @@ async def get_connection():
 async def init_database():
     """Initialize database schema."""
     async with get_connection() as conn:
-        # Create users table (synced from Clerk)
+        # Create users table
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
                 email TEXT UNIQUE,
+                password_hash TEXT,
+                auth_provider TEXT DEFAULT 'email',
+                oauth_id TEXT,
+                email_verified BOOLEAN DEFAULT FALSE,
                 credits INTEGER DEFAULT 5,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
+
+        # Add new auth columns if they don't exist (for migration from Clerk)
+        try:
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'email'")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id TEXT")
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE")
+        except Exception:
+            pass  # Columns may already exist
 
         # Create conversations table
         await conn.execute("""
