@@ -188,6 +188,10 @@ async def register(request: Request, reg_request: RegisterRequest):
     access_token = create_access_token(user["id"], user["email"])
     refresh_token = create_refresh_token(user["id"])
 
+    # Send welcome email (fire and forget - don't block registration)
+    from .email import send_welcome_email
+    asyncio.create_task(send_welcome_email(user["email"], user["credits"]))
+
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -381,6 +385,10 @@ async def reset_password(request: Request, reset_request: ResetPasswordRequest):
     # Hash new password and update
     new_password_hash = hash_password(reset_request.password)
     await storage.update_user_password(user_id, new_password_hash)
+
+    # Send password changed confirmation email
+    from .email import send_password_changed_email
+    asyncio.create_task(send_password_changed_email(user["email"]))
 
     return {"message": "Password has been reset successfully. You can now log in with your new password."}
 
@@ -687,6 +695,7 @@ async def send_message_stream(
     is_admin = user_email in ADMIN_EMAILS
 
     # Check and deduct credits based on mode cost (skip for admins)
+    remaining_credits = None
     if not is_admin:
         credits = await storage.get_user_credits(user["user_id"])
         if credits < credit_cost:
@@ -694,8 +703,14 @@ async def send_message_stream(
                 status_code=402,
                 detail=f"Insufficient credits. Need {credit_cost}, have {credits}."
             )
-        if not await storage.deduct_credits(user["user_id"], credit_cost):
+        success, remaining_credits = await storage.deduct_credits_and_get_remaining(user["user_id"], credit_cost)
+        if not success:
             raise HTTPException(status_code=402, detail="Insufficient credits")
+
+        # Send low credits email if user is running low (1 or 0 credits remaining)
+        if remaining_credits <= 1:
+            from .email import send_low_credits_email
+            asyncio.create_task(send_low_credits_email(user["email"], remaining_credits))
 
     # Check if this is the first message
     is_first_message = len(conversation["messages"]) == 0
@@ -810,8 +825,14 @@ async def rerun_decision(
                 status_code=402,
                 detail=f"Insufficient credits. Need {credit_cost}, have {credits}."
             )
-        if not await storage.deduct_credits(user["user_id"], credit_cost):
+        success, remaining_credits = await storage.deduct_credits_and_get_remaining(user["user_id"], credit_cost)
+        if not success:
             raise HTTPException(status_code=402, detail="Insufficient credits")
+
+        # Send low credits email if user is running low (1 or 0 credits remaining)
+        if remaining_credits <= 1:
+            from .email import send_low_credits_email
+            asyncio.create_task(send_low_credits_email(user["email"], remaining_credits))
 
     # Create event queue for SSE
     event_queue: asyncio.Queue = asyncio.Queue()

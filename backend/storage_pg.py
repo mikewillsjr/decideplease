@@ -512,6 +512,38 @@ async def deduct_credits(user_id: str, amount: int) -> bool:
         return result == "UPDATE 1"
 
 
+async def deduct_credits_and_get_remaining(user_id: str, amount: int) -> tuple[bool, int]:
+    """
+    Deduct credits and return remaining balance.
+
+    Args:
+        user_id: User ID
+        amount: Number of credits to deduct
+
+    Returns:
+        Tuple of (success, remaining_credits)
+    """
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE users
+            SET credits = credits - $1
+            WHERE id = $2 AND credits >= $1
+            RETURNING credits
+            """,
+            amount,
+            user_id
+        )
+        if row:
+            return True, row["credits"]
+        # If update failed, get current credits
+        current = await conn.fetchval(
+            "SELECT credits FROM users WHERE id = $1",
+            user_id
+        )
+        return False, current or 0
+
+
 async def add_credits(user_id: str, amount: int):
     """
     Add credits to a user's balance.
