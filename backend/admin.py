@@ -439,3 +439,39 @@ async def check_admin_access(user: dict = Depends(get_current_user)):
 
     is_admin = user_email in ADMIN_EMAILS
     return {"is_admin": is_admin, "email": user_email}
+
+
+@router.post("/test-emails")
+async def send_test_emails(
+    email: str,
+    admin: dict = Depends(require_admin)
+):
+    """Send all email templates to a specified address for testing."""
+    from .email import (
+        send_welcome_email,
+        send_password_reset_email,
+        send_password_changed_email,
+        send_purchase_confirmation_email,
+        send_refund_notification_email,
+        send_low_credits_email,
+        send_verification_email,
+    )
+
+    results = {}
+
+    # Send all test emails
+    results["welcome"] = await send_welcome_email(email, credits=5)
+    results["password_reset"] = await send_password_reset_email(email, "test-token-preview-only")
+    results["password_changed"] = await send_password_changed_email(email)
+    results["purchase_confirmation"] = await send_purchase_confirmation_email(email, amount_cents=500, credits=10)
+    results["refund_notification"] = await send_refund_notification_email(email, amount_cents=500)
+    results["low_credits_1"] = await send_low_credits_email(email, remaining_credits=1)
+    results["low_credits_0"] = await send_low_credits_email(email, remaining_credits=0)
+    results["email_verification"] = await send_verification_email(email, "verify-token-preview-only")
+
+    sent_count = sum(1 for v in results.values() if v)
+
+    return {
+        "message": f"Sent {sent_count}/8 test emails to {email}",
+        "results": results
+    }
