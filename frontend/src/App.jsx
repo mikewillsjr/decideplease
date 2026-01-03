@@ -367,7 +367,24 @@ function App() {
   };
 
   const handleSendMessage = async (content, mode = 'standard') => {
-    if (!currentConversationId) return;
+    // Auto-create conversation if none exists
+    let conversationId = currentConversationId;
+    if (!conversationId) {
+      try {
+        const newConv = await api.createConversation();
+        conversationId = newConv.id;
+        setConversations([
+          { id: newConv.id, created_at: newConv.created_at, title: 'New Decision', message_count: 0 },
+          ...conversations,
+        ]);
+        setCurrentConversationId(newConv.id);
+        setCurrentConversation({ id: newConv.id, messages: [], title: 'New Decision' });
+      } catch (error) {
+        console.error('Failed to create conversation:', error);
+        setError('Failed to start new decision. Please try again.');
+        return;
+      }
+    }
 
     // Check credits before sending
     if (credits !== null && credits <= 0) {
