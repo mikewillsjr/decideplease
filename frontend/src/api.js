@@ -458,4 +458,52 @@ export const api = {
     }
     return response.json();
   },
+
+  /**
+   * Set user credits by email (admin).
+   */
+  async setUserCreditsByEmail(email, credits) {
+    const headers = await getHeaders();
+    const response = await fetch(
+      `${API_BASE}/api/admin/users/set-credits-by-email?email=${encodeURIComponent(email)}&credits=${credits}`,
+      { method: 'POST', headers }
+    );
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to set credits');
+    }
+    return response.json();
+  },
+
+  /**
+   * Delete user account by email (admin).
+   */
+  async deleteUserByEmail(email) {
+    const headers = await getHeaders();
+    const response = await fetch(
+      `${API_BASE}/api/admin/users/delete-by-email?email=${encodeURIComponent(email)}`,
+      { method: 'DELETE', headers }
+    );
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to delete user');
+    }
+    return response.json();
+  },
+
+  /**
+   * Reset user password (admin) - sends reset email.
+   */
+  async adminSendPasswordReset(email) {
+    const headers = await getHeaders();
+    const response = await fetch(
+      `${API_BASE}/api/admin/users/send-password-reset?email=${encodeURIComponent(email)}`,
+      { method: 'POST', headers }
+    );
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to send password reset');
+    }
+    return response.json();
+  },
 };

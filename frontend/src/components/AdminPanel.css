@@ -341,6 +341,105 @@ tbody tr.selected {
   white-space: nowrap;
 }
 
+/* Success Message */
+.admin-success {
+  background: #dcfce7;
+  color: #16a34a;
+  padding: 12px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.admin-success button {
+  background: none;
+  border: 1px solid #16a34a;
+  color: #16a34a;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Quick Actions */
+.quick-actions {
+  background: #f0f4ff;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.quick-actions h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.quick-actions-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.quick-actions-form input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.quick-actions-form input[type="email"] {
+  min-width: 250px;
+}
+
+.quick-actions-form button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.quick-actions-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.quick-actions-form .btn-credits {
+  background: #22c55e;
+  color: white;
+}
+
+.quick-actions-form .btn-credits:hover:not(:disabled) {
+  background: #16a34a;
+}
+
+.quick-actions-form .btn-reset {
+  background: #f59e0b;
+  color: white;
+}
+
+.quick-actions-form .btn-reset:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.quick-actions-form .btn-delete {
+  background: #ef4444;
+  color: white;
+}
+
+.quick-actions-form .btn-delete:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.quick-actions-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #666;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .users-layout {
@@ -354,5 +453,14 @@ tbody tr.selected {
   .admin-panel {
     width: 95%;
     height: 90vh;
+  }
+
+  .quick-actions-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .quick-actions-form input[type="email"] {
+    min-width: auto;
   }
 }

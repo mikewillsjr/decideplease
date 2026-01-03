@@ -13,6 +13,12 @@ function AdminPanel({ onClose }) {
   const [creditAdjustment, setCreditAdjustment] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
+
+  // Quick action states
+  const [quickEmail, setQuickEmail] = useState('');
+  const [quickCredits, setQuickCredits] = useState('');
+  const [quickActionLoading, setQuickActionLoading] = useState(false);
 
   useEffect(() => {
     loadDashboard();
@@ -65,10 +71,64 @@ function AdminPanel({ onClose }) {
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     setSelectedUser(null);
+    setSuccessMessage(null);
+    setError(null);
     if (tab === 'dashboard') loadDashboard();
     else if (tab === 'users') loadUsers();
     else if (tab === 'payments') loadPayments();
     else if (tab === 'queries') loadQueries();
+  };
+
+  // Quick Actions
+  const handleSetCredits = async () => {
+    if (!quickEmail || quickCredits === '') return;
+    setQuickActionLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const result = await api.setUserCreditsByEmail(quickEmail, parseInt(quickCredits));
+      setSuccessMessage(`Set ${result.email} credits: ${result.previous_credits} → ${result.new_credits}`);
+      setQuickEmail('');
+      setQuickCredits('');
+      if (activeTab === 'users') loadUsers();
+    } catch (err) {
+      setError(err.message);
+    }
+    setQuickActionLoading(false);
+  };
+
+  const handleSendPasswordReset = async () => {
+    if (!quickEmail) return;
+    setQuickActionLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      await api.adminSendPasswordReset(quickEmail);
+      setSuccessMessage(`Password reset email sent to ${quickEmail}`);
+    } catch (err) {
+      setError(err.message);
+    }
+    setQuickActionLoading(false);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!quickEmail) return;
+    if (!window.confirm(`PERMANENTLY DELETE user ${quickEmail} and ALL their data? This cannot be undone!`)) {
+      return;
+    }
+    setQuickActionLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const result = await api.deleteUserByEmail(quickEmail);
+      setSuccessMessage(`Deleted ${quickEmail}: ${result.deleted.conversations} conversations, ${result.deleted.messages} messages`);
+      setQuickEmail('');
+      if (activeTab === 'users') loadUsers();
+      if (activeTab === 'dashboard') loadDashboard();
+    } catch (err) {
+      setError(err.message);
+    }
+    setQuickActionLoading(false);
   };
 
   const handleUserSearch = (e) => {
@@ -155,6 +215,59 @@ function AdminPanel({ onClose }) {
             <button onClick={() => setError(null)}>Dismiss</button>
           </div>
         )}
+
+        {successMessage && (
+          <div className="admin-success">
+            {successMessage}
+            <button onClick={() => setSuccessMessage(null)}>Dismiss</button>
+          </div>
+        )}
+
+        {/* Quick Actions - Always visible */}
+        <div className="quick-actions">
+          <h3>Quick Actions</h3>
+          <div className="quick-actions-form">
+            <input
+              type="email"
+              placeholder="User email"
+              value={quickEmail}
+              onChange={(e) => setQuickEmail(e.target.value)}
+              disabled={quickActionLoading}
+            />
+            <input
+              type="number"
+              placeholder="Credits (set to)"
+              value={quickCredits}
+              onChange={(e) => setQuickCredits(e.target.value)}
+              disabled={quickActionLoading}
+              style={{ width: '120px' }}
+            />
+            <button
+              onClick={handleSetCredits}
+              disabled={quickActionLoading || !quickEmail || quickCredits === ''}
+              className="btn-credits"
+            >
+              Set Credits
+            </button>
+            <button
+              onClick={handleSendPasswordReset}
+              disabled={quickActionLoading || !quickEmail}
+              className="btn-reset"
+            >
+              Send Reset
+            </button>
+            <button
+              onClick={handleDeleteUser}
+              disabled={quickActionLoading || !quickEmail}
+              className="btn-delete"
+            >
+              Delete User
+            </button>
+          </div>
+          <div className="quick-actions-hint">
+            Enter email to: set credits (999999 = unlimited), send password reset, or delete account
+          </div>
+        </div>
 
         <div className="admin-content">
           {loading && <div className="admin-loading">Loading...</div>}

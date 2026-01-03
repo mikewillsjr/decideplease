@@ -330,6 +330,108 @@ async def set_credits_by_email(
         }
 
 
+@router.delete("/users/delete-by-email")
+async def delete_user_by_email(
+    email: str,
+    admin: dict = Depends(require_admin)
+):
+    """Delete a user account and all their data by email address."""
+    async with get_connection() as conn:
+        user = await conn.fetchrow(
+            "SELECT id, email, credits FROM users WHERE LOWER(email) = LOWER($1)",
+            email
+        )
+
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User not found: {email}")
+
+        user_id = user["id"]
+
+        # Delete in order: messages -> conversations -> payments -> user
+        # Get conversation IDs first
+        conv_ids = await conn.fetch(
+            "SELECT id FROM conversations WHERE user_id = $1",
+            user_id
+        )
+        conv_id_list = [row["id"] for row in conv_ids]
+
+        deleted_messages = 0
+        if conv_id_list:
+            deleted_messages = await conn.fetchval(
+                "DELETE FROM messages WHERE conversation_id = ANY($1) RETURNING COUNT(*)",
+                conv_id_list
+            ) or 0
+
+        deleted_convs = await conn.fetchval(
+            "DELETE FROM conversations WHERE user_id = $1 RETURNING COUNT(*)",
+            user_id
+        ) or 0
+
+        deleted_payments = 0
+        try:
+            deleted_payments = await conn.fetchval(
+                "DELETE FROM payments WHERE user_id = $1 RETURNING COUNT(*)",
+                user_id
+            ) or 0
+        except:
+            pass
+
+        await conn.execute("DELETE FROM users WHERE id = $1", user_id)
+
+        return {
+            "message": f"User {email} deleted",
+            "deleted": {
+                "user": 1,
+                "conversations": deleted_convs,
+                "messages": deleted_messages,
+                "payments": deleted_payments
+            }
+        }
+
+
+@router.post("/users/send-password-reset")
+async def admin_send_password_reset(
+    email: str,
+    admin: dict = Depends(require_admin)
+):
+    """Send a password reset email to a user (admin-triggered)."""
+    from .email import send_password_reset_email
+    import secrets
+
+    async with get_connection() as conn:
+        user = await conn.fetchrow(
+            "SELECT id, email FROM users WHERE LOWER(email) = LOWER($1)",
+            email
+        )
+
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User not found: {email}")
+
+        # Generate reset token
+        reset_token = secrets.token_urlsafe(32)
+        expires_at = datetime.utcnow() + timedelta(hours=1)
+
+        # Store the reset token
+        await conn.execute(
+            """
+            INSERT INTO password_reset_tokens (user_id, token, expires_at)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id) DO UPDATE SET token = $2, expires_at = $3
+            """,
+            user["id"],
+            reset_token,
+            expires_at
+        )
+
+        # Send the email
+        sent = await send_password_reset_email(user["email"], reset_token)
+
+        return {
+            "message": f"Password reset email sent to {email}",
+            "sent": sent
+        }
+
+
 @router.get("/payments", response_model=List[RecentPayment])
 async def list_payments(
     limit: int = 50,
