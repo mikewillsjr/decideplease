@@ -39,8 +39,8 @@ export default function UnifiedHeader({
       <div className="header-container">
         <div className="header-left">
           <a href="/" className="header-logo">
-            <span className="header-mark">&#x2B21;</span>
-            <span className="header-brand">DecidePlease</span>
+            <img src="/logo/Logo-icon.png" alt="DecidePlease Icon" className="header-logo-icon" />
+            <img src="/logo/logo-text.png" alt="DecidePlease" className="header-logo-text" />
           </a>
 
           <nav className="header-nav">
