@@ -32,19 +32,24 @@
 .header-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  position: relative;
   text-decoration: none;
   color: #fff;
 }
 
 .header-logo-icon {
-  height: 150px;
+  height: 52px;
   width: auto;
+  position: relative;
+  z-index: 2;
+  margin-right: -20px;
 }
 
 .header-logo-text {
-  height: 150px;
+  height: 28px;
   width: auto;
+  position: relative;
+  z-index: 1;
 }
 
 .header-nav {
