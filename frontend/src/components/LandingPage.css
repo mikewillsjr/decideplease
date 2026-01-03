@@ -812,6 +812,99 @@
   color: #fbbf24;
 }
 
+.insight-box.next-step {
+  border-left-color: #3b82f6;
+}
+
+.insight-box.next-step .ib-label {
+  color: #60a5fa;
+}
+
+.insight-box.next-step .ib-text {
+  color: #93c5fd;
+}
+
+/* Model Opinions */
+.model-opinions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.model-opinions.compact {
+  gap: 6px;
+}
+
+.opinion-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid;
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+.model-opinions.compact .opinion-chip {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+}
+
+.opinion-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.opinion-model {
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.opinion-stance {
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Verdict Synthesis */
+.verdict-synthesis {
+  background: linear-gradient(135deg, rgba(93, 93, 255, 0.08), rgba(93, 93, 255, 0.02));
+  border: 1px solid rgba(93, 93, 255, 0.2);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.synthesis-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--primary);
+  font-weight: 700;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+}
+
+.synthesis-text {
+  color: #e5e7eb;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Badge for model count */
+.verdict-badge-models {
+  background: rgba(93, 93, 255, 0.15);
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(93, 93, 255, 0.3);
+}
+
 .verdict-footer {
   margin-top: 20px;
   font-size: 0.8rem;

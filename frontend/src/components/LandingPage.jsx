@@ -7,55 +7,55 @@ import './LandingPage.css';
 const DEMOS = [
   {
     q: "Should I accept a lower salary at a startup for equity, or take the higher salary job?",
-    rec: "Take the higher salary — unless the startup equity is unusually clear and near-term liquid.",
-    confidence: 76,
-    votes: [
-      { model: "GPT-4", pick: "Higher salary" },
-      { model: "Claude", pick: "Higher salary" },
-      { model: "Gemini", pick: "Startup equity (dissent)" }
+    verdict: "Take the higher salary. The guaranteed income provides stability and optionality that early-stage equity rarely matches. Most startup equity ends up worthless, and even successful exits often come with heavy dilution. The council found strong consensus that unless you have specific insider knowledge about the startup's trajectory, the bird in hand wins.",
+    opinions: [
+      { label: "ChatGPT", stance: "Higher salary", color: "#10b981" },
+      { label: "Claude", stance: "Higher salary", color: "#10b981" },
+      { label: "Gemini", stance: "Take the equity", color: "#ef4444" },
+      { label: "Grok", stance: "Higher salary", color: "#10b981" },
+      { label: "DeepSeek", stance: "Higher salary", color: "#10b981" }
     ],
-    risk: "Equity often ends up worth $0. If the startup fails or dilutes heavily, you paid for hope with years of income.",
-    tradeoff: "Higher salary reduces upside, but increases certainty and optionality.",
-    flip: "If the startup has strong traction, clear terms, and you have 12–18 months runway, equity can win."
+    keyRisk: "Startup equity has ~90% chance of being worth $0. You're trading guaranteed income for lottery tickets.",
+    nextStep: "If you're still considering the startup, request to see their cap table, latest 409A valuation, and runway."
   },
   {
     q: "Should I hire a senior employee now or wait 3 months and keep contracting?",
-    rec: "Wait 3 months and keep contracting — unless the role is blocking revenue this month.",
-    confidence: 81,
-    votes: [
-      { model: "GPT-4", pick: "Wait / contract" },
-      { model: "Claude", pick: "Wait / contract" },
-      { model: "Gemini", pick: "Hire now (dissent)" }
+    verdict: "Wait and keep contracting. The consensus strongly favors maintaining flexibility at this stage. A premature full-time hire locks in fixed costs and cultural commitment before you've validated the role's actual requirements. Contractors let you test the work without the commitment.",
+    opinions: [
+      { label: "ChatGPT", stance: "Wait / contract", color: "#10b981" },
+      { label: "Claude", stance: "Wait / contract", color: "#10b981" },
+      { label: "Gemini", stance: "Hire now", color: "#ef4444" },
+      { label: "Grok", stance: "Wait / contract", color: "#10b981" },
+      { label: "DeepSeek", stance: "Wait / contract", color: "#10b981" }
     ],
-    risk: "A bad full-time hire costs more than money—momentum, culture, and time.",
-    tradeoff: "Waiting may slow execution, but reduces long-term payroll risk.",
-    flip: "If you're losing deals due to speed or expertise gaps right now, hiring immediately becomes higher-ROI."
+    keyRisk: "A bad hire costs 6-12 months of productivity. Firing is harder and more expensive than not hiring.",
+    nextStep: "Define the exact outcomes you need in 90 days. If a contractor can hit them, you've validated the role."
   },
   {
     q: "Migrate to Next.js or stick with React Router?",
-    rec: "Migrate to Next.js — unless SEO is not a priority and team velocity is critical.",
-    confidence: 92,
-    votes: [
-      { model: "GPT-4", pick: "Next.js" },
-      { model: "Claude", pick: "Next.js" },
-      { model: "Gemini", pick: "React Router (dissent)" }
+    verdict: "Migrate to Next.js. The council reached near-unanimous agreement that the long-term benefits outweigh short-term migration costs. Server-side rendering, improved SEO, and the App Router's conventions will accelerate development once the team adapts. The one dissent raised valid concerns about migration complexity but was outweighed.",
+    opinions: [
+      { label: "ChatGPT", stance: "Next.js", color: "#10b981" },
+      { label: "Claude", stance: "Next.js", color: "#10b981" },
+      { label: "Gemini", stance: "React Router", color: "#ef4444" },
+      { label: "Grok", stance: "Next.js", color: "#10b981" },
+      { label: "DeepSeek", stance: "Next.js", color: "#10b981" }
     ],
-    risk: "Migration complexity may pause feature work for 2-3 sprints.",
-    tradeoff: "Next.js adds SSR/SEO benefits but increases infrastructure complexity.",
-    flip: "If SEO is not a top priority, the verdict flips to React Router to reduce overhead."
+    keyRisk: "Migration will pause feature development for 2-4 weeks. Plan for velocity dip.",
+    nextStep: "Start with a single route migration to prove the pattern before committing fully."
   },
   {
     q: "Should I sign this client at a lower price to get the logo, or hold the line?",
-    rec: "Hold the line — unless the deal creates repeatable distribution and a clean case study.",
-    confidence: 83,
-    votes: [
-      { model: "GPT-4", pick: "Hold price" },
-      { model: "Claude", pick: "Hold price" },
-      { model: "Gemini", pick: "Discount for logo (dissent)" }
+    verdict: "Hold your price. The council found that logo-hunting discounts rarely pay off—they set dangerous precedents, attract price-sensitive customers, and erode positioning. The one dissent argued for strategic discounting but couldn't overcome the risk of training your market that prices are negotiable.",
+    opinions: [
+      { label: "ChatGPT", stance: "Hold price", color: "#10b981" },
+      { label: "Claude", stance: "Hold price", color: "#10b981" },
+      { label: "Gemini", stance: "Discount for logo", color: "#ef4444" },
+      { label: "Grok", stance: "Hold price", color: "#10b981" },
+      { label: "DeepSeek", stance: "Hold price", color: "#10b981" }
     ],
-    risk: "Discounts train the market that your price is negotiable.",
-    tradeoff: "Holding price may lose the deal, but protects positioning and margins.",
-    flip: "If the client guarantees a public case study + referrals and you cap the discount tightly, the logo play can be worth it."
+    keyRisk: "One discount becomes a pattern. Future prospects will expect the same treatment.",
+    nextStep: "Counter-offer with added value instead of reduced price: extra onboarding, priority support, or a case study package."
   }
 ];
 
@@ -241,45 +241,59 @@ export default function LandingPage() {
               <div className="how-demo-card">
                 <div className="demo-label">Example Output</div>
                 <div className="verdict-header">
-                  <span className="verdict-title">Consensus Verdict</span>
-                  <span className="verdict-badge">92% CONFIDENCE</span>
+                  <span className="verdict-title">Council Verdict</span>
+                  <span className="verdict-badge-models">5 AI Models</span>
                 </div>
                 <div className="verdict-body">
                   <div className="verdict-question">
-                    Q: "Migrate to Next.js or stick with React Router?"
+                    "Migrate to Next.js or stick with React Router?"
                   </div>
 
-                  <h4 className="verdict-recommendation">
-                    <span className="v-dot"></span>
-                    Recommendation: Migrate to Next.js
-                  </h4>
+                  {/* Compact model opinions */}
+                  <div className="model-opinions compact">
+                    <div className="opinion-chip" style={{ borderColor: '#10b981' }}>
+                      <span className="opinion-dot" style={{ background: '#10b981' }}></span>
+                      <span className="opinion-model">ChatGPT</span>
+                      <span className="opinion-stance">Next.js</span>
+                    </div>
+                    <div className="opinion-chip" style={{ borderColor: '#10b981' }}>
+                      <span className="opinion-dot" style={{ background: '#10b981' }}></span>
+                      <span className="opinion-model">Claude</span>
+                      <span className="opinion-stance">Next.js</span>
+                    </div>
+                    <div className="opinion-chip" style={{ borderColor: '#ef4444' }}>
+                      <span className="opinion-dot" style={{ background: '#ef4444' }}></span>
+                      <span className="opinion-model">Gemini</span>
+                      <span className="opinion-stance">React Router</span>
+                    </div>
+                    <div className="opinion-chip" style={{ borderColor: '#10b981' }}>
+                      <span className="opinion-dot" style={{ background: '#10b981' }}></span>
+                      <span className="opinion-model">Grok</span>
+                      <span className="opinion-stance">Next.js</span>
+                    </div>
+                    <div className="opinion-chip" style={{ borderColor: '#10b981' }}>
+                      <span className="opinion-dot" style={{ background: '#10b981' }}></span>
+                      <span className="opinion-model">DeepSeek</span>
+                      <span className="opinion-stance">Next.js</span>
+                    </div>
+                  </div>
 
-                  <div className="model-votes">
-                    <div className="vote agree">
-                      <span className="vote-model">GPT-4</span>
-                      <span className="vote-stance">Next.js</span>
-                    </div>
-                    <div className="vote agree">
-                      <span className="vote-model">Claude</span>
-                      <span className="vote-stance">Next.js</span>
-                    </div>
-                    <div className="vote dissent">
-                      <span className="vote-model">Gemini</span>
-                      <span className="vote-stance">React Router (dissent)</span>
-                    </div>
+                  <div className="verdict-synthesis">
+                    <div className="synthesis-label">The Verdict</div>
+                    <p className="synthesis-text">Migrate to Next.js. The long-term benefits outweigh short-term migration costs.</p>
                   </div>
 
                   <div className="insight-box risk">
-                    <div className="ib-label">Primary Risk</div>
+                    <div className="ib-label">Key Risk</div>
                     <div className="ib-text">
-                      Migration complexity may pause feature work for 2-3 sprints.
+                      Migration will pause feature development for 2-4 weeks.
                     </div>
                   </div>
 
-                  <div className="insight-box flip">
-                    <div className="ib-label">Flip Condition</div>
+                  <div className="insight-box next-step">
+                    <div className="ib-label">Next Step</div>
                     <div className="ib-text">
-                      If SEO is not critical, verdict flips to <strong>React Router</strong>.
+                      Start with a single route migration to prove the pattern.
                     </div>
                   </div>
                 </div>
@@ -311,51 +325,39 @@ export default function LandingPage() {
 
             <div className="verdict-card">
               <div className="verdict-header">
-                <span className="verdict-title">Consensus Verdict</span>
-                <span className={`verdict-badge ${currentDemo.confidence >= 80 ? '' : 'warning'}`}>
-                  {currentDemo.confidence}% CONFIDENCE
-                </span>
+                <span className="verdict-title">Council Verdict</span>
+                <span className="verdict-badge-models">5 AI Models</span>
               </div>
               <div className="verdict-body">
                 <div className="verdict-question">
-                  Q: "{currentDemo.q}"
+                  "{currentDemo.q}"
                 </div>
 
-                <h4 className="verdict-recommendation">
-                  <span className="v-dot"></span>
-                  {currentDemo.rec}
-                </h4>
+                {/* Model opinions row */}
+                <div className="model-opinions">
+                  {currentDemo.opinions.map((op, i) => (
+                    <div key={i} className="opinion-chip" style={{ borderColor: op.color }}>
+                      <span className="opinion-dot" style={{ background: op.color }}></span>
+                      <span className="opinion-model">{op.label}</span>
+                      <span className="opinion-stance">{op.stance}</span>
+                    </div>
+                  ))}
+                </div>
 
-                <div className="model-votes">
-                  {currentDemo.votes.map((v, i) => {
-                    const isDissent = v.pick.toLowerCase().includes('dissent');
-                    return (
-                      <div key={i} className={`vote-item ${isDissent ? 'dissent' : ''}`}>
-                        <span className={`vote-dot ${isDissent ? 'dissent' : ''}`}></span>
-                        <span className="vote-model">{v.model}</span>
-                        <span className="vote-pick">{v.pick}</span>
-                      </div>
-                    );
-                  })}
+                {/* Synthesized verdict */}
+                <div className="verdict-synthesis">
+                  <div className="synthesis-label">The Verdict</div>
+                  <p className="synthesis-text">{currentDemo.verdict}</p>
                 </div>
 
                 <div className="insight-box risk">
-                  <div className="ib-label">Primary Risk</div>
-                  <div className="ib-text">{currentDemo.risk}</div>
+                  <div className="ib-label">Key Risk</div>
+                  <div className="ib-text">{currentDemo.keyRisk}</div>
                 </div>
 
-                <div className="insight-box">
-                  <div className="ib-label">Tradeoff</div>
-                  <div className="ib-text">{currentDemo.tradeoff}</div>
-                </div>
-
-                <div className="insight-box flip">
-                  <div className="ib-label">Flip Condition</div>
-                  <div className="ib-text">{currentDemo.flip}</div>
-                </div>
-
-                <div className="verdict-footer">
-                  Consulted: Top-tier Language Models (GPT, Claude, Gemini)
+                <div className="insight-box next-step">
+                  <div className="ib-label">Recommended Next Step</div>
+                  <div className="ib-text">{currentDemo.nextStep}</div>
                 </div>
               </div>
             </div>
