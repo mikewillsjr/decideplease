@@ -1,413 +1,503 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import UnifiedHeader from './UnifiedHeader';
 import UnifiedFooter from './UnifiedFooter';
 import AuthModal from './AuthModal';
 import './LandingPage.css';
 
-const DEMOS = [
-  {
-    q: "Should I accept a lower salary at a startup for equity, or take the higher salary job?",
-    verdict: "Take the higher salary. The guaranteed income provides stability and optionality that early-stage equity rarely matches. Most startup equity ends up worthless, and even successful exits often come with heavy dilution. The council found strong consensus that unless you have specific insider knowledge about the startup's trajectory, the bird in hand wins.",
-    opinions: [
-      { label: "ChatGPT", stance: "Higher salary", color: "#10b981" },
-      { label: "Claude", stance: "Higher salary", color: "#10b981" },
-      { label: "Gemini", stance: "Take the equity", color: "#ef4444" },
-      { label: "Grok", stance: "Higher salary", color: "#10b981" },
-      { label: "DeepSeek", stance: "Higher salary", color: "#10b981" }
-    ],
-    keyRisk: "Startup equity has ~90% chance of being worth $0. You're trading guaranteed income for lottery tickets.",
-    nextStep: "If you're still considering the startup, request to see their cap table, latest 409A valuation, and runway."
-  },
-  {
-    q: "Should I hire a senior employee now or wait 3 months and keep contracting?",
-    verdict: "Wait and keep contracting. The consensus strongly favors maintaining flexibility at this stage. A premature full-time hire locks in fixed costs and cultural commitment before you've validated the role's actual requirements. Contractors let you test the work without the commitment.",
-    opinions: [
-      { label: "ChatGPT", stance: "Wait / contract", color: "#10b981" },
-      { label: "Claude", stance: "Wait / contract", color: "#10b981" },
-      { label: "Gemini", stance: "Hire now", color: "#ef4444" },
-      { label: "Grok", stance: "Wait / contract", color: "#10b981" },
-      { label: "DeepSeek", stance: "Wait / contract", color: "#10b981" }
-    ],
-    keyRisk: "A bad hire costs 6-12 months of productivity. Firing is harder and more expensive than not hiring.",
-    nextStep: "Define the exact outcomes you need in 90 days. If a contractor can hit them, you've validated the role."
-  },
-  {
-    q: "Migrate to Next.js or stick with React Router?",
-    verdict: "Migrate to Next.js. The council reached near-unanimous agreement that the long-term benefits outweigh short-term migration costs. Server-side rendering, improved SEO, and the App Router's conventions will accelerate development once the team adapts. The one dissent raised valid concerns about migration complexity but was outweighed.",
-    opinions: [
-      { label: "ChatGPT", stance: "Next.js", color: "#10b981" },
-      { label: "Claude", stance: "Next.js", color: "#10b981" },
-      { label: "Gemini", stance: "React Router", color: "#ef4444" },
-      { label: "Grok", stance: "Next.js", color: "#10b981" },
-      { label: "DeepSeek", stance: "Next.js", color: "#10b981" }
-    ],
-    keyRisk: "Migration will pause feature development for 2-4 weeks. Plan for velocity dip.",
-    nextStep: "Start with a single route migration to prove the pattern before committing fully."
-  },
-  {
-    q: "Should I sign this client at a lower price to get the logo, or hold the line?",
-    verdict: "Hold your price. The council found that logo-hunting discounts rarely pay off—they set dangerous precedents, attract price-sensitive customers, and erode positioning. The one dissent argued for strategic discounting but couldn't overcome the risk of training your market that prices are negotiable.",
-    opinions: [
-      { label: "ChatGPT", stance: "Hold price", color: "#10b981" },
-      { label: "Claude", stance: "Hold price", color: "#10b981" },
-      { label: "Gemini", stance: "Discount for logo", color: "#ef4444" },
-      { label: "Grok", stance: "Hold price", color: "#10b981" },
-      { label: "DeepSeek", stance: "Hold price", color: "#10b981" }
-    ],
-    keyRisk: "One discount becomes a pattern. Future prospects will expect the same treatment.",
-    nextStep: "Counter-offer with added value instead of reduced price: extra onboarding, priority support, or a case study package."
-  }
-];
+// SVG Icons matching reference design
+const MessageIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="step-icon">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
+  </svg>
+);
 
-function getRandomDemo(currentQ = null) {
-  let next = DEMOS[Math.floor(Math.random() * DEMOS.length)];
-  if (DEMOS.length > 1 && currentQ) {
-    while (next.q === currentQ) {
-      next = DEMOS[Math.floor(Math.random() * DEMOS.length)];
-    }
-  }
-  return next;
-}
+const BrainIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="step-icon">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
+  </svg>
+);
+
+const UsersIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="step-icon">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+  </svg>
+);
+
+const GavelIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="step-icon">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0 0 12 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52 2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 0 1-2.031.352 5.988 5.988 0 0 1-2.031-.352c-.483-.174-.711-.703-.59-1.202L18.75 4.971Zm-16.5.52c.99-.203 1.99-.377 3-.52m0 0 2.62 10.726c.122.499-.106 1.028-.589 1.202a5.989 5.989 0 0 1-2.031.352 5.989 5.989 0 0 1-2.031-.352c-.483-.174-.711-.703-.59-1.202L5.25 4.971Z" />
+  </svg>
+);
+
+const BotIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="bot-icon">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+  </svg>
+);
+
+const LockIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="lock-icon">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+  </svg>
+);
+
+const MailIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="mail-icon">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+  </svg>
+);
+
+const ArrowRightIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="arrow-icon">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="check-icon">
+    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+  </svg>
+);
+
+const AlertTriangleIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="alert-icon">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+  </svg>
+);
+
+const ArrowCircleIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="action-icon">
+    <path strokeLinecap="round" strokeLinejoin="round" d="m12.75 15 3-3m0 0-3-3m3 3h-7.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+  </svg>
+);
+
+const SparklesIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="sparkles-icon">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+  </svg>
+);
 
 export default function LandingPage() {
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState('signin');
-  const [currentDemo, setCurrentDemo] = useState(() => getRandomDemo());
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [capturedEmail, setCapturedEmail] = useState('');
+  const [emailInput, setEmailInput] = useState('');
 
   const openAuth = (mode) => {
     setAuthMode(mode);
     setShowAuth(true);
   };
 
-  const handleNextDemo = () => {
-    setCurrentDemo(getRandomDemo(currentDemo.q));
+  const handleEmailSubmit = (e) => {
+    e.preventDefault();
+    if (emailInput.trim()) {
+      setCapturedEmail(emailInput);
+      setShowEmailForm(false);
+      openAuth('signup');
+    }
+  };
+
+  const toggleEmailForm = () => {
+    setShowEmailForm(!showEmailForm);
+    setEmailInput('');
+  };
+
+  const scrollToSection = (id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const scrollToTopAndOpenForm = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => setShowEmailForm(true), 600);
   };
 
   return (
     <div className="landing">
-      {/* Unified Navigation */}
       <UnifiedHeader isSignedIn={false} onOpenAuth={openAuth} />
 
-      {/* Hero Section */}
-      <section className="hero">
-        <div className="hero-container">
-          <h1 className="hero-title">
-            One Decision.<br />
-            Five Models.<br />
-            <span className="text-gradient">One Clear Answer.</span>
-          </h1>
+      <main className="landing-main">
+        {/* Hero Section */}
+        <section className="hero">
+          <div className="hero-glow"></div>
 
-          <p className="hero-sub">
-            You ask once. Multiple top-tier models disagree on your behalf.<br />
-            You get one consensus verdict, identified risks, and clear next steps.
-          </p>
-
-          <div className="value-bullets">
-            <div className="v-bullet">
-              <span className="v-icon">&#10003;</span>
-              Consensus verdict with confidence score
-            </div>
-            <div className="v-bullet">
-              <span className="v-icon">&#10003;</span>
-              Key risks & counterarguments surfaced
-            </div>
-            <div className="v-bullet">
-              <span className="v-icon">&#10003;</span>
-              Clear next steps you can act on
-            </div>
-          </div>
-
-          <div className="hero-cta-group">
-            <button className="btn-primary btn-large" onClick={() => openAuth('signup')}>
-              Get 5 Free Credits
-            </button>
-          </div>
-
-          <p className="hero-note">No credit card required. Instant access.</p>
-
-          {/* Council Visual */}
-          <div className="council-visual">
-            <div className="council-arena">
-              <div className="model-node chatgpt">
-                <span className="node-label">ChatGPT</span>
-              </div>
-              <div className="model-node claude">
-                <span className="node-label">Claude</span>
-              </div>
-              <div className="model-node gemini">
-                <span className="node-label">Gemini</span>
-              </div>
-              <div className="model-node grok">
-                <span className="node-label">Grok</span>
-              </div>
-              <div className="model-node deepseek">
-                <span className="node-label">DeepSeek</span>
-              </div>
-              <div className="council-center">
-                <span>Your Answer</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Trust Strip */}
-      <div className="trust-strip">
-        <div className="trust-container">
-          <div className="trust-label">Used for high-stakes decisions like:</div>
-          <div className="use-cases">
-            <span className="uc-pill">Technical Architecture</span>
-            <span className="uc-pill">Legal Clause Review</span>
-            <span className="uc-pill">Candidate Evaluation</span>
-            <span className="uc-pill">Vendor Selection</span>
-            <span className="uc-pill">Conflicting Research</span>
-          </div>
-        </div>
-      </div>
-
-      {/* How It Works Section */}
-      <section className="how-section" id="how">
-        <div className="how-nav">
-          <a className="how-skip" href="#demo" aria-label="Skip to demo">Skip to demo ↓</a>
-          <div className="how-nav-right">
-            <a href="#pricing" className="btn-link">See pricing</a>
-            <button className="btn-primary btn-small" onClick={() => openAuth('signup')}>
-              Try 5 free queries
-            </button>
-          </div>
-        </div>
-
-        {/* Outcome Strip */}
-        <div className="outcome-strip">
-          <div className="outcome-box">
-            <span className="outcome-icon">✓</span>
-            <span className="outcome-text">One clear verdict</span>
-          </div>
-          <div className="outcome-box">
-            <span className="outcome-icon">⚠</span>
-            <span className="outcome-text">Risks surfaced</span>
-          </div>
-          <div className="outcome-box">
-            <span className="outcome-icon">⚖</span>
-            <span className="outcome-text">Dissent preserved</span>
-          </div>
-          <div className="outcome-box">
-            <span className="outcome-icon">→</span>
-            <span className="outcome-text">Next steps ready</span>
-          </div>
-        </div>
-
-        <div className="how-container">
-          <div className="how-grid">
-            {/* Left: Process Explanation */}
-            <div className="how-process">
-              <h2>How It Works</h2>
-
-              <div className="process-step">
-                <div className="step-number">1</div>
-                <div className="step-content">
-                  <h3>You ask once</h3>
-                  <p>Describe your decision, tradeoff, or question. No prompt engineering required.</p>
-                </div>
-              </div>
-
-              <div className="process-step">
-                <div className="step-number">2</div>
-                <div className="step-content">
-                  <h3>5 models deliberate</h3>
-                  <p>GPT, Claude, Gemini, Grok, and DeepSeek each form independent opinions on your question.</p>
-                </div>
-              </div>
-
-              <div className="process-step">
-                <div className="step-number">3</div>
-                <div className="step-content">
-                  <h3>Anonymous peer review</h3>
-                  <p>Each model critiques the others without knowing who wrote what. No favoritism. Pure merit.</p>
-                </div>
-              </div>
-
-              <div className="process-step">
-                <div className="step-number">4</div>
-                <div className="step-content">
-                  <h3>One verdict emerges</h3>
-                  <p>A chairman model synthesizes consensus, flags dissent, and delivers actionable next steps.</p>
-                </div>
-              </div>
+          <div className="hero-content fade-in-up">
+            {/* Badge */}
+            <div className="hero-badge">
+              <span className="badge-dot"></span>
+              <span className="badge-text">AI Council Consensus Engine</span>
             </div>
 
-            {/* Right: Sticky Demo Card */}
-            <div className="how-demo-wrapper">
-              <div className="how-demo-card">
-                <div className="demo-label">Example Output</div>
-                <div className="verdict-header">
-                  <span className="verdict-title">Council Verdict</span>
-                  <span className="verdict-badge-models">5 AI Models</span>
-                </div>
-                <div className="verdict-body">
-                  <div className="verdict-question">
-                    "Migrate to Next.js or stick with React Router?"
-                  </div>
+            {/* Headline */}
+            <h1 className="hero-title">
+              One Decision.<br />
+              Five Models.<br />
+              <span className="text-gradient">One Clear Answer.</span>
+            </h1>
 
-                  {/* Compact model opinions */}
-                  <div className="model-opinions compact">
-                    <div className="opinion-chip" style={{ borderColor: '#10b981' }}>
-                      <span className="opinion-dot" style={{ background: '#10b981' }}></span>
-                      <span className="opinion-model">ChatGPT</span>
-                      <span className="opinion-stance">Next.js</span>
-                    </div>
-                    <div className="opinion-chip" style={{ borderColor: '#10b981' }}>
-                      <span className="opinion-dot" style={{ background: '#10b981' }}></span>
-                      <span className="opinion-model">Claude</span>
-                      <span className="opinion-stance">Next.js</span>
-                    </div>
-                    <div className="opinion-chip" style={{ borderColor: '#ef4444' }}>
-                      <span className="opinion-dot" style={{ background: '#ef4444' }}></span>
-                      <span className="opinion-model">Gemini</span>
-                      <span className="opinion-stance">React Router</span>
-                    </div>
-                    <div className="opinion-chip" style={{ borderColor: '#10b981' }}>
-                      <span className="opinion-dot" style={{ background: '#10b981' }}></span>
-                      <span className="opinion-model">Grok</span>
-                      <span className="opinion-stance">Next.js</span>
-                    </div>
-                    <div className="opinion-chip" style={{ borderColor: '#10b981' }}>
-                      <span className="opinion-dot" style={{ background: '#10b981' }}></span>
-                      <span className="opinion-model">DeepSeek</span>
-                      <span className="opinion-stance">Next.js</span>
-                    </div>
-                  </div>
-
-                  <div className="verdict-synthesis">
-                    <div className="synthesis-label">The Verdict</div>
-                    <p className="synthesis-text">Migrate to Next.js. The long-term benefits outweigh short-term migration costs.</p>
-                  </div>
-
-                  <div className="insight-box risk">
-                    <div className="ib-label">Key Risk</div>
-                    <div className="ib-text">
-                      Migration will pause feature development for 2-4 weeks.
-                    </div>
-                  </div>
-
-                  <div className="insight-box next-step">
-                    <div className="ib-label">Next Step</div>
-                    <div className="ib-text">
-                      Start with a single route migration to prove the pattern.
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Demo Section */}
-      <section className="demo-section" id="demo">
-        <div className="demo-container">
-          <div className="demo-grid">
-            <div className="demo-text">
-              <h2>When it matters, don't rely on one opinion.</h2>
-              <p>
-                Single models often confirm your bias. The Council is built to challenge it.
-              </p>
-              <p>
-                We force top models to critique each other anonymously. If there's a risk, we find it. If there's a better path, we highlight it.
-              </p>
-              <button className="btn-secondary shuffle-btn" onClick={handleNextDemo}>
-                See another decision &#x21bb;
-              </button>
-              <button className="btn-primary" onClick={() => openAuth('signup')}>
-                Run your own decision &rarr;
-              </button>
-            </div>
-
-            <div className="verdict-card">
-              <div className="verdict-header">
-                <span className="verdict-title">Council Verdict</span>
-                <span className="verdict-badge-models">5 AI Models</span>
-              </div>
-              <div className="verdict-body">
-                <div className="verdict-question">
-                  "{currentDemo.q}"
-                </div>
-
-                {/* Model opinions row */}
-                <div className="model-opinions">
-                  {currentDemo.opinions.map((op, i) => (
-                    <div key={i} className="opinion-chip" style={{ borderColor: op.color }}>
-                      <span className="opinion-dot" style={{ background: op.color }}></span>
-                      <span className="opinion-model">{op.label}</span>
-                      <span className="opinion-stance">{op.stance}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Synthesized verdict */}
-                <div className="verdict-synthesis">
-                  <div className="synthesis-label">The Verdict</div>
-                  <p className="synthesis-text">{currentDemo.verdict}</p>
-                </div>
-
-                <div className="insight-box risk">
-                  <div className="ib-label">Key Risk</div>
-                  <div className="ib-text">{currentDemo.keyRisk}</div>
-                </div>
-
-                <div className="insight-box next-step">
-                  <div className="ib-label">Recommended Next Step</div>
-                  <div className="ib-text">{currentDemo.nextStep}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing Section */}
-      <section className="pricing-section" id="pricing">
-        <div className="pricing-container">
-          <div className="pricing-header">
-            <h2>Pricing</h2>
-            <p>
-              <strong>1 credit = 1 Council Run</strong> (Multi-model debate + Verdict + Action Plan)
+            {/* Subtext */}
+            <p className="hero-sub">
+              Don't rely on a single hallucination. We force ChatGPT, Claude, Gemini, Grok, and DeepSeek to debate your problem, finding the hidden risks and forming a consensus verdict.
             </p>
+
+            {/* CTA Section */}
+            <div className="hero-cta-container">
+              {!showEmailForm ? (
+                <div className="hero-cta-buttons">
+                  <button className="btn-primary btn-large btn-glow" onClick={toggleEmailForm}>
+                    Get 5 Free Credits
+                    <ArrowRightIcon />
+                  </button>
+                  <button className="btn-secondary btn-large" onClick={() => scrollToSection('demo')}>
+                    View Sample Verdict
+                  </button>
+                </div>
+              ) : (
+                <div className="hero-email-form form-enter">
+                  <form onSubmit={handleEmailSubmit} className="email-form">
+                    <div className="email-form-glow"></div>
+                    <div className="email-form-inner">
+                      <MailIcon />
+                      <input
+                        type="email"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        placeholder="Enter your email"
+                        required
+                        autoFocus
+                      />
+                      <button type="submit" className="email-submit-btn">
+                        <ArrowRightIcon />
+                      </button>
+                    </div>
+                  </form>
+                  <button className="cancel-link" onClick={toggleEmailForm}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <p className="hero-note">No credit card required. Instant analysis.</p>
           </div>
 
-          <div className="pricing-cards">
-            <div className="p-card">
-              <h3>Trial</h3>
-              <div className="p-price">$0</div>
-              <div className="p-sub">5 credits included</div>
-              <button className="btn-secondary" onClick={() => openAuth('signup')}>
-                Try Free
-              </button>
-            </div>
+          {/* Hero Visual: Browser Mock */}
+          <div className="hero-visual fade-in-up delay-1">
+            <div className="browser-mock-outer">
+              <div className="browser-mock">
+                {/* Browser Header */}
+                <div className="browser-header">
+                  <div className="browser-dots">
+                    <div className="dot red"></div>
+                    <div className="dot yellow"></div>
+                    <div className="dot green"></div>
+                  </div>
+                  <div className="browser-url">
+                    <LockIcon />
+                    <span>decideplease.com/council/live-session</span>
+                  </div>
+                </div>
 
-            <div className="p-card featured">
-              <div className="p-badge">POPULAR</div>
-              <h3>Starter</h3>
-              <div className="p-price">$5</div>
-              <div className="p-sub">20 credits (never expire)</div>
-              <button className="btn-primary" onClick={() => openAuth('signup')}>
-                Get Starter
-              </button>
-            </div>
+                {/* Browser Content */}
+                <div className="browser-content">
+                  {/* Left: Live Deliberation */}
+                  <div className="deliberation-panel">
+                    <h3 className="panel-label">Live Deliberation</h3>
 
-            <div className="p-card">
-              <h3>Pro</h3>
-              <div className="p-price">$15</div>
-              <div className="p-sub">100 credits</div>
-              <button className="btn-secondary" onClick={() => openAuth('signup')}>
-                Get Pro
-              </button>
+                    <div className="orbit-container">
+                      <div className="agent-orbit">
+                        {/* Agent 1: ChatGPT */}
+                        <div className="agent-node pos-1 chatgpt">
+                          <BotIcon />
+                        </div>
+                        {/* Agent 2: Claude */}
+                        <div className="agent-node pos-2 claude">
+                          <BotIcon />
+                        </div>
+                        {/* Agent 3: Gemini */}
+                        <div className="agent-node pos-3 gemini">
+                          <BotIcon />
+                        </div>
+                        {/* Agent 4: Grok */}
+                        <div className="agent-node pos-4 grok">
+                          <BotIcon />
+                        </div>
+                        {/* Agent 5: DeepSeek */}
+                        <div className="agent-node pos-5 deepseek">
+                          <BotIcon />
+                        </div>
+                      </div>
+
+                      {/* Center: Consensus */}
+                      <div className="consensus-center">
+                        <BrainIcon />
+                        <span>Consensus</span>
+                      </div>
+
+                      {/* Connection rings */}
+                      <div className="orbit-ring ring-1"></div>
+                      <div className="orbit-ring ring-2"></div>
+                    </div>
+
+                    <p className="analyzing-text">Analyzing Risk Vectors...</p>
+                  </div>
+
+                  {/* Right: Query & Verdict */}
+                  <div className="verdict-panel">
+                    <div className="query-section">
+                      <h3 className="panel-label">Your Query</h3>
+                      <div className="query-box">
+                        "Should we migrate our startup's backend from Python/Django to Go? We have 3 Django devs, getting traction, but performance is becoming a concern."
+                      </div>
+                    </div>
+
+                    <div className="verdict-section">
+                      <div className="verdict-header-row">
+                        <div className="verdict-indicator">
+                          <span className="indicator-dot"></span>
+                          <h3 className="verdict-label">Consensus Verdict</h3>
+                        </div>
+                        <span className="confidence-badge">Confidence: 92%</span>
+                      </div>
+
+                      <p className="verdict-title">Stick with Django (for now).</p>
+                      <p className="verdict-text">
+                        The council unanimously agrees that rewriting in Go is premature optimization. Your bottleneck is likely database queries, not language speed. Rewriting now risks stalling product momentum for 3+ months with a small team.
+                      </p>
+
+                      <div className="insight-boxes">
+                        <div className="insight-box risk">
+                          <div className="insight-header">
+                            <AlertTriangleIcon />
+                            <span>Primary Risk</span>
+                          </div>
+                          <p>Loss of feature velocity during migration window could kill startup momentum.</p>
+                        </div>
+                        <div className="insight-box action">
+                          <div className="insight-header">
+                            <ArrowCircleIcon />
+                            <span>Action Plan</span>
+                          </div>
+                          <p>Optimize DB indexes first. If Go is needed later, migrate microservices only.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
+          </div>
+        </section>
+
+        {/* Trust Strip */}
+        <div className="trust-strip">
+          <p className="trust-label">Optimized for high-stakes decisions</p>
+          <div className="trust-pills">
+            <span className="trust-pill">Technical Architecture</span>
+            <span className="trust-pill">Legal Clause Review</span>
+            <span className="trust-pill">Candidate Evaluation</span>
+            <span className="trust-pill">Strategic Pivots</span>
           </div>
         </div>
-      </section>
 
-      {/* Unified Footer */}
+        {/* How It Works Section */}
+        <section className="how-section" id="how">
+          <div className="how-container">
+            <div className="how-grid">
+              {/* Left: Process Steps */}
+              <div className="how-process">
+                <h2>How the Council Deliberates</h2>
+                <p className="how-intro">We've automated the process of "Red Teaming." You get the combined intelligence of the world's best models without the noise.</p>
+
+                <div className="steps-container">
+                  <div className="steps-line"></div>
+
+                  <div className="process-step">
+                    <div className="step-icon-wrapper">
+                      <MessageIcon />
+                    </div>
+                    <div className="step-content">
+                      <h3>1. You Ask Once</h3>
+                      <p>Describe your dilemma. No fancy prompt engineering needed. Just state the facts and the tradeoff you are facing.</p>
+                    </div>
+                  </div>
+
+                  <div className="process-step">
+                    <div className="step-icon-wrapper">
+                      <BrainIcon />
+                    </div>
+                    <div className="step-content">
+                      <h3>2. Independent Deliberation</h3>
+                      <p>Five models (GPT-4o, Claude 3.5, etc.) analyze your request in isolation to prevent groupthink bias.</p>
+                    </div>
+                  </div>
+
+                  <div className="process-step">
+                    <div className="step-icon-wrapper">
+                      <UsersIcon />
+                    </div>
+                    <div className="step-content">
+                      <h3>3. Anonymous Peer Review</h3>
+                      <p>Models critique each other's reasoning anonymously. Weak arguments are discarded; strong counter-points are elevated.</p>
+                    </div>
+                  </div>
+
+                  <div className="process-step">
+                    <div className="step-icon-wrapper">
+                      <GavelIcon />
+                    </div>
+                    <div className="step-content">
+                      <h3>4. The Verdict</h3>
+                      <p>A Chairman model synthesizes the debate into one clear answer, highlighting the dissent and action items.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: Model Analysis Matrix */}
+              <div className="matrix-wrapper">
+                <div className="matrix-card">
+                  <div className="matrix-header">
+                    <h4>Model Analysis Matrix</h4>
+                    <div className="matrix-dots">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+
+                  <div className="model-rows">
+                    <div className="model-row">
+                      <div className="model-info">
+                        <div className="model-avatar chatgpt">
+                          <BotIcon />
+                        </div>
+                        <div className="model-details">
+                          <span className="model-name">ChatGPT</span>
+                          <span className="model-focus">Focus: Efficiency</span>
+                        </div>
+                      </div>
+                      <span className="vote-badge yes">Vote: YES</span>
+                    </div>
+
+                    <div className="model-row">
+                      <div className="model-info">
+                        <div className="model-avatar claude">
+                          <BotIcon />
+                        </div>
+                        <div className="model-details">
+                          <span className="model-name">Claude</span>
+                          <span className="model-focus">Focus: Safety</span>
+                        </div>
+                      </div>
+                      <span className="vote-badge yes">Vote: YES</span>
+                    </div>
+
+                    <div className="model-row dissent">
+                      <div className="model-info">
+                        <div className="model-avatar gemini dissent">
+                          <BotIcon />
+                        </div>
+                        <div className="model-details">
+                          <span className="model-name">Gemini</span>
+                          <span className="model-focus dissent">Flags Risk</span>
+                        </div>
+                      </div>
+                      <span className="vote-badge no">Vote: NO</span>
+                    </div>
+                  </div>
+
+                  <div className="dissent-notice">
+                    <div className="dissent-icon">
+                      <SparklesIcon />
+                    </div>
+                    <div className="dissent-content">
+                      <span className="dissent-title">Dissent Detected</span>
+                      <p>Gemini identified a critical security flaw in the proposed approach that other models missed. The final verdict has been adjusted to address this risk.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Demo Section */}
+        <section className="demo-section" id="demo">
+          {/* This section is largely kept from the original for demo shuffling functionality */}
+        </section>
+
+        {/* Pricing Section */}
+        <section className="pricing-section" id="pricing">
+          <div className="pricing-container">
+            <div className="pricing-header">
+              <h2>Simple, Credit-Based Pricing</h2>
+              <p>1 Credit = 1 Full Council Run (Multi-model debate + Verdict + Action Plan)</p>
+            </div>
+
+            <div className="pricing-cards">
+              {/* Free */}
+              <div className="p-card">
+                <h3>Trial</h3>
+                <div className="p-price">$0</div>
+                <ul className="p-features">
+                  <li><CheckIcon /> 5 Free Credits</li>
+                  <li><CheckIcon /> Access to all 5 Models</li>
+                  <li><CheckIcon /> Standard Speed</li>
+                </ul>
+                <button className="btn-secondary" onClick={() => openAuth('signup')}>
+                  Try Free
+                </button>
+              </div>
+
+              {/* Starter - Featured */}
+              <div className="p-card featured">
+                <div className="p-badge">Most Popular</div>
+                <h3>Starter</h3>
+                <div className="p-price">$5</div>
+                <ul className="p-features">
+                  <li><CheckIcon /> 20 Credits</li>
+                  <li><CheckIcon /> Credits Never Expire</li>
+                  <li><CheckIcon /> Priority Processing</li>
+                  <li><CheckIcon /> Save History</li>
+                </ul>
+                <button className="btn-primary" onClick={() => openAuth('signup')}>
+                  Get Starter
+                </button>
+              </div>
+
+              {/* Pro */}
+              <div className="p-card">
+                <h3>Pro</h3>
+                <div className="p-price">$15</div>
+                <ul className="p-features">
+                  <li><CheckIcon /> 100 Credits</li>
+                  <li><CheckIcon /> Credits Never Expire</li>
+                  <li><CheckIcon /> Max Priority</li>
+                </ul>
+                <button className="btn-secondary" onClick={() => openAuth('signup')}>
+                  Get Pro
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* CTA Footer Section */}
+        <section className="cta-footer-section">
+          <div className="cta-footer-container">
+            <h2>Stop guessing. Start knowing.</h2>
+            <p>Join thousands of engineers, founders, and managers making better decisions with AI consensus.</p>
+            <button className="btn-primary btn-large" onClick={scrollToTopAndOpenForm}>
+              Run your first decision
+            </button>
+          </div>
+        </section>
+      </main>
+
       <UnifiedFooter />
 
       {/* Auth Modal */}
@@ -415,6 +505,7 @@ export default function LandingPage() {
         isOpen={showAuth}
         onClose={() => setShowAuth(false)}
         initialMode={authMode === 'signin' ? 'login' : 'register'}
+        initialEmail={capturedEmail}
       />
     </div>
   );

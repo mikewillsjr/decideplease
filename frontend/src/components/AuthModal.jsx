@@ -4,9 +4,9 @@ import './AuthModal.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
-export default function AuthModal({ isOpen, onClose, initialMode = 'login' }) {
+export default function AuthModal({ isOpen, onClose, initialMode = 'login', initialEmail = '' }) {
   const [mode, setMode] = useState(initialMode); // 'login', 'register', or 'forgot'
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
