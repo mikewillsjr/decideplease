@@ -61,6 +61,32 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 # Data directory for conversation storage
 DATA_DIR = "data/conversations"
 
+# ============== Vision Model Configuration ==============
+# Models that support vision/image input
+VISION_MODELS = [
+    "openai/gpt-5.2-chat",
+    "openai/gpt-5.2",
+    "anthropic/claude-sonnet-4.5",
+    "anthropic/claude-opus-4.5",
+    "google/gemini-3-flash-preview",
+    "google/gemini-3-pro-preview",
+    "x-ai/grok-4-fast",
+    "x-ai/grok-4.1-fast",
+]
+
+# Models that are text-only (need image descriptions)
+TEXT_ONLY_MODELS = [
+    "deepseek/deepseek-v3.2",
+]
+
+# Model used to generate image descriptions for text-only models
+DESCRIPTION_MODEL = "google/gemini-3-flash-preview"
+
+# ============== File Upload Configuration ==============
+FILE_UPLOAD_CREDIT_COST = 1  # Additional credit cost when files are attached
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB per file
+MAX_FILES = 5  # Maximum files per message
+
 # ============== Auth Configuration ==============
 AUTH_CONFIG = {
     "jwt_secret": os.getenv("JWT_SECRET", "dev-secret-change-in-production"),

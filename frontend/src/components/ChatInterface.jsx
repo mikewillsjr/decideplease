@@ -6,6 +6,7 @@ import Stage3 from './Stage3';
 import CouncilDebate from './CouncilDebate';
 import SpeedSelector, { SPEED_OPTIONS } from './SpeedSelector';
 import RerunModal from './RerunModal';
+import FileUpload from './FileUpload';
 import './ChatInterface.css';
 
 export default function ChatInterface({
@@ -23,6 +24,7 @@ export default function ChatInterface({
   const [selectedMode, setSelectedMode] = useState('standard');
   const [showRerunModal, setShowRerunModal] = useState(false);
   const [rerunMessageIndex, setRerunMessageIndex] = useState(null);
+  const [attachedFiles, setAttachedFiles] = useState([]);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -36,8 +38,9 @@ export default function ChatInterface({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (input.trim() && !isLoading) {
-      onSendMessage(input, selectedMode);
+      onSendMessage(input, selectedMode, attachedFiles);
       setInput('');
+      setAttachedFiles([]); // Clear files after send
     }
   };
 
@@ -55,7 +58,9 @@ export default function ChatInterface({
 
   const getSelectedCredits = () => {
     const option = SPEED_OPTIONS.find(o => o.mode === selectedMode);
-    return option ? option.credits : 2;
+    const baseCredits = option ? option.credits : 2;
+    // Add +1 credit for file uploads
+    return attachedFiles.length > 0 ? baseCredits + 1 : baseCredits;
   };
 
   const handleKeyDown = (e) => {
@@ -81,6 +86,11 @@ export default function ChatInterface({
         </div>
 
         <form className="input-form" onSubmit={handleSubmit}>
+          <FileUpload
+            files={attachedFiles}
+            onFilesChange={setAttachedFiles}
+            disabled={isLoading}
+          />
           <div className="input-wrapper">
             <textarea
               className="message-input"
@@ -279,6 +289,11 @@ export default function ChatInterface({
       )}
 
       <form className="input-form" onSubmit={handleSubmit}>
+        <FileUpload
+          files={attachedFiles}
+          onFilesChange={setAttachedFiles}
+          disabled={isLoading}
+        />
         <div className="input-wrapper">
           <textarea
             className="message-input"

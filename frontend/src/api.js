@@ -186,16 +186,34 @@ export const api = {
    * @param {string} content - The message content
    * @param {string} mode - Run mode: 'quick', 'standard', or 'extra_care'
    * @param {function} onEvent - Callback function for each event: (eventType, data) => void
+   * @param {File[]} files - Optional array of File objects to attach
    * @returns {Promise<void>}
    */
-  async sendMessageStream(conversationId, content, mode, onEvent) {
+  async sendMessageStream(conversationId, content, mode, onEvent, files = []) {
     const headers = await getHeaders();
+
+    // Convert files to base64 if present
+    let fileAttachments = null;
+    if (files && files.length > 0) {
+      fileAttachments = await Promise.all(
+        files.map(async (file) => ({
+          filename: file.name,
+          content_type: file.type,
+          data: await this._fileToBase64(file),
+        }))
+      );
+    }
+
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message/stream`,
       {
         method: 'POST',
         headers,
-        body: JSON.stringify({ content, mode: mode || 'standard' }),
+        body: JSON.stringify({
+          content,
+          mode: mode || 'standard',
+          files: fileAttachments,
+        }),
       }
     );
 
@@ -206,10 +224,34 @@ export const api = {
       if (response.status === 402) {
         throw new Error('Insufficient credits');
       }
-      throw new Error('Failed to send message');
+      // Try to get error detail from response
+      try {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to send message');
+      } catch {
+        throw new Error('Failed to send message');
+      }
     }
 
     await this._processSSEStream(response, onEvent);
+  },
+
+  /**
+   * Convert a File to base64 string.
+   * @param {File} file - The file to convert
+   * @returns {Promise<string>} Base64-encoded file content
+   */
+  _fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        // Remove the data URL prefix (e.g., "data:image/png;base64,")
+        const base64 = reader.result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   },
 
   /**

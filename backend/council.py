@@ -1,8 +1,10 @@
 """3-stage DecidePlease orchestration."""
 
+import asyncio
 from typing import List, Dict, Any, Tuple, Optional
 from .openrouter import query_models_parallel, query_model
-from .config import COUNCIL_MODELS, CHAIRMAN_MODEL, RUN_MODES
+from .config import COUNCIL_MODELS, CHAIRMAN_MODEL, RUN_MODES, VISION_MODELS, TEXT_ONLY_MODELS
+from .file_processing import generate_image_descriptions_for_text_models
 
 
 async def stage1_collect_responses(
@@ -33,6 +35,113 @@ async def stage1_collect_responses(
                 "model": model,
                 "response": response.get('content', '')
             })
+
+    return stage1_results
+
+
+def build_multimodal_message(
+    user_query: str,
+    processed_files: List[Dict[str, Any]],
+    model: str,
+    image_descriptions: Dict[str, str]
+) -> Dict[str, Any]:
+    """
+    Build a message appropriate for the target model.
+
+    Args:
+        user_query: The user's question
+        processed_files: List of processed file dicts from file_processing.py
+        model: The target model identifier
+        image_descriptions: Pre-generated descriptions for images (for text-only models)
+
+    Returns:
+        Message dict with 'role' and 'content'
+    """
+    is_vision_model = model in VISION_MODELS
+
+    # Build content parts
+    content_parts = []
+
+    # Add user query as text
+    content_parts.append({"type": "text", "text": user_query})
+
+    # Add file content
+    for file in processed_files:
+        if file['file_type'] == 'image':
+            if is_vision_model:
+                # Vision model: include actual image
+                content_parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": file['data_uri']}
+                })
+            else:
+                # Text-only model: include description
+                description = image_descriptions.get(
+                    file['filename'],
+                    f"[Image: {file['filename']} - description unavailable]"
+                )
+                content_parts.append({
+                    "type": "text",
+                    "text": f"\n\n[ATTACHED IMAGE: {file['filename']}]\n{description}"
+                })
+        else:
+            # Document: include extracted text for all models
+            text = file.get('extracted_text', '[Document content unavailable]')
+            content_parts.append({
+                "type": "text",
+                "text": f"\n\n[ATTACHED {file['file_type'].upper()}: {file['filename']}]\n{text}"
+            })
+
+    return {"role": "user", "content": content_parts}
+
+
+async def stage1_collect_responses_with_files(
+    user_query: str,
+    processed_files: List[Dict[str, Any]],
+    council_models: Optional[List[str]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Stage 1 with file support: Collect individual responses from all council models.
+
+    For vision models, includes actual images. For text-only models (DeepSeek),
+    uses Gemini Flash to generate text descriptions of images.
+
+    Args:
+        user_query: The user's question
+        processed_files: List of processed file dicts from file_processing.py
+        council_models: Optional list of models to use (defaults to COUNCIL_MODELS)
+
+    Returns:
+        List of dicts with 'model' and 'response' keys
+    """
+    models = council_models or COUNCIL_MODELS
+
+    # Check if we have any images that need descriptions for text-only models
+    has_images = any(f['file_type'] == 'image' for f in processed_files)
+    has_text_only_models = any(m in TEXT_ONLY_MODELS for m in models)
+
+    # Generate image descriptions for text-only models if needed
+    image_descriptions = {}
+    if has_images and has_text_only_models:
+        image_descriptions = await generate_image_descriptions_for_text_models(processed_files)
+
+    # Build messages for each model and query in parallel
+    async def query_with_files(model: str) -> Optional[Dict[str, Any]]:
+        message = build_multimodal_message(user_query, processed_files, model, image_descriptions)
+        response = await query_model(model, [message])
+        if response is not None:
+            return {
+                "model": model,
+                "response": response.get('content', '')
+            }
+        return None
+
+    # Query all models in parallel
+    tasks = [query_with_files(model) for model in models]
+    results = await asyncio.gather(*tasks)
+
+    # Filter out None results
+    stage1_results = [r for r in results if r is not None]
 
     return stage1_results
 
@@ -339,7 +448,8 @@ async def run_council_with_mode(
     mode: str = "standard",
     context_packet: Optional[Dict[str, Any]] = None,
     is_rerun: bool = False,
-    new_input: Optional[str] = None
+    new_input: Optional[str] = None,
+    processed_files: Optional[List[Dict[str, Any]]] = None
 ) -> Tuple[List, List, Dict, Dict]:
     """
     Run the council process with a specific mode.
@@ -350,6 +460,7 @@ async def run_council_with_mode(
         context_packet: Optional context from previous run (for reruns)
         is_rerun: Whether this is a rerun of a previous decision
         new_input: Optional new input for refinement reruns
+        processed_files: Optional list of processed file dicts for multimodal queries
 
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
@@ -369,8 +480,13 @@ async def run_council_with_mode(
     else:
         effective_query = user_query
 
-    # Stage 1: Collect individual responses
-    stage1_results = await stage1_collect_responses(effective_query, council_models)
+    # Stage 1: Collect individual responses (with or without files)
+    if processed_files:
+        stage1_results = await stage1_collect_responses_with_files(
+            effective_query, processed_files, council_models
+        )
+    else:
+        stage1_results = await stage1_collect_responses(effective_query, council_models)
 
     # If no models responded successfully, return error
     if not stage1_results:

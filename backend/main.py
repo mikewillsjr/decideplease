@@ -48,8 +48,10 @@ from .council import (
     calculate_aggregate_rankings,
     extract_tldr_packet
 )
-from .config import RUN_MODES
+from .config import RUN_MODES, FILE_UPLOAD_CREDIT_COST, MAX_FILES, MAX_FILE_SIZE
 from .admin import router as admin_router, ADMIN_EMAILS
+from .file_processing import validate_files, process_files, FileValidationError
+from .council import stage1_collect_responses_with_files
 
 
 @asynccontextmanager
@@ -85,19 +87,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request body size limit (100KB max for regular requests)
+# Request body size limit (100KB max for regular requests, 60MB for file uploads)
 MAX_BODY_SIZE = 100 * 1024  # 100KB
+MAX_UPLOAD_BODY_SIZE = 60 * 1024 * 1024  # 60MB for file uploads (5 files x 10MB + overhead)
 MAX_QUERY_LENGTH = 10000  # 10,000 characters max for user queries
 
 @app.middleware("http")
 async def limit_request_size(request: Request, call_next):
     """Middleware to limit request body size."""
     content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > MAX_BODY_SIZE:
-        return JSONResponse(
-            status_code=413,
-            content={"detail": "Request body too large. Maximum size is 100KB."}
-        )
+    if content_length:
+        size = int(content_length)
+        path = str(request.url.path)
+        # Allow larger requests for message endpoints (which handle file uploads)
+        if "/message" in path:
+            if size > MAX_UPLOAD_BODY_SIZE:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": "Request body too large. Maximum size is 60MB."}
+                )
+        elif size > MAX_BODY_SIZE:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Request body too large. Maximum size is 100KB."}
+            )
     return await call_next(request)
 
 # Include admin router
@@ -109,10 +122,18 @@ class CreateConversationRequest(BaseModel):
     pass
 
 
+class FileAttachment(BaseModel):
+    """Base64-encoded file attachment."""
+    filename: str
+    content_type: str
+    data: str  # base64-encoded file content
+
+
 class SendMessageRequest(BaseModel):
     """Request to send a message in a conversation."""
     content: str
     mode: str = "standard"  # "quick", "standard", or "extra_care"
+    files: Optional[List[FileAttachment]] = None  # Optional file attachments
 
 
 class RerunRequest(BaseModel):
@@ -649,12 +670,16 @@ async def _process_council_request(
     is_rerun: bool = False,
     rerun_input: Optional[str] = None,
     parent_message_id: Optional[int] = None,
-    context_packet: Optional[Dict[str, Any]] = None
+    context_packet: Optional[Dict[str, Any]] = None,
+    processed_files: Optional[List[Dict[str, Any]]] = None
 ):
     """
     Background task to process the council request.
     Saves progress incrementally and pushes events to the queue.
     Continues running even if client disconnects.
+
+    Args:
+        processed_files: Optional list of processed file dicts for multimodal queries
     """
     message_id = None
 
@@ -703,10 +728,15 @@ async def _process_council_request(
             from .council import build_rerun_query
             effective_content = build_rerun_query(content, context_packet, rerun_input)
 
-        # Stage 1: Collect responses
+        # Stage 1: Collect responses (with or without files)
         _active_status[conversation_id] = "stage1"
         await event_queue.put({'type': 'stage1_start'})
-        stage1_results = await stage1_collect_responses(effective_content, council_models)
+        if processed_files:
+            stage1_results = await stage1_collect_responses_with_files(
+                effective_content, processed_files, council_models
+            )
+        else:
+            stage1_results = await stage1_collect_responses(effective_content, council_models)
         await storage.update_assistant_message_stage(message_id, 'stage1', stage1_results)
         await event_queue.put({'type': 'stage1_complete', 'data': stage1_results})
 
@@ -788,6 +818,7 @@ async def send_message_stream(
     Send a message and stream the 3-stage council process.
     Returns Server-Sent Events as each stage completes.
     Processing continues in background even if client disconnects.
+    Supports optional file attachments (images, PDFs, Office docs).
     """
     # Validate query length
     if len(msg_request.content) > MAX_QUERY_LENGTH:
@@ -801,6 +832,22 @@ async def send_message_stream(
     mode_config = RUN_MODES[mode]
     credit_cost = mode_config["credit_cost"]
 
+    # Check for file attachments and add file upload credit cost
+    has_files = bool(msg_request.files and len(msg_request.files) > 0)
+    processed_files = None
+    if has_files:
+        # Validate files
+        try:
+            files_as_dicts = [f.model_dump() for f in msg_request.files]
+            validate_files(files_as_dicts)
+            # Process files (extract text, convert images to data URIs)
+            processed_files = await process_files(files_as_dicts)
+        except FileValidationError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        # Add file upload credit cost
+        credit_cost += FILE_UPLOAD_CREDIT_COST
+
     # Check if conversation exists and belongs to user
     conversation = await storage.get_conversation(conversation_id, user["user_id"])
     if conversation is None:
@@ -810,7 +857,7 @@ async def send_message_stream(
     user_email = user.get("email", "").lower()
     is_admin = user_email in ADMIN_EMAILS
 
-    # Check and deduct credits based on mode cost (skip for admins)
+    # Check and deduct credits based on mode cost + file cost (skip for admins)
     remaining_credits = None
     if not is_admin:
         credits = await storage.get_user_credits(user["user_id"])
@@ -841,7 +888,8 @@ async def send_message_stream(
         user["user_id"],
         is_first_message,
         event_queue,
-        mode=mode
+        mode=mode,
+        processed_files=processed_files
     ))
     _active_tasks[conversation_id] = task
 

@@ -366,7 +366,7 @@ function App() {
     }
   };
 
-  const handleSendMessage = async (content, mode = 'standard') => {
+  const handleSendMessage = async (content, mode = 'standard', files = []) => {
     // Auto-create conversation if none exists
     let conversationId = currentConversationId;
     if (!conversationId) {
@@ -386,8 +386,9 @@ function App() {
       }
     }
 
-    // Check credits before sending
-    if (credits !== null && credits <= 0) {
+    // Check credits before sending (account for file upload cost)
+    const fileCost = files.length > 0 ? 1 : 0;
+    if (credits !== null && credits <= fileCost) {
       setError('No credits remaining. Please purchase more credits to continue.');
       return;
     }
@@ -424,16 +425,16 @@ function App() {
         messages: [...prev.messages, assistantMessage],
       }));
 
-      // Send message with streaming
+      // Send message with streaming (include files)
       await api.sendMessageStream(currentConversationId, content, mode, (eventType, event) => {
         handleStreamEvent(eventType, event);
-      });
+      }, files);
     } catch (error) {
       console.error('Failed to send message:', error);
       if (error.message === 'Insufficient credits') {
         setError('No credits remaining. Please purchase more credits to continue.');
       } else {
-        setError('Failed to send message. Please try again.');
+        setError(error.message || 'Failed to send message. Please try again.');
       }
       // Remove optimistic messages on error
       setCurrentConversation((prev) => ({
