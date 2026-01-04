@@ -69,7 +69,7 @@ export default function UnifiedHeader({
               <>
                 <button
                   className="header-nav-link"
-                  onClick={() => scrollToSection('demo')}
+                  onClick={() => scrollToSection('how')}
                 >
                   Examples
                 </button>

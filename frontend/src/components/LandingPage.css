@@ -216,7 +216,7 @@
 /* Main Content */
 .landing-main {
   padding-top: 96px;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 @media (min-width: 640px) {
@@ -1354,9 +1354,9 @@
   margin: 0;
 }
 
-/* Demo Section - placeholder for now */
+/* Demo Section */
 .demo-section {
-  display: none; /* Hidden until we add the demo content back */
+  /* Section visible - content added in JSX */
 }
 
 /* Pricing Section */

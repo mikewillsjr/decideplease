@@ -151,7 +151,7 @@ export default function LandingPage() {
                     Get 5 Free Credits
                     <ArrowRightIcon />
                   </button>
-                  <button className="btn-secondary btn-large" onClick={() => scrollToSection('demo')}>
+                  <button className="btn-secondary btn-large" onClick={() => scrollToSection('how')}>
                     View Sample Verdict
                   </button>
                 </div>
@@ -423,11 +423,6 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
-        </section>
-
-        {/* Demo Section */}
-        <section className="demo-section" id="demo">
-          {/* This section is largely kept from the original for demo shuffling functionality */}
         </section>
 
         {/* Pricing Section */}
