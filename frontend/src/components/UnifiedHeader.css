@@ -44,7 +44,7 @@ html[data-theme="light"] .unified-header {
 }
 
 .header-logo-icon {
-  height: 44px;
+  height: 64px;
   width: auto;
   display: block;
 }
@@ -308,7 +308,7 @@ html[data-theme="light"] .theme-toggle {
   }
 
   .header-logo-icon {
-    height: 36px;
+    height: 48px;
   }
 
   .header-brand {
