@@ -27,12 +27,12 @@
   --text-dim: #52525b;
 
   /* Header specific */
-  --header-bg: rgba(5, 5, 7, 0.85);
-  --header-border: rgba(255, 255, 255, 0.06);
+  --header-bg: #000000;
+  --header-border: rgba(255, 255, 255, 0.10);
 
   /* Dimensions */
   --sidebar-width: 320px;
-  --header-height: 60px;
+  --header-height: 80px;
   --radius-md: 8px;
 }
 
@@ -56,9 +56,9 @@
   --text-muted: #6b7280;
   --text-dim: #9ca3af;
 
-  /* Header - use a subtle gray instead of white to show the logo */
-  --header-bg: rgba(243, 244, 246, 0.9);
-  --header-border: rgba(0, 0, 0, 0.08);
+  /* Header - pure white */
+  --header-bg: #ffffff;
+  --header-border: rgba(0, 0, 0, 0.10);
 }
 
 body {
@@ -91,7 +91,7 @@ input, textarea {
   overflow: hidden;
   background: var(--bg-deep);
   color: var(--text-main);
-  padding-top: 60px; /* Space for fixed header */
+  padding-top: 0; /* Header is now sticky, not fixed */
 }
 
 .app-body {

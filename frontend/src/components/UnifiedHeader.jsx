@@ -54,9 +54,9 @@ export default function UnifiedHeader({
     <header className="unified-header">
       <div className="header-container">
         <div className="header-left">
-          <a href="/" className="header-logo">
-            <img src="/logo/Logo-icon.png" alt="DecidePlease Icon" className="header-logo-icon" />
-            <img src="/logo/logo-text.png" alt="DecidePlease" className="header-logo-text" />
+          <a href="/" className="header-logo" aria-label="DecidePlease home">
+            <img src="/logo/Logo-icon.png" alt="" className="header-logo-icon" />
+            <span className="header-brand" aria-hidden="true">DecidePlease</span>
           </a>
 
           <nav className="header-nav">
