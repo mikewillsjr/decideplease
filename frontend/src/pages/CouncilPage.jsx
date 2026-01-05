@@ -436,7 +436,8 @@ function CouncilPage() {
       }));
 
       // Send message with streaming (include files)
-      await api.sendMessageStream(currentConversationId, content, mode, (eventType, event) => {
+      // Use local conversationId variable, not state (which may not have updated yet)
+      await api.sendMessageStream(conversationId, content, mode, (eventType, event) => {
         handleStreamEvent(eventType, event);
       }, files);
     } catch (error) {
