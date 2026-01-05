@@ -164,3 +164,66 @@ Frontend: Display with tabs + validation UI
 ```
 
 The entire flow is async/parallel where possible to minimize latency.
+
+## Testing Requirements (ALWAYS FOLLOW)
+
+This project uses Playwright for comprehensive testing. Whenever you make ANY changes to the codebase, you MUST:
+
+1. **After adding/modifying features:** Create or update the relevant Playwright tests in the `tests/` folder to cover the changes
+
+2. **After changing routes/URLs:** Update `tests/links/` to reflect new paths
+
+3. **After changing forms:** Update `tests/forms/` with new validation rules and fields
+
+4. **After changing UI/layout:** Update `tests/visual/` baseline screenshots and `tests/responsive/` checks
+
+5. **After adding/changing API endpoints:** Update `tests/api/` with new endpoint tests
+
+6. **After changing auth/permissions:** Update `tests/security/` and relevant e2e tests
+
+7. **After removing features:** Delete the corresponding test files
+
+### Test Structure
+- `tests/smoke.spec.js` — Quick health check for deploys
+- `tests/e2e/` — User flow tests (auth, conversations, settings)
+- `tests/links/` — Link crawler and 404 detection
+- `tests/forms/` — Form validation tests
+- `tests/visual/` — Screenshot comparison tests
+- `tests/responsive/` — Mobile/tablet/desktop tests
+- `tests/accessibility/` — a11y tests using axe-core
+- `tests/performance/` — Page load time tests
+- `tests/console/` — JavaScript error detection
+- `tests/api/` — API endpoint tests
+- `tests/security/` — Auth and permission tests
+- `tests/fixtures/` — Test helpers and utilities
+
+### Commands
+```bash
+# Run all tests
+npx playwright test
+
+# Run specific category
+npx playwright test tests/e2e/
+
+# Run single file
+npx playwright test tests/e2e/auth.spec.js
+
+# Run smoke tests (before deploy)
+npx playwright test tests/smoke.spec.js
+
+# Update visual baselines
+npx playwright test tests/visual/ --update-snapshots
+
+# Run with UI mode
+npx playwright test --ui
+
+# Run specific browser
+npx playwright test --project=chromium
+```
+
+### IMPORTANT
+- Never skip updating tests. Tests are as important as the feature itself.
+- If you're unsure what tests to update, run `npx playwright test` and fix any failures.
+- When in doubt, ask the user before deleting tests.
+- Visual tests require updating baselines when UI intentionally changes.
+- All tests should pass before committing changes.
