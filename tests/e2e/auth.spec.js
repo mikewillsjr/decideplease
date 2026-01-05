@@ -10,8 +10,10 @@ import {
   API_BASE_URL,
   API_ENDPOINTS,
   UI,
+  ROUTES,
   openAuthModal,
   setupAuthenticatedUser,
+  navigateToCouncil,
 } from '../fixtures/test-helpers.js';
 
 test.describe('Authentication - Registration Flow', () => {
@@ -287,9 +289,58 @@ test.describe('Authentication - Logout Flow', () => {
     // Should be logged out - check localStorage
     await page.waitForTimeout(1000);
 
-    const isLoggedOut = await page.evaluate(() => !localStorage.getItem('accessToken'));
+    const isLoggedOut = await page.evaluate(() => !localStorage.getItem('decideplease_access_token'));
     expect(isLoggedOut).toBe(true);
     console.log('  Logout successful');
+  });
+});
+
+test.describe('Authentication - Redirect Behavior', () => {
+  test('authenticated user is redirected from / to /council', async ({ page, request }) => {
+    console.log('Testing: Authenticated redirect to /council');
+
+    await setupAuthenticatedUser(page, request);
+
+    // Navigate to home
+    await page.goto(ROUTES.home);
+    await page.waitForLoadState('networkidle');
+
+    // Wait for React's useEffect redirect to trigger
+    await page.waitForURL(/\/council/, { timeout: 10000 });
+    console.log('  Authenticated user redirected to /council');
+  });
+
+  test('unauthenticated user stays on landing page', async ({ page }) => {
+    console.log('Testing: Unauthenticated stays on landing');
+
+    await page.goto(ROUTES.home);
+    await page.waitForLoadState('networkidle');
+
+    // Should stay on home
+    await expect(page).toHaveURL('/');
+    console.log('  Unauthenticated user stays on landing');
+  });
+
+  test('after login, user is on /council', async ({ page, request }) => {
+    console.log('Testing: Post-login redirect');
+
+    const testEmail = generateTestEmail();
+    const testPassword = generateTestPassword();
+
+    await request.post(`${API_BASE_URL}${API_ENDPOINTS.register}`, {
+      data: { email: testEmail, password: testPassword },
+    });
+
+    await openAuthModal(page, 'signin');
+
+    await page.fill(UI.auth.emailInput, testEmail);
+    await page.fill(UI.auth.passwordInput, testPassword);
+    await page.click(UI.auth.submitButton);
+
+    // Should be on /council after login
+    await expect(page.locator(UI.app.sidebar)).toBeVisible({ timeout: 10000 });
+    await expect(page).toHaveURL(/\/council/);
+    console.log('  User on /council after login');
   });
 });
 
