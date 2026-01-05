@@ -2,26 +2,44 @@
 
 import base64
 import io
+import os
 from typing import Dict, List, Any, Optional, Tuple
 from PIL import Image
 
 from .openrouter import query_model
 from .config import DESCRIPTION_MODEL
 
-# File type configurations
-ALLOWED_MIME_TYPES = {
-    # Images
+# File uploads feature flag - disable in production until virus scanning is implemented
+# Set FILE_UPLOADS_ENABLED=true to enable
+FILE_UPLOADS_ENABLED = os.getenv("FILE_UPLOADS_ENABLED", "false").lower() == "true"
+
+# Safe file types only - reduced set for production safety
+# Office documents (docx, xlsx, pptx) can potentially contain malicious macros or XXE attacks
+SAFE_MIME_TYPES = {
+    # Images (safe - just pixel data)
     'image/jpeg': 'image',
     'image/png': 'image',
     'image/gif': 'image',
     'image/webp': 'image',
-    # PDF
+    # PDF (relatively safe, but can contain JavaScript - use caution)
     'application/pdf': 'pdf',
-    # Office documents
+}
+
+# Full file type configurations (includes Office docs)
+# Only used when FILE_UPLOADS_OFFICE_ENABLED=true
+OFFICE_MIME_TYPES = {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
     'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
 }
+
+# Office documents are higher risk - require explicit opt-in
+FILE_UPLOADS_OFFICE_ENABLED = os.getenv("FILE_UPLOADS_OFFICE_ENABLED", "false").lower() == "true"
+
+# Build allowed types based on configuration
+ALLOWED_MIME_TYPES = SAFE_MIME_TYPES.copy()
+if FILE_UPLOADS_OFFICE_ENABLED:
+    ALLOWED_MIME_TYPES.update(OFFICE_MIME_TYPES)
 
 # Magic bytes for file type validation
 MAGIC_BYTES = {
@@ -115,8 +133,15 @@ def validate_files(files: List[Dict[str, Any]]) -> None:
         files: List of file dicts with 'filename', 'content_type', 'data' (base64)
 
     Raises:
-        FileValidationError: If validation fails
+        FileValidationError: If validation fails or uploads are disabled
     """
+    # Check if file uploads are enabled
+    if not FILE_UPLOADS_ENABLED:
+        raise FileValidationError(
+            "File uploads are currently disabled. "
+            "This feature will be enabled in a future update."
+        )
+
     if len(files) > MAX_FILES:
         raise FileValidationError(f"Maximum {MAX_FILES} files allowed, got {len(files)}")
 

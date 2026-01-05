@@ -1,0 +1,718 @@
+.admin-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+}
+
+.admin-page-content {
+  flex: 1;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.admin-page-header h1 {
+  margin: 0;
+  font-size: 28px;
+  color: #333;
+}
+
+.admin-role-badge {
+  font-size: 14px;
+  color: #666;
+}
+
+.admin-role-badge span {
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-left: 4px;
+}
+
+.admin-role-badge .role-superadmin {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.admin-role-badge .role-admin {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.admin-role-badge .role-employee {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.admin-role-badge .role-user {
+  background: #e5e7eb;
+  color: #6b7280;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 0;
+  background: white;
+  border-radius: 8px 8px 0 0;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.admin-tabs button {
+  padding: 14px 24px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.admin-tabs button:hover {
+  background: #f8f8f8;
+  color: #333;
+}
+
+.admin-tabs button.active {
+  color: #4a90e2;
+  border-bottom-color: #4a90e2;
+  background: #fff;
+}
+
+.admin-error {
+  background: #fee2e2;
+  color: #dc2626;
+  padding: 14px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.admin-error button {
+  background: none;
+  border: 1px solid #dc2626;
+  color: #dc2626;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.admin-success {
+  background: #dcfce7;
+  color: #16a34a;
+  padding: 14px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.admin-success button {
+  background: none;
+  border: 1px solid #16a34a;
+  color: #16a34a;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.admin-content {
+  background: white;
+  border-radius: 0 0 8px 8px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  min-height: 400px;
+}
+
+.admin-loading {
+  text-align: center;
+  padding: 60px;
+  color: #666;
+  font-size: 16px;
+}
+
+/* Quick Actions */
+.quick-actions {
+  background: #f0f4ff;
+  padding: 20px 24px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.quick-actions h3 {
+  margin: 0 0 14px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.quick-actions-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.quick-actions-form input {
+  padding: 10px 14px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.quick-actions-form input[type="email"] {
+  min-width: 280px;
+}
+
+.quick-actions-form button {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.quick-actions-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.quick-actions-form .btn-credits {
+  background: #22c55e;
+  color: white;
+}
+
+.quick-actions-form .btn-credits:hover:not(:disabled) {
+  background: #16a34a;
+}
+
+.quick-actions-form .btn-reset {
+  background: #f59e0b;
+  color: white;
+}
+
+.quick-actions-form .btn-reset:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.quick-actions-form .btn-delete {
+  background: #ef4444;
+  color: white;
+}
+
+.quick-actions-form .btn-delete:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.quick-actions-hint {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #666;
+}
+
+/* Dashboard Grid */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.stat-card {
+  background: #f8f8f8;
+  border-radius: 12px;
+  padding: 28px;
+  text-align: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card.revenue {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+}
+
+.stat-value {
+  font-size: 42px;
+  font-weight: 700;
+  color: #333;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #666;
+  margin-top: 6px;
+}
+
+.stat-today {
+  font-size: 13px;
+  color: #22c55e;
+  margin-top: 10px;
+  font-weight: 500;
+}
+
+/* Users Section */
+.users-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.search-form {
+  display: flex;
+  gap: 10px;
+}
+
+.search-form input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.search-form button {
+  padding: 12px 24px;
+  background: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.search-form button:hover {
+  background: #357abd;
+}
+
+.users-layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 24px;
+}
+
+.users-list {
+  overflow-x: auto;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th, td {
+  text-align: left;
+  padding: 14px 12px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+th {
+  background: #f8f8f8;
+  font-weight: 600;
+  color: #555;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+tbody tr {
+  transition: background 0.15s;
+}
+
+tbody tr:hover {
+  background: #f8f8f8;
+  cursor: pointer;
+}
+
+tbody tr.selected {
+  background: #e8f0fe;
+}
+
+.empty-state {
+  text-align: center;
+  color: #999;
+  padding: 50px !important;
+  font-style: italic;
+}
+
+/* User Detail */
+.user-detail {
+  background: #f8f8f8;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.user-detail h3 {
+  margin: 0 0 18px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.user-detail h4 {
+  margin: 20px 0 10px 0;
+  font-size: 14px;
+  color: #666;
+  font-weight: 600;
+}
+
+.user-info p {
+  margin: 6px 0;
+  font-size: 14px;
+}
+
+.user-info code {
+  font-size: 11px;
+  background: #e0e0e0;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.credit-adjustment {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.adjustment-form {
+  display: flex;
+  gap: 10px;
+}
+
+.adjustment-form input {
+  width: 120px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.adjustment-form button {
+  padding: 10px 20px;
+  background: #22c55e;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.adjustment-form button:hover {
+  background: #16a34a;
+}
+
+.user-conversations ul,
+.user-payments ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.user-conversations li,
+.user-payments li {
+  padding: 10px 0;
+  border-bottom: 1px solid #e0e0e0;
+  font-size: 13px;
+}
+
+.user-payments li {
+  display: flex;
+  justify-content: space-between;
+}
+
+.payment-date {
+  color: #999;
+  font-size: 12px;
+}
+
+/* Status Badge */
+.status-badge {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge.completed {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.status-badge.pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.status-badge.failed {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* Role Badge */
+.role-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.role-badge.role-superadmin {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.role-badge.role-admin {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.role-badge.role-employee {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.role-badge.role-user {
+  background: #e5e7eb;
+  color: #6b7280;
+}
+
+/* Action Badge */
+.action-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.action-badge.action-adjust_credits,
+.action-badge.action-set_credits {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.action-badge.action-delete_user {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.action-badge.action-change_role,
+.action-badge.action-create_staff {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.action-badge.action-impersonate_start,
+.action-badge.action-impersonate_end {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.action-badge.action-send_password_reset {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+/* Queries */
+.query-preview {
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Details Cell */
+.details-cell {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #666;
+  font-family: monospace;
+}
+
+/* Impersonate Button */
+.btn-impersonate {
+  padding: 6px 12px;
+  background: #8b5cf6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.btn-impersonate:hover {
+  background: #7c3aed;
+}
+
+/* Staff Section */
+.staff-section {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.staff-create {
+  background: #f8f8f8;
+  padding: 24px;
+  border-radius: 12px;
+}
+
+.staff-create h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.staff-form {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.staff-form input {
+  padding: 10px 14px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.staff-form input[type="email"] {
+  min-width: 250px;
+}
+
+.staff-form input[type="password"] {
+  min-width: 180px;
+}
+
+.staff-form select {
+  padding: 10px 14px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+}
+
+.staff-form button {
+  padding: 10px 20px;
+  background: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.staff-form button:hover {
+  background: #357abd;
+}
+
+.staff-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.staff-list h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.role-select {
+  padding: 6px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  cursor: pointer;
+}
+
+/* Audit Section */
+.audit-section table {
+  font-size: 13px;
+}
+
+/* Responsive */
+@media (max-width: 1000px) {
+  .users-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .user-detail {
+    order: -1;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-page-content {
+    padding: 16px;
+  }
+
+  .admin-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .admin-tabs {
+    flex-wrap: wrap;
+  }
+
+  .admin-tabs button {
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+
+  .quick-actions-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .quick-actions-form input[type="email"] {
+    min-width: auto;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .staff-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .staff-form input[type="email"],
+  .staff-form input[type="password"] {
+    min-width: auto;
+  }
+}

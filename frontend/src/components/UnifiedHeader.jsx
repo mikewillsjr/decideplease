@@ -131,15 +131,13 @@ export default function UnifiedHeader({
                       <div className="user-menu-divider" />
                       <a href="/settings" className="user-menu-item">Settings</a>
                       {isAdmin && (
-                        <button
+                        <a
+                          href="/admin"
                           className="user-menu-item"
-                          onClick={() => {
-                            onOpenAdmin?.();
-                            setShowUserMenu(false);
-                          }}
+                          onClick={() => setShowUserMenu(false)}
                         >
                           Admin Panel
-                        </button>
+                        </a>
                       )}
                       <div className="user-menu-divider" />
                       <button

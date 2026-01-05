@@ -4,12 +4,15 @@ import os
 from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
-from .auth import get_current_user
+from .auth_custom import get_current_user, hash_password, create_impersonation_token
 from .database import get_connection
+from .permissions import has_permission, can_manage_role, can_assign_role, is_staff, PERMISSIONS
+from . import storage_pg as storage
 
 # Admin emails - set via environment variable (comma-separated)
+# Kept for backwards compatibility - new system uses role column in DB
 ADMIN_EMAILS = os.getenv("ADMIN_EMAILS", "").split(",")
 ADMIN_EMAILS = [e.strip().lower() for e in ADMIN_EMAILS if e.strip()]
 
@@ -53,37 +56,61 @@ class QueryLog(BaseModel):
     created_at: str
 
 
-async def require_admin(user: dict = Depends(get_current_user)) -> dict:
+def require_permission(permission: str):
     """
-    Dependency that requires the current user to be an admin.
+    Create a dependency that requires a specific permission.
 
-    Raises:
-        HTTPException: If user is not an admin
+    Uses role-based access control from permissions.py.
+    Falls back to ADMIN_EMAILS env var for backwards compatibility.
     """
-    user_email = user.get("email", "").lower()
+    async def dependency(user: dict = Depends(get_current_user)) -> dict:
+        user_email = user.get("email", "").lower()
+        user_role = user.get("role", "user")
 
-    # Development mode bypass - only on localhost for safety
-    if os.getenv("DEVELOPMENT_MODE") == "true":
-        # Only allow bypass in actual local development
-        is_local = not os.getenv("RENDER") and not os.getenv("PRODUCTION")
-        if is_local:
-            print(f"[WARNING] Admin bypass active for {user_email} (DEVELOPMENT_MODE=true)")
+        # Development mode bypass - only on localhost for safety
+        if os.getenv("DEVELOPMENT_MODE") == "true":
+            is_local = not os.getenv("RENDER") and not os.getenv("PRODUCTION")
+            if is_local:
+                print(f"[WARNING] Admin bypass active for {user_email} (DEVELOPMENT_MODE=true)")
+                return user
+
+        # Check role-based permission first
+        if has_permission(user_role, permission):
             return user
 
-    if not ADMIN_EMAILS:
+        # Fallback: Check legacy ADMIN_EMAILS env var (backwards compatibility)
+        # Legacy admins get equivalent of 'admin' role permissions
+        if user_email in ADMIN_EMAILS and permission in [
+            'view_dashboard', 'view_users', 'view_user_detail', 'view_conversations',
+            'view_payments', 'view_queries', 'view_metrics', 'modify_credits',
+            'delete_users', 'send_password_reset', 'manage_employees'
+        ]:
+            return user
+
         raise HTTPException(
-            status_code=500,
-            detail="Admin emails not configured. Set ADMIN_EMAILS env var."
+            status_code=403,
+            detail=f"Permission denied: {permission} required"
         )
 
-    if user_email not in ADMIN_EMAILS:
-        raise HTTPException(status_code=403, detail="Admin access required")
+    return dependency
 
-    return user
+
+# Pre-built permission dependencies for each endpoint
+require_view_dashboard = require_permission('view_dashboard')
+require_view_users = require_permission('view_users')
+require_view_payments = require_permission('view_payments')
+require_view_queries = require_permission('view_queries')
+require_view_metrics = require_permission('view_metrics')
+require_modify_credits = require_permission('modify_credits')
+require_delete_users = require_permission('delete_users')
+require_send_password_reset = require_permission('send_password_reset')
+require_manage_employees = require_permission('manage_employees')
+require_manage_admins = require_permission('manage_admins')
+require_impersonate = require_permission('impersonate')
 
 
 @router.get("/stats", response_model=DashboardStats)
-async def get_dashboard_stats(admin: dict = Depends(require_admin)):
+async def get_dashboard_stats(admin: dict = Depends(require_view_dashboard)):
     """Get dashboard statistics for the admin panel."""
     async with get_connection() as conn:
         # Total users
@@ -142,7 +169,7 @@ async def list_users(
     limit: int = 50,
     offset: int = 0,
     search: Optional[str] = None,
-    admin: dict = Depends(require_admin)
+    admin: dict = Depends(require_view_users)
 ):
     """List all users with their stats."""
     async with get_connection() as conn:
@@ -195,7 +222,7 @@ async def list_users(
 
 
 @router.get("/users/{user_id}")
-async def get_user_detail(user_id: str, admin: dict = Depends(require_admin)):
+async def get_user_detail(user_id: str, admin: dict = Depends(require_view_users)):
     """Get detailed info for a specific user."""
     async with get_connection() as conn:
         user = await conn.fetchrow(
@@ -269,20 +296,24 @@ async def get_user_detail(user_id: str, admin: dict = Depends(require_admin)):
 async def adjust_user_credits(
     user_id: str,
     credits: int,
-    admin: dict = Depends(require_admin)
+    admin: dict = Depends(require_modify_credits)
 ):
     """Manually adjust a user's credits (add or remove)."""
+    admin_id = admin.get("user_id", "")
+    admin_email = admin.get("email", "")
+
     async with get_connection() as conn:
         # Check user exists
         user = await conn.fetchrow(
-            "SELECT id, credits FROM users WHERE id = $1",
+            "SELECT id, email, credits FROM users WHERE id = $1",
             user_id
         )
 
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        new_credits = max(0, user["credits"] + credits)
+        previous_credits = user["credits"]
+        new_credits = max(0, previous_credits + credits)
 
         await conn.execute(
             "UPDATE users SET credits = $1 WHERE id = $2",
@@ -290,21 +321,38 @@ async def adjust_user_credits(
             user_id
         )
 
-        return {
-            "user_id": user_id,
-            "previous_credits": user["credits"],
+    # Log the action
+    await storage.log_admin_action(
+        admin_id=admin_id,
+        admin_email=admin_email,
+        action="adjust_credits",
+        target_user_id=user_id,
+        details={
+            "target_email": user["email"],
+            "previous_credits": previous_credits,
             "adjustment": credits,
             "new_credits": new_credits
         }
+    )
+
+    return {
+        "user_id": user_id,
+        "previous_credits": previous_credits,
+        "adjustment": credits,
+        "new_credits": new_credits
+    }
 
 
 @router.post("/users/set-credits-by-email")
 async def set_credits_by_email(
     email: str,
     credits: int,
-    admin: dict = Depends(require_admin)
+    admin: dict = Depends(require_modify_credits)
 ):
     """Set a user's credits by email address."""
+    admin_id = admin.get("user_id", "")
+    admin_email = admin.get("email", "")
+
     async with get_connection() as conn:
         user = await conn.fetchrow(
             "SELECT id, email, credits FROM users WHERE LOWER(email) = LOWER($1)",
@@ -322,23 +370,39 @@ async def set_credits_by_email(
             user["id"]
         )
 
-        return {
-            "user_id": user["id"],
-            "email": user["email"],
+    # Log the action
+    await storage.log_admin_action(
+        admin_id=admin_id,
+        admin_email=admin_email,
+        action="set_credits",
+        target_user_id=user["id"],
+        details={
+            "target_email": user["email"],
             "previous_credits": previous_credits,
             "new_credits": credits
         }
+    )
+
+    return {
+        "user_id": user["id"],
+        "email": user["email"],
+        "previous_credits": previous_credits,
+        "new_credits": credits
+    }
 
 
 @router.delete("/users/delete-by-email")
 async def delete_user_by_email(
     email: str,
-    admin: dict = Depends(require_admin)
+    admin: dict = Depends(require_delete_users)
 ):
     """Delete a user account and all their data by email address."""
+    admin_id = admin.get("user_id", "")
+    admin_email = admin.get("email", "")
+
     async with get_connection() as conn:
         user = await conn.fetchrow(
-            "SELECT id, email, credits FROM users WHERE LOWER(email) = LOWER($1)",
+            "SELECT id, email, credits, role FROM users WHERE LOWER(email) = LOWER($1)",
             email
         )
 
@@ -346,6 +410,14 @@ async def delete_user_by_email(
             raise HTTPException(status_code=404, detail=f"User not found: {email}")
 
         user_id = user["id"]
+        user_role = user["role"] or "user"
+
+        # Check if admin can manage this user
+        if not can_manage_role(admin.get("role", "user"), user_role):
+            raise HTTPException(
+                status_code=403,
+                detail=f"You cannot delete users with the '{user_role}' role"
+            )
 
         # Delete in order: messages -> conversations -> payments -> user
         # Get conversation IDs first
@@ -378,25 +450,43 @@ async def delete_user_by_email(
 
         await conn.execute("DELETE FROM users WHERE id = $1", user_id)
 
-        return {
-            "message": f"User {email} deleted",
-            "deleted": {
-                "user": 1,
-                "conversations": deleted_convs,
-                "messages": deleted_messages,
-                "payments": deleted_payments
-            }
+    # Log the action
+    await storage.log_admin_action(
+        admin_id=admin_id,
+        admin_email=admin_email,
+        action="delete_user",
+        target_user_id=user_id,
+        details={
+            "target_email": email,
+            "target_role": user_role,
+            "deleted_conversations": deleted_convs,
+            "deleted_messages": deleted_messages,
+            "deleted_payments": deleted_payments
         }
+    )
+
+    return {
+        "message": f"User {email} deleted",
+        "deleted": {
+            "user": 1,
+            "conversations": deleted_convs,
+            "messages": deleted_messages,
+            "payments": deleted_payments
+        }
+    }
 
 
 @router.post("/users/send-password-reset")
 async def admin_send_password_reset(
     email: str,
-    admin: dict = Depends(require_admin)
+    admin: dict = Depends(require_send_password_reset)
 ):
     """Send a password reset email to a user (admin-triggered)."""
     from .email import send_password_reset_email
     import secrets
+
+    admin_id = admin.get("user_id", "")
+    admin_email = admin.get("email", "")
 
     async with get_connection() as conn:
         user = await conn.fetchrow(
@@ -426,17 +516,26 @@ async def admin_send_password_reset(
         # Send the email
         sent = await send_password_reset_email(user["email"], reset_token)
 
-        return {
-            "message": f"Password reset email sent to {email}",
-            "sent": sent
-        }
+    # Log the action
+    await storage.log_admin_action(
+        admin_id=admin_id,
+        admin_email=admin_email,
+        action="send_password_reset",
+        target_user_id=user["id"],
+        details={"target_email": email, "sent": sent}
+    )
+
+    return {
+        "message": f"Password reset email sent to {email}",
+        "sent": sent
+    }
 
 
 @router.get("/payments", response_model=List[RecentPayment])
 async def list_payments(
     limit: int = 50,
     offset: int = 0,
-    admin: dict = Depends(require_admin)
+    admin: dict = Depends(require_view_payments)
 ):
     """List recent payments."""
     async with get_connection() as conn:
@@ -474,7 +573,7 @@ async def list_payments(
 async def list_recent_queries(
     limit: int = 50,
     offset: int = 0,
-    admin: dict = Depends(require_admin)
+    admin: dict = Depends(require_view_queries)
 ):
     """List recent queries across all users."""
     async with get_connection() as conn:
@@ -508,7 +607,7 @@ async def list_recent_queries(
 @router.get("/metrics/daily")
 async def get_daily_metrics(
     days: int = 30,
-    admin: dict = Depends(require_admin)
+    admin: dict = Depends(require_view_metrics)
 ):
     """Get daily metrics for charts."""
     async with get_connection() as conn:
@@ -562,23 +661,56 @@ async def get_daily_metrics(
 
 @router.get("/check")
 async def check_admin_access(user: dict = Depends(get_current_user)):
-    """Check if current user has admin access."""
+    """Check if current user has admin/staff access and their role."""
     user_email = user.get("email", "").lower()
+    user_role = user.get("role", "user")
 
     # Development mode bypass - only on localhost for safety
     if os.getenv("DEVELOPMENT_MODE") == "true":
         is_local = not os.getenv("RENDER") and not os.getenv("PRODUCTION")
         if is_local:
-            return {"is_admin": True, "email": user_email, "dev_mode": True}
+            return {
+                "is_admin": True,
+                "is_staff": True,
+                "role": "superadmin",
+                "email": user_email,
+                "dev_mode": True,
+                "permissions": list(PERMISSIONS.keys())  # All permissions in dev mode
+            }
 
-    is_admin = user_email in ADMIN_EMAILS
-    return {"is_admin": is_admin, "email": user_email}
+    # Check if user is staff (has any admin-level role)
+    user_is_staff = is_staff(user_role)
+
+    # Legacy ADMIN_EMAILS support
+    legacy_admin = user_email in ADMIN_EMAILS
+
+    # Get user's permissions
+    user_permissions = [
+        perm for perm, roles in PERMISSIONS.items()
+        if user_role in roles
+    ]
+
+    # Legacy admins get admin-equivalent permissions
+    if legacy_admin and not user_is_staff:
+        user_permissions = [
+            'view_dashboard', 'view_users', 'view_user_detail', 'view_conversations',
+            'view_payments', 'view_queries', 'view_metrics', 'modify_credits',
+            'delete_users', 'send_password_reset', 'manage_employees'
+        ]
+
+    return {
+        "is_admin": user_role in ['admin', 'superadmin'] or legacy_admin,
+        "is_staff": user_is_staff or legacy_admin,
+        "role": user_role if user_is_staff else ("admin" if legacy_admin else "user"),
+        "email": user_email,
+        "permissions": user_permissions
+    }
 
 
 @router.post("/test-emails")
 async def send_test_emails(
     email: str,
-    admin: dict = Depends(require_admin)
+    admin: dict = Depends(require_view_dashboard)
 ):
     """Send all email templates to a specified address for testing."""
     from .email import (
@@ -609,3 +741,224 @@ async def send_test_emails(
         "message": f"Sent {sent_count}/8 test emails to {email}",
         "results": results
     }
+
+
+# ============== Staff Management Endpoints ==============
+
+class CreateStaffRequest(BaseModel):
+    """Request to create a new staff member."""
+    email: EmailStr
+    password: str
+    role: str  # 'employee' or 'admin'
+
+
+class UpdateRoleRequest(BaseModel):
+    """Request to update a user's role."""
+    role: str
+
+
+@router.get("/staff")
+async def list_staff_users(admin: dict = Depends(require_manage_employees)):
+    """List all staff members (employees, admins, superadmins)."""
+    staff = await storage.get_staff_users()
+    return {"staff": staff}
+
+
+@router.post("/staff")
+async def create_staff_user(
+    request: CreateStaffRequest,
+    admin: dict = Depends(require_manage_employees)
+):
+    """Create a new staff user (employee or admin)."""
+    admin_role = admin.get("role", "user")
+    admin_email = admin.get("email", "")
+    admin_id = admin.get("user_id", "")
+
+    # Check if the admin can assign this role
+    if not can_assign_role(admin_role, request.role):
+        raise HTTPException(
+            status_code=403,
+            detail=f"You cannot assign the '{request.role}' role"
+        )
+
+    # Check if user already exists
+    existing = await storage.get_user_by_email(request.email)
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"User with email {request.email} already exists"
+        )
+
+    # Hash password and create user
+    password_hash = hash_password(request.password)
+    new_user = await storage.create_staff_user(
+        email=request.email,
+        password_hash=password_hash,
+        role=request.role
+    )
+
+    # Log the action
+    await storage.log_admin_action(
+        admin_id=admin_id,
+        admin_email=admin_email,
+        action="create_staff",
+        target_user_id=new_user["id"],
+        details={"email": request.email, "role": request.role}
+    )
+
+    return {
+        "message": f"Staff user created: {request.email}",
+        "user": new_user
+    }
+
+
+@router.post("/users/{user_id}/role")
+async def update_user_role(
+    user_id: str,
+    request: UpdateRoleRequest,
+    admin: dict = Depends(require_manage_employees)
+):
+    """Update a user's role."""
+    admin_role = admin.get("role", "user")
+    admin_email = admin.get("email", "")
+    admin_id = admin.get("user_id", "")
+
+    # Get target user's current role
+    target_role = await storage.get_user_role(user_id)
+    if target_role is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check if admin can manage this user
+    if not can_manage_role(admin_role, target_role):
+        raise HTTPException(
+            status_code=403,
+            detail=f"You cannot modify users with the '{target_role}' role"
+        )
+
+    # Check if admin can assign the new role
+    if not can_assign_role(admin_role, request.role):
+        raise HTTPException(
+            status_code=403,
+            detail=f"You cannot assign the '{request.role}' role"
+        )
+
+    # Update the role
+    success = await storage.update_user_role(user_id, request.role)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update role")
+
+    # Log the action
+    await storage.log_admin_action(
+        admin_id=admin_id,
+        admin_email=admin_email,
+        action="change_role",
+        target_user_id=user_id,
+        details={"old_role": target_role, "new_role": request.role}
+    )
+
+    return {
+        "message": f"User role updated to '{request.role}'",
+        "user_id": user_id,
+        "old_role": target_role,
+        "new_role": request.role
+    }
+
+
+# ============== Impersonation Endpoints ==============
+
+@router.get("/impersonate/{user_id}")
+async def impersonate_user(
+    user_id: str,
+    admin: dict = Depends(require_impersonate)
+):
+    """
+    Get an impersonation token for a user (superadmin only).
+
+    Returns a short-lived access token that allows acting as the target user.
+    All actions are tracked with the impersonated_by claim in the token.
+    """
+    admin_id = admin.get("user_id", "")
+    admin_email = admin.get("email", "")
+
+    # Get target user info
+    async with get_connection() as conn:
+        target_user = await conn.fetchrow(
+            "SELECT id, email, role FROM users WHERE id = $1",
+            user_id
+        )
+
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    target_email = target_user["email"]
+    target_role = target_user["role"] or "user"
+
+    # Create impersonation token (short-lived, includes impersonated_by claim)
+    impersonation_token = create_impersonation_token(
+        user_id=user_id,
+        email=target_email,
+        role=target_role,
+        impersonated_by=admin_id
+    )
+
+    # Log the impersonation
+    await storage.log_admin_action(
+        admin_id=admin_id,
+        admin_email=admin_email,
+        action="impersonate_start",
+        target_user_id=user_id,
+        details={"target_email": target_email}
+    )
+
+    return {
+        "access_token": impersonation_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user_id,
+            "email": target_email,
+            "role": target_role
+        },
+        "impersonated_by": admin_email,
+        "expires_in": 3600  # 1 hour
+    }
+
+
+@router.post("/impersonate/end")
+async def end_impersonation(admin: dict = Depends(get_current_user)):
+    """
+    Log the end of an impersonation session.
+
+    Called when the superadmin clicks "Exit" on the impersonation banner.
+    The token is handled client-side, this just logs the action.
+    """
+    impersonated_by = admin.get("impersonated_by")
+
+    if not impersonated_by:
+        raise HTTPException(
+            status_code=400,
+            detail="Not currently impersonating anyone"
+        )
+
+    # Log the end of impersonation
+    await storage.log_admin_action(
+        admin_id=impersonated_by,
+        admin_email="",  # We don't have the admin's email easily accessible
+        action="impersonate_end",
+        target_user_id=admin.get("user_id"),
+        details={"target_email": admin.get("email")}
+    )
+
+    return {"message": "Impersonation session ended"}
+
+
+# ============== Audit Log Endpoints ==============
+
+@router.get("/audit-log")
+async def get_audit_log(
+    limit: int = 100,
+    offset: int = 0,
+    admin: dict = Depends(require_view_dashboard)
+):
+    """Get the admin audit log (visible to all staff)."""
+    logs = await storage.get_audit_log(limit=limit, offset=offset)
+    return {"audit_log": logs}

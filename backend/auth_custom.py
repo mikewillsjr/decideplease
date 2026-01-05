@@ -68,15 +68,36 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 # ============== JWT Tokens ==============
 
-def create_access_token(user_id: str, email: str) -> str:
-    """Create a JWT access token."""
+def create_access_token(user_id: str, email: str, role: str = "user") -> str:
+    """Create a JWT access token with unique JTI for revocation support."""
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
         "sub": user_id,
         "email": email,
+        "role": role,
         "type": "access",
         "exp": expire,
         "iat": datetime.now(timezone.utc),
+        "jti": str(uuid.uuid4()),  # Unique token ID for revocation
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def create_impersonation_token(user_id: str, email: str, role: str, impersonated_by: str) -> str:
+    """Create an impersonation token for superadmin to act as another user.
+
+    This token includes the impersonated_by claim to track who is impersonating.
+    """
+    expire = datetime.now(timezone.utc) + timedelta(hours=1)  # Shorter expiry for impersonation
+    payload = {
+        "sub": user_id,
+        "email": email,
+        "role": role,
+        "type": "access",
+        "impersonated_by": impersonated_by,
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
+        "jti": str(uuid.uuid4()),  # Unique token ID for revocation
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -92,6 +113,74 @@ def create_refresh_token(user_id: str) -> str:
         "jti": str(uuid.uuid4()),  # Unique token ID for potential revocation
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+# In-memory cache for revoked tokens (cleared on restart, but DB is source of truth)
+_revoked_tokens_cache: set = set()
+
+
+async def is_token_revoked(jti: str) -> bool:
+    """Check if a token has been revoked."""
+    # Check cache first
+    if jti in _revoked_tokens_cache:
+        return True
+
+    # Check database
+    from .database import get_connection
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            "SELECT jti FROM revoked_tokens WHERE jti = $1",
+            jti
+        )
+        if row:
+            _revoked_tokens_cache.add(jti)
+            return True
+    return False
+
+
+async def revoke_token(jti: str, user_id: str, expires_at: datetime):
+    """
+    Add a token to the revocation list.
+
+    Args:
+        jti: The JWT ID to revoke
+        user_id: The user who owns the token
+        expires_at: When the token naturally expires (for cleanup)
+    """
+    from .database import get_connection
+    async with get_connection() as conn:
+        await conn.execute(
+            """
+            INSERT INTO revoked_tokens (jti, user_id, expires_at)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (jti) DO NOTHING
+            """,
+            jti,
+            user_id,
+            expires_at
+        )
+    _revoked_tokens_cache.add(jti)
+
+
+async def revoke_all_user_tokens(user_id: str):
+    """
+    Revoke all tokens for a user (e.g., on password change or security concern).
+    Note: This doesn't actually revoke existing tokens, but the user will need to re-login
+    since we can't enumerate all their tokens. For immediate revocation, we'd need to track
+    all active tokens per user.
+    """
+    # For now, this is a placeholder. True revocation of all tokens would require
+    # either storing all issued tokens or using a "not before" timestamp per user.
+    pass
+
+
+async def cleanup_expired_revocations():
+    """Remove expired entries from the revoked_tokens table."""
+    from .database import get_connection
+    async with get_connection() as conn:
+        await conn.execute(
+            "DELETE FROM revoked_tokens WHERE expires_at < NOW()"
+        )
 
 
 def verify_token(token: str, token_type: str = "access") -> dict:
@@ -123,6 +212,33 @@ def verify_token(token: str, token_type: str = "access") -> dict:
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
 
+async def verify_token_async(token: str, token_type: str = "access") -> dict:
+    """
+    Verify and decode a JWT token with revocation check.
+
+    This is the async version that checks the revocation database.
+
+    Args:
+        token: The JWT token string
+        token_type: Expected token type ("access" or "refresh")
+
+    Returns:
+        Decoded token payload
+
+    Raises:
+        HTTPException: If token is invalid, expired, or revoked
+    """
+    # First do basic verification
+    payload = verify_token(token, token_type)
+
+    # Check if token has been revoked
+    jti = payload.get("jti")
+    if jti and await is_token_revoked(jti):
+        raise HTTPException(status_code=401, detail="Token has been revoked")
+
+    return payload
+
+
 # ============== FastAPI Dependencies ==============
 
 async def get_current_user(
@@ -133,20 +249,29 @@ async def get_current_user(
     FastAPI dependency to get the current authenticated user.
 
     Returns:
-        Dict with user_id and email
+        Dict with user_id, email, role, jti, and optionally impersonated_by
 
     Raises:
-        HTTPException: If not authenticated
+        HTTPException: If not authenticated or token is revoked
     """
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    payload = verify_token(credentials.credentials, token_type="access")
+    # Use async verification with revocation check
+    payload = await verify_token_async(credentials.credentials, token_type="access")
 
-    return {
+    result = {
         "user_id": payload.get("sub"),
-        "email": payload.get("email", "")
+        "email": payload.get("email", ""),
+        "role": payload.get("role", "user"),
+        "jti": payload.get("jti"),  # Include JTI for logout
     }
+
+    # Include impersonation info if present
+    if "impersonated_by" in payload:
+        result["impersonated_by"] = payload["impersonated_by"]
+
+    return result
 
 
 async def get_optional_user(
@@ -155,17 +280,22 @@ async def get_optional_user(
 ) -> Optional[dict]:
     """
     FastAPI dependency to optionally get the current user.
-    Returns None if not authenticated (doesn't raise error).
+    Returns None if not authenticated or token is revoked (doesn't raise error).
     """
     if not credentials:
         return None
 
     try:
-        payload = verify_token(credentials.credentials, token_type="access")
-        return {
+        payload = await verify_token_async(credentials.credentials, token_type="access")
+        result = {
             "user_id": payload.get("sub"),
-            "email": payload.get("email", "")
+            "email": payload.get("email", ""),
+            "role": payload.get("role", "user"),
+            "jti": payload.get("jti"),
         }
+        if "impersonated_by" in payload:
+            result["impersonated_by"] = payload["impersonated_by"]
+        return result
     except HTTPException:
         return None
 
@@ -203,6 +333,7 @@ class UserResponse(BaseModel):
     email: str
     credits: int
     email_verified: bool
+    role: str = "user"
 
 
 # ============== OAuth Providers (Future) ==============

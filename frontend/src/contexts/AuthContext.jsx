@@ -213,6 +213,12 @@ export function AuthProvider({ children }) {
     return userData;
   }, [fetchCurrentUser]);
 
+  // Set auth data directly (for OAuth callbacks)
+  const setAuthData = useCallback(({ accessToken, refreshToken, user: userData }) => {
+    storeTokens(accessToken, refreshToken);
+    storeUser(userData);
+  }, [storeTokens, storeUser]);
+
   const value = {
     user,
     isLoading,
@@ -223,6 +229,7 @@ export function AuthProvider({ children }) {
     getAuthHeaders,
     getAccessToken,
     refreshUser,
+    setAuthData,
   };
 
   return (

@@ -600,4 +600,99 @@ export const api = {
     }
     return response.json();
   },
+
+  // ============== Staff Management ==============
+
+  /**
+   * Get list of staff users (employees, admins, superadmins).
+   */
+  async getStaffUsers() {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/staff`, { headers });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to get staff users');
+    }
+    return response.json();
+  },
+
+  /**
+   * Create a new staff user.
+   */
+  async createStaffUser(email, password, role) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/staff`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ email, password, role }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to create staff user');
+    }
+    return response.json();
+  },
+
+  /**
+   * Update a user's role.
+   */
+  async updateUserRole(userId, role) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/users/${userId}/role`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ role }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to update user role');
+    }
+    return response.json();
+  },
+
+  // ============== Impersonation ==============
+
+  /**
+   * Get impersonation token for a user (superadmin only).
+   */
+  async impersonateUser(userId) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/impersonate/${userId}`, { headers });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to impersonate user');
+    }
+    return response.json();
+  },
+
+  /**
+   * End impersonation session.
+   */
+  async endImpersonation() {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/impersonate/end`, {
+      method: 'POST',
+      headers,
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to end impersonation');
+    }
+    return response.json();
+  },
+
+  // ============== Audit Log ==============
+
+  /**
+   * Get admin audit log.
+   */
+  async getAuditLog(limit = 100, offset = 0) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/audit-log?limit=${limit}&offset=${offset}`, { headers });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to get audit log');
+    }
+    return response.json();
+  },
 };

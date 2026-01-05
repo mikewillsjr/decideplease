@@ -14,7 +14,30 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+# Initialize Sentry for error tracking (if configured)
+SENTRY_DSN = os.getenv("SENTRY_DSN")
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.asyncpg import AsyncPGIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            FastApiIntegration(transaction_style="endpoint"),
+            AsyncPGIntegration(),
+        ],
+        traces_sample_rate=0.1,  # 10% of requests for performance monitoring
+        profiles_sample_rate=0.1,  # 10% profiling
+        environment=os.getenv("ENVIRONMENT", "development"),
+    )
+
+# Initialize structured logging
+from .logging_config import get_logger
+logger = get_logger(__name__)
+
 from . import storage_pg as storage
+from .storage_pg import InsufficientCreditsError
 from .database import init_database, close_pool, get_connection
 from .auth_custom import (
     get_current_user,
@@ -23,12 +46,14 @@ from .auth_custom import (
     create_access_token,
     create_refresh_token,
     verify_token,
+    revoke_token,
     RegisterRequest,
     LoginRequest,
     RefreshRequest,
     AuthResponse,
     OAUTH_ENABLED,
     JWT_SECRET,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
 )
 from .payments import (
     create_checkout_session,
@@ -50,26 +75,120 @@ from .council import (
 )
 from .config import RUN_MODES, FILE_UPLOAD_CREDIT_COST, MAX_FILES, MAX_FILE_SIZE
 from .admin import router as admin_router, ADMIN_EMAILS
+from .permissions import has_permission
 from .file_processing import validate_files, process_files, FileValidationError
 from .council import stage1_collect_responses_with_files
+
+
+# Required environment variables for production
+REQUIRED_ENV_VARS = [
+    "DATABASE_URL",
+    "JWT_SECRET",
+    "OPENROUTER_API_KEY",
+]
+
+# Optional but recommended env vars
+RECOMMENDED_ENV_VARS = [
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "RESEND_API_KEY",
+    "CORS_ORIGINS",
+]
+
+
+def validate_environment():
+    """
+    Validate required environment variables at startup.
+    Raises RuntimeError if critical variables are missing in production.
+    """
+    is_production = (
+        os.getenv("RENDER") == "true" or
+        os.getenv("PRODUCTION") == "true" or
+        os.getenv("NODE_ENV") == "production" or
+        os.getenv("ENVIRONMENT") == "production"
+    )
+
+    missing_required = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
+    missing_recommended = [var for var in RECOMMENDED_ENV_VARS if not os.getenv(var)]
+
+    # In production, fail if required vars are missing
+    if is_production and missing_required:
+        raise RuntimeError(
+            f"Missing required environment variables: {', '.join(missing_required)}. "
+            "These must be set in production."
+        )
+
+    # Check for default JWT secret in production
+    if is_production and os.getenv("JWT_SECRET") == "dev-secret-change-in-production":
+        raise RuntimeError(
+            "JWT_SECRET is still set to the default value. "
+            "Generate a secure secret with: openssl rand -hex 32"
+        )
+
+    # Warn about missing vars in development
+    if missing_required:
+        print(f"[WARNING] Missing required env vars (OK in dev): {', '.join(missing_required)}")
+
+    if missing_recommended:
+        print(f"[INFO] Missing recommended env vars: {', '.join(missing_recommended)}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan - initialize and cleanup resources."""
+    # Validate environment before starting
+    validate_environment()
+
+    logger.info("application_starting", service="DecidePlease API")
+
     # Startup: Initialize database
     if os.getenv("DATABASE_URL"):
         await init_database()
+        logger.info("database_initialized")
+
+    logger.info("application_ready")
     yield
+
     # Shutdown: Close database pool
+    logger.info("application_shutting_down")
     await close_pool()
+    logger.info("application_stopped")
 
 
 app = FastAPI(title="DecidePlease API", lifespan=lifespan)
 
+
+def get_rate_limit_key(request: Request) -> str:
+    """
+    Get rate limit key - uses user ID for authenticated requests, IP for anonymous.
+
+    This prevents:
+    - Multiple users behind same NAT from sharing rate limits
+    - A single user from bypassing limits by changing IP
+    """
+    # Try to get user from request state (set by auth middleware/dependency)
+    # For endpoints that don't use auth, fall back to IP
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        try:
+            from jose import jwt
+            token = auth_header.split(" ")[1]
+            # Decode without verification just to get user_id for rate limiting
+            # (actual auth verification happens in the endpoint)
+            payload = jwt.decode(token, options={"verify_signature": False})
+            user_id = payload.get("sub")
+            if user_id:
+                return f"user:{user_id}"
+        except Exception:
+            pass  # Fall back to IP if token parsing fails
+
+    # Fall back to IP address for anonymous requests
+    return f"ip:{get_remote_address(request)}"
+
+
 # Rate limiting configuration
-# Uses IP address for rate limiting key
-limiter = Limiter(key_func=get_remote_address)
+# Uses user ID for authenticated requests, IP for anonymous
+limiter = Limiter(key_func=get_rate_limit_key)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -79,12 +198,20 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
 cors_origins = [origin.strip() for origin in cors_origins if origin.strip()]
 
+# Use explicit allow lists instead of wildcards for better security
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=cors_origins,  # Explicit origins only
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Explicit methods
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+        "Stripe-Signature",  # For Stripe webhooks
+    ],
 )
 
 # Request body size limit (100KB max for regular requests, 60MB for file uploads)
@@ -180,8 +307,46 @@ class CreditPackInfo(BaseModel):
 
 @app.get("/")
 async def root():
-    """Health check endpoint."""
+    """Basic health check endpoint."""
     return {"status": "ok", "service": "DecidePlease API"}
+
+
+@app.get("/health")
+async def health_check():
+    """
+    Comprehensive health check endpoint.
+
+    Checks:
+    - Database connectivity
+    - Basic system health
+
+    Returns status and details about each component.
+    """
+    health_status = {
+        "status": "healthy",
+        "service": "DecidePlease API",
+        "checks": {}
+    }
+
+    # Check database connection
+    try:
+        async with get_connection() as conn:
+            await conn.fetchval("SELECT 1")
+        health_status["checks"]["database"] = {"status": "healthy"}
+    except Exception as e:
+        health_status["status"] = "unhealthy"
+        health_status["checks"]["database"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        logger.error("health_check_failed", component="database", error=str(e))
+
+    # Return 503 if unhealthy
+    if health_status["status"] == "unhealthy":
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=503, content=health_status)
+
+    return health_status
 
 
 # ============== Authentication Endpoints ==============
@@ -205,8 +370,8 @@ async def register(request: Request, reg_request: RegisterRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Generate tokens
-    access_token = create_access_token(user["id"], user["email"])
+    # Generate tokens (new users always have 'user' role)
+    access_token = create_access_token(user["id"], user["email"], user.get("role", "user"))
     refresh_token = create_refresh_token(user["id"])
 
     # Send welcome email (fire and forget - don't block registration)
@@ -221,7 +386,8 @@ async def register(request: Request, reg_request: RegisterRequest):
             "id": user["id"],
             "email": user["email"],
             "credits": user["credits"],
-            "email_verified": user["email_verified"]
+            "email_verified": user["email_verified"],
+            "role": user.get("role", "user")
         }
     }
 
@@ -250,8 +416,8 @@ async def login(request: Request, login_request: LoginRequest):
     if not verify_password(login_request.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    # Generate tokens
-    access_token = create_access_token(user["id"], user["email"])
+    # Generate tokens with role
+    access_token = create_access_token(user["id"], user["email"], user.get("role", "user"))
     refresh_token = create_refresh_token(user["id"])
 
     return {
@@ -262,7 +428,8 @@ async def login(request: Request, login_request: LoginRequest):
             "id": user["id"],
             "email": user["email"],
             "credits": user["credits"],
-            "email_verified": user["email_verified"]
+            "email_verified": user["email_verified"],
+            "role": user.get("role", "user")
         }
     }
 
@@ -280,13 +447,30 @@ async def refresh_token(request: RefreshRequest):
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
-    # Generate new access token
-    access_token = create_access_token(user["id"], user["email"])
+    # Generate new access token with role
+    access_token = create_access_token(user["id"], user["email"], user.get("role", "user"))
 
     return {
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+
+@app.post("/api/auth/logout")
+async def logout(user: dict = Depends(get_current_user)):
+    """
+    Logout the current user by revoking their access token.
+    The token will be added to the blacklist and rejected on future requests.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    jti = user.get("jti")
+    if jti:
+        # Calculate when the token expires (for cleanup purposes)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        await revoke_token(jti, user["user_id"], expires_at)
+
+    return {"message": "Logged out successfully"}
 
 
 @app.get("/api/auth/me")
@@ -298,25 +482,182 @@ async def get_current_user_info(user: dict = Depends(get_current_user)):
     if not user_data:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return {
+    result = {
         "id": user_data["id"],
         "email": user_data["email"],
         "credits": user_data["credits"],
-        "email_verified": user_data["email_verified"]
+        "email_verified": user_data["email_verified"],
+        "role": user_data.get("role", "user")
     }
+
+    # Include impersonation info if present
+    if user.get("impersonated_by"):
+        result["impersonated_by"] = user["impersonated_by"]
+
+    return result
 
 
 @app.get("/api/auth/oauth/providers")
 async def get_oauth_providers():
     """
     Get list of available OAuth providers.
-    Returns empty list if OAuth is disabled.
+    Returns enabled providers based on environment configuration.
     """
-    if not OAUTH_ENABLED:
-        return {"providers": [], "oauth_enabled": False}
+    providers = []
 
-    # Return enabled providers (none for now)
-    return {"providers": [], "oauth_enabled": False}
+    # Check if Google OAuth is configured
+    if os.getenv("GOOGLE_CLIENT_ID") and os.getenv("GOOGLE_CLIENT_SECRET"):
+        providers.append({
+            "name": "google",
+            "display_name": "Google",
+            "authorize_url": "/api/auth/oauth/google/authorize"
+        })
+
+    return {"providers": providers, "oauth_enabled": len(providers) > 0}
+
+
+@app.get("/api/auth/oauth/google/authorize")
+async def google_oauth_authorize(request: Request):
+    """
+    Initiate Google OAuth flow.
+    Returns the URL to redirect the user to for Google sign-in.
+    """
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    if not client_id:
+        raise HTTPException(status_code=503, detail="Google OAuth not configured")
+
+    # Build the redirect URI (where Google sends users after auth)
+    frontend_url = os.getenv("FRONTEND_URL", os.getenv("APP_URL", "http://localhost:5173"))
+    redirect_uri = f"{frontend_url}/auth/google/callback"
+
+    # Build Google's authorization URL
+    from urllib.parse import urlencode
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "select_account",
+    }
+    auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+
+    return {"authorize_url": auth_url, "redirect_uri": redirect_uri}
+
+
+class GoogleCallbackRequest(BaseModel):
+    """Request body for Google OAuth callback."""
+    code: str
+    redirect_uri: str
+
+
+@app.post("/api/auth/oauth/google/callback")
+@limiter.limit("10/minute")
+async def google_oauth_callback(request: Request, callback: GoogleCallbackRequest):
+    """
+    Handle Google OAuth callback.
+    Exchanges the authorization code for tokens and creates/logs in the user.
+    """
+    import httpx
+
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=503, detail="Google OAuth not configured")
+
+    # Exchange code for tokens
+    async with httpx.AsyncClient() as client:
+        token_response = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": callback.code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": callback.redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+
+        if token_response.status_code != 200:
+            logger.error("google_oauth_token_error", status=token_response.status_code, body=token_response.text)
+            raise HTTPException(status_code=400, detail="Failed to exchange authorization code")
+
+        token_data = token_response.json()
+
+        # Get user info from Google
+        userinfo_response = await client.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {token_data['access_token']}"},
+        )
+
+        if userinfo_response.status_code != 200:
+            logger.error("google_oauth_userinfo_error", status=userinfo_response.status_code)
+            raise HTTPException(status_code=400, detail="Failed to get user info from Google")
+
+        userinfo = userinfo_response.json()
+
+    email = userinfo.get("email", "").lower().strip()
+    google_id = userinfo.get("id")
+    email_verified = userinfo.get("verified_email", False)
+
+    if not email:
+        raise HTTPException(status_code=400, detail="No email provided by Google")
+
+    # Check if user exists
+    async with get_connection() as conn:
+        user = await conn.fetchrow(
+            "SELECT id, email, role, credits, auth_provider, oauth_id FROM users WHERE email = $1",
+            email
+        )
+
+        if user:
+            # User exists - check if they used a different auth method
+            if user["auth_provider"] == "email" and not user["oauth_id"]:
+                # Link Google to existing email account
+                await conn.execute(
+                    "UPDATE users SET oauth_id = $1, auth_provider = 'google', email_verified = TRUE WHERE id = $2",
+                    google_id, user["id"]
+                )
+                logger.info("google_oauth_linked", user_id=user["id"], email=email)
+
+            user_id = user["id"]
+            role = user["role"]
+            credits = user["credits"]
+        else:
+            # Create new user
+            user_id = str(uuid.uuid4())
+            await conn.execute(
+                """
+                INSERT INTO users (id, email, auth_provider, oauth_id, email_verified, credits, role)
+                VALUES ($1, $2, 'google', $3, TRUE, 5, 'user')
+                """,
+                user_id, email, google_id
+            )
+            role = "user"
+            credits = 5
+            logger.info("google_oauth_registered", user_id=user_id, email=email)
+
+            # Send welcome email
+            from .email import send_welcome_email
+            asyncio.create_task(send_welcome_email(email, credits))
+
+    # Create JWT tokens
+    access_token = create_access_token(user_id, email, role)
+    refresh_token = create_refresh_token(user_id)
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user_id,
+            "email": email,
+            "credits": credits,
+            "email_verified": True,
+            "role": role,
+        }
+    }
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -541,10 +882,25 @@ async def get_user_info(user: dict = Depends(get_current_user)):
     )
 
 
-@app.get("/api/conversations", response_model=List[ConversationMetadata])
-async def list_conversations(user: dict = Depends(get_current_user)):
-    """List all conversations for the current user (metadata only)."""
-    return await storage.list_conversations(user["user_id"])
+@app.get("/api/conversations")
+async def list_conversations(
+    user: dict = Depends(get_current_user),
+    limit: int = 50,
+    offset: int = 0
+):
+    """
+    List conversations for the current user with pagination.
+
+    Query params:
+    - limit: Max conversations to return (default 50, max 100)
+    - offset: Skip this many conversations (for pagination)
+
+    Returns:
+    - conversations: List of conversation metadata
+    - total: Total number of conversations
+    - has_more: Whether more conversations exist
+    """
+    return await storage.list_conversations(user["user_id"], limit=limit, offset=offset)
 
 
 @app.post("/api/conversations", response_model=Conversation)
@@ -609,17 +965,20 @@ async def send_message(
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Check if user is admin (admins get unlimited usage)
+    # Check if user has unlimited credits (admin/superadmin role OR in legacy ADMIN_EMAILS)
     user_email = user.get("email", "").lower()
-    is_admin = user_email in ADMIN_EMAILS
+    user_role = user.get("role", "user")
+    has_unlimited = has_permission(user_role, 'unlimited_credits') or user_email in ADMIN_EMAILS
 
-    # Check and deduct credits (skip for admins)
-    if not is_admin:
-        credits = await storage.get_user_credits(user["user_id"])
-        if credits <= 0:
-            raise HTTPException(status_code=402, detail="Insufficient credits")
-        if not await storage.deduct_credit(user["user_id"]):
-            raise HTTPException(status_code=402, detail="Insufficient credits")
+    # Atomically reserve credits BEFORE starting any processing
+    if not has_unlimited:
+        try:
+            await storage.reserve_credits_atomic(user["user_id"], 1)
+        except InsufficientCreditsError as e:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Insufficient credits. Need {e.required}, have {e.available}."
+            )
 
     # Check if this is the first message
     is_first_message = len(conversation["messages"]) == 0
@@ -853,22 +1212,22 @@ async def send_message_stream(
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Check if user is admin (admins get unlimited usage)
+    # Check if user has unlimited credits (admin/superadmin role OR in legacy ADMIN_EMAILS)
     user_email = user.get("email", "").lower()
-    is_admin = user_email in ADMIN_EMAILS
+    user_role = user.get("role", "user")
+    has_unlimited = has_permission(user_role, 'unlimited_credits') or user_email in ADMIN_EMAILS
 
-    # Check and deduct credits based on mode cost + file cost (skip for admins)
+    # Atomically reserve credits BEFORE starting any processing
+    # This prevents concurrent requests from overdrawing credits
     remaining_credits = None
-    if not is_admin:
-        credits = await storage.get_user_credits(user["user_id"])
-        if credits < credit_cost:
+    if not has_unlimited:
+        try:
+            remaining_credits = await storage.reserve_credits_atomic(user["user_id"], credit_cost)
+        except InsufficientCreditsError as e:
             raise HTTPException(
                 status_code=402,
-                detail=f"Insufficient credits. Need {credit_cost}, have {credits}."
+                detail=f"Insufficient credits. Need {e.required}, have {e.available}."
             )
-        success, remaining_credits = await storage.deduct_credits_and_get_remaining(user["user_id"], credit_cost)
-        if not success:
-            raise HTTPException(status_code=402, detail="Insufficient credits")
 
         # Send low credits email if user is running low (1 or 0 credits remaining)
         if remaining_credits <= 1:
@@ -977,21 +1336,21 @@ async def rerun_decision(
     stage3_response = latest_message.get("stage3", {}).get("response", "")
     context_packet = extract_tldr_packet(stage3_response)
 
-    # Check if user is admin (admins get unlimited usage)
+    # Check if user has unlimited credits (admin/superadmin role OR in legacy ADMIN_EMAILS)
     user_email = user.get("email", "").lower()
-    is_admin = user_email in ADMIN_EMAILS
+    user_role = user.get("role", "user")
+    has_unlimited = has_permission(user_role, 'unlimited_credits') or user_email in ADMIN_EMAILS
 
-    # Check and deduct credits based on mode cost (skip for admins)
-    if not is_admin:
-        credits = await storage.get_user_credits(user["user_id"])
-        if credits < credit_cost:
+    # Atomically reserve credits BEFORE starting any processing
+    remaining_credits = None
+    if not has_unlimited:
+        try:
+            remaining_credits = await storage.reserve_credits_atomic(user["user_id"], credit_cost)
+        except InsufficientCreditsError as e:
             raise HTTPException(
                 status_code=402,
-                detail=f"Insufficient credits. Need {credit_cost}, have {credits}."
+                detail=f"Insufficient credits. Need {e.required}, have {e.available}."
             )
-        success, remaining_credits = await storage.deduct_credits_and_get_remaining(user["user_id"], credit_cost)
-        if not success:
-            raise HTTPException(status_code=402, detail="Insufficient credits")
 
         # Send low credits email if user is running low (1 or 0 credits remaining)
         if remaining_credits <= 1:
@@ -1157,28 +1516,47 @@ async def stripe_webhook(
     elif event["type"] == "charge.refunded":
         charge = event["data"]["object"]
 
-        # For refunds, we need to check the payment intent's metadata
-        # The charge itself may not have metadata, but we can check if
-        # this charge is associated with a DecidePlease payment by looking
-        # at the payment intent or checking our database
         payment_intent_id = charge.get("payment_intent")
         customer_email = charge.get("billing_details", {}).get("email") or charge.get("receipt_email")
         amount_refunded = charge.get("amount_refunded", 0)
 
-        # Try to get metadata from the charge or payment intent
-        metadata = charge.get("metadata", {})
+        # Look up the payment in our database by payment_intent_id
+        # This is more reliable than checking metadata on the charge
+        if payment_intent_id:
+            refund_processed = await storage.mark_payment_refunded(payment_intent_id, amount_refunded)
 
-        # Skip if this doesn't look like a DecidePlease payment
-        # (no metadata means it's probably from another app)
-        if not metadata.get("user_id") and not metadata:
-            print(f"[WEBHOOK] Ignoring charge.refunded - no DecidePlease metadata (other app)")
-            return {"status": "success"}
+            if refund_processed:
+                logger.info(
+                    "refund_processed",
+                    payment_intent_id=payment_intent_id,
+                    amount_refunded_cents=amount_refunded
+                )
 
-        print(f"[WEBHOOK] Refund detected: {charge.get('id')} for ${amount_refunded/100:.2f}")
+                # Send refund notification email
+                if customer_email:
+                    await handle_refund(charge.get("id"), amount_refunded, customer_email)
+            else:
+                # Payment not found in our database - probably from another app
+                logger.info(
+                    "refund_ignored",
+                    reason="payment_not_found",
+                    payment_intent_id=payment_intent_id
+                )
+        else:
+            logger.warning("refund_missing_payment_intent", charge_id=charge.get("id"))
 
-        # Handle the refund (send email, etc.)
-        if customer_email:
-            await handle_refund(charge.get("id"), amount_refunded, customer_email)
+    # Handle disputes (freeze account)
+    elif event["type"] == "charge.dispute.created":
+        dispute = event["data"]["object"]
+        payment_intent_id = dispute.get("payment_intent")
+
+        logger.warning(
+            "dispute_created",
+            dispute_id=dispute.get("id"),
+            payment_intent_id=payment_intent_id,
+            reason=dispute.get("reason")
+        )
+        # TODO: Consider freezing user account until dispute is resolved
 
     return {"status": "success"}
 

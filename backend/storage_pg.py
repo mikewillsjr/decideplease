@@ -117,17 +117,34 @@ async def get_conversation(conversation_id: str, user_id: str) -> Optional[Dict[
         }
 
 
-async def list_conversations(user_id: str) -> List[Dict[str, Any]]:
+async def list_conversations(
+    user_id: str,
+    limit: int = 50,
+    offset: int = 0
+) -> Dict[str, Any]:
     """
-    List all conversations for a user (metadata only).
+    List conversations for a user with pagination.
 
     Args:
         user_id: The Clerk user ID
+        limit: Maximum number of conversations to return (default 50, max 100)
+        offset: Number of conversations to skip (for pagination)
 
     Returns:
-        List of conversation metadata dicts
+        Dict with 'conversations' list and 'total' count
     """
+    # Enforce limits
+    limit = min(max(1, limit), 100)
+    offset = max(0, offset)
+
     async with get_connection() as conn:
+        # Get total count
+        total = await conn.fetchval(
+            "SELECT COUNT(*) FROM conversations WHERE user_id = $1",
+            user_id
+        )
+
+        # Get paginated results
         rows = await conn.fetch(
             """
             SELECT c.id, c.title, c.created_at,
@@ -137,11 +154,14 @@ async def list_conversations(user_id: str) -> List[Dict[str, Any]]:
             WHERE c.user_id = $1
             GROUP BY c.id
             ORDER BY c.created_at DESC
+            LIMIT $2 OFFSET $3
             """,
-            user_id
+            user_id,
+            limit,
+            offset
         )
 
-        return [
+        conversations = [
             {
                 "id": str(row["id"]),
                 "created_at": row["created_at"].isoformat(),
@@ -150,6 +170,14 @@ async def list_conversations(user_id: str) -> List[Dict[str, Any]]:
             }
             for row in rows
         ]
+
+        return {
+            "conversations": conversations,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": offset + len(conversations) < total
+        }
 
 
 async def add_user_message(conversation_id: str, content: str):
@@ -371,7 +399,8 @@ async def create_user_with_password(email: str, password_hash: str) -> Dict[str,
             "id": user_id,
             "email": email.lower(),
             "credits": 5,
-            "email_verified": False
+            "email_verified": False,
+            "role": "user"  # New users always start as regular users
         }
 
 
@@ -388,7 +417,7 @@ async def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     async with get_connection() as conn:
         row = await conn.fetchrow(
             """
-            SELECT id, email, password_hash, credits, email_verified, auth_provider
+            SELECT id, email, password_hash, credits, email_verified, auth_provider, role
             FROM users WHERE email = $1
             """,
             email.lower()
@@ -401,7 +430,8 @@ async def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
                 "password_hash": row["password_hash"],
                 "credits": row["credits"],
                 "email_verified": row["email_verified"] or False,
-                "auth_provider": row["auth_provider"] or "email"
+                "auth_provider": row["auth_provider"] or "email",
+                "role": row["role"] or "user"
             }
         return None
 
@@ -419,7 +449,7 @@ async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
     async with get_connection() as conn:
         row = await conn.fetchrow(
             """
-            SELECT id, email, credits, email_verified, auth_provider
+            SELECT id, email, credits, email_verified, auth_provider, role
             FROM users WHERE id = $1
             """,
             user_id
@@ -431,7 +461,8 @@ async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
                 "email": row["email"],
                 "credits": row["credits"],
                 "email_verified": row["email_verified"] or False,
-                "auth_provider": row["auth_provider"] or "email"
+                "auth_provider": row["auth_provider"] or "email",
+                "role": row["role"] or "user"
             }
         return None
 
@@ -544,6 +575,78 @@ async def deduct_credits_and_get_remaining(user_id: str, amount: int) -> tuple[b
         return False, current or 0
 
 
+class InsufficientCreditsError(Exception):
+    """Raised when a user doesn't have enough credits for an operation."""
+    def __init__(self, required: int, available: int):
+        self.required = required
+        self.available = available
+        super().__init__(f"Insufficient credits: need {required}, have {available}")
+
+
+async def reserve_credits_atomic(user_id: str, amount: int) -> int:
+    """
+    Atomically reserve credits for a request.
+
+    This should be called at the START of a request to prevent concurrent
+    requests from overdrawing credits.
+
+    Args:
+        user_id: User ID
+        amount: Number of credits to reserve
+
+    Returns:
+        Remaining credits after deduction
+
+    Raises:
+        InsufficientCreditsError: If user doesn't have enough credits
+    """
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE users
+            SET credits = credits - $1
+            WHERE id = $2 AND credits >= $1
+            RETURNING credits
+            """,
+            amount,
+            user_id
+        )
+        if row:
+            return row["credits"]
+
+        # Get current credits for error message
+        current = await conn.fetchval(
+            "SELECT credits FROM users WHERE id = $1",
+            user_id
+        )
+        raise InsufficientCreditsError(required=amount, available=current or 0)
+
+
+async def refund_credits(user_id: str, amount: int) -> int:
+    """
+    Refund credits to a user (e.g., if a request fails after credit deduction).
+
+    Args:
+        user_id: User ID
+        amount: Number of credits to refund
+
+    Returns:
+        New credit balance
+    """
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE users
+            SET credits = credits + $1
+            WHERE id = $2
+            RETURNING credits
+            """,
+            amount,
+            user_id
+        )
+        return row["credits"] if row else 0
+
+
 async def add_credits(user_id: str, amount: int):
     """
     Add credits to a user's balance.
@@ -594,6 +697,101 @@ async def record_payment(
             amount_cents,
             credits
         )
+
+
+async def get_payment_by_payment_intent(payment_intent_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get a payment record by Stripe payment intent ID.
+
+    Args:
+        payment_intent_id: Stripe payment intent ID
+
+    Returns:
+        Payment dict or None if not found
+    """
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, user_id, stripe_session_id, stripe_payment_intent,
+                   amount_cents, credits, status, created_at
+            FROM payments
+            WHERE stripe_payment_intent = $1
+            """,
+            payment_intent_id
+        )
+        if row:
+            return {
+                "id": str(row["id"]),
+                "user_id": row["user_id"],
+                "stripe_session_id": row["stripe_session_id"],
+                "stripe_payment_intent": row["stripe_payment_intent"],
+                "amount_cents": row["amount_cents"],
+                "credits": row["credits"],
+                "status": row["status"],
+                "created_at": row["created_at"].isoformat() if row["created_at"] else None
+            }
+        return None
+
+
+async def mark_payment_refunded(payment_intent_id: str, refund_amount_cents: int) -> bool:
+    """
+    Mark a payment as refunded and calculate credits to deduct.
+
+    Args:
+        payment_intent_id: Stripe payment intent ID
+        refund_amount_cents: Amount refunded in cents
+
+    Returns:
+        True if payment was found and updated, False otherwise
+    """
+    async with get_connection() as conn:
+        # Get the original payment
+        payment = await conn.fetchrow(
+            """
+            SELECT user_id, amount_cents, credits, status
+            FROM payments
+            WHERE stripe_payment_intent = $1
+            """,
+            payment_intent_id
+        )
+
+        if not payment:
+            return False
+
+        # Calculate credits to deduct proportionally
+        # If full refund, deduct all credits. If partial, deduct proportionally.
+        original_amount = payment["amount_cents"]
+        original_credits = payment["credits"]
+
+        if original_amount > 0:
+            credits_to_deduct = int((refund_amount_cents / original_amount) * original_credits)
+        else:
+            credits_to_deduct = original_credits
+
+        # Update payment status
+        new_status = "refunded" if refund_amount_cents >= original_amount else "partially_refunded"
+        await conn.execute(
+            """
+            UPDATE payments
+            SET status = $1
+            WHERE stripe_payment_intent = $2
+            """,
+            new_status,
+            payment_intent_id
+        )
+
+        # Deduct credits from user (but don't go below 0)
+        await conn.execute(
+            """
+            UPDATE users
+            SET credits = GREATEST(0, credits - $1)
+            WHERE id = $2
+            """,
+            credits_to_deduct,
+            payment["user_id"]
+        )
+
+        return True
 
 
 async def add_assistant_message_with_mode(
@@ -815,3 +1013,196 @@ async def create_pending_assistant_message_with_mode(
             parent_message_id
         )
         return row["id"]
+
+
+# ============== Role Management ==============
+
+async def update_user_role(user_id: str, new_role: str) -> bool:
+    """
+    Update a user's role.
+
+    Args:
+        user_id: User ID
+        new_role: New role (user, employee, admin, superadmin)
+
+    Returns:
+        True if updated, False if user not found
+    """
+    valid_roles = ['user', 'employee', 'admin', 'superadmin']
+    if new_role not in valid_roles:
+        raise ValueError(f"Invalid role: {new_role}")
+
+    async with get_connection() as conn:
+        result = await conn.execute(
+            "UPDATE users SET role = $1 WHERE id = $2",
+            new_role,
+            user_id
+        )
+        return result == "UPDATE 1"
+
+
+async def get_user_role(user_id: str) -> Optional[str]:
+    """Get a user's role."""
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            "SELECT role FROM users WHERE id = $1",
+            user_id
+        )
+        return row["role"] if row else None
+
+
+async def get_staff_users() -> List[Dict[str, Any]]:
+    """Get all users with staff roles (employee, admin, superadmin)."""
+    async with get_connection() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, email, role, credits, created_at
+            FROM users
+            WHERE role IN ('employee', 'admin', 'superadmin')
+            ORDER BY
+                CASE role
+                    WHEN 'superadmin' THEN 1
+                    WHEN 'admin' THEN 2
+                    WHEN 'employee' THEN 3
+                END,
+                created_at DESC
+            """
+        )
+        return [
+            {
+                "id": row["id"],
+                "email": row["email"],
+                "role": row["role"],
+                "credits": row["credits"],
+                "created_at": row["created_at"].isoformat() if row["created_at"] else None
+            }
+            for row in rows
+        ]
+
+
+async def create_staff_user(email: str, password_hash: str, role: str) -> Dict[str, Any]:
+    """
+    Create a new staff user (employee or admin).
+
+    Args:
+        email: User's email address
+        password_hash: Bcrypt hashed password
+        role: Role to assign (employee or admin)
+
+    Returns:
+        User dict
+
+    Raises:
+        ValueError if email exists or invalid role
+    """
+    import uuid
+
+    valid_roles = ['employee', 'admin']
+    if role not in valid_roles:
+        raise ValueError(f"Invalid staff role: {role}")
+
+    user_id = str(uuid.uuid4())
+
+    async with get_connection() as conn:
+        # Check if email already exists
+        existing = await conn.fetchrow(
+            "SELECT id FROM users WHERE email = $1",
+            email.lower()
+        )
+        if existing:
+            raise ValueError("Email already registered")
+
+        await conn.execute(
+            """
+            INSERT INTO users (id, email, password_hash, auth_provider, role, credits, email_verified, created_at)
+            VALUES ($1, $2, $3, 'email', $4, 9999999, TRUE, NOW())
+            """,
+            user_id,
+            email.lower(),
+            password_hash,
+            role
+        )
+
+        return {
+            "id": user_id,
+            "email": email.lower(),
+            "role": role,
+            "credits": 9999999,
+            "email_verified": True
+        }
+
+
+# ============== Audit Logging ==============
+
+async def log_admin_action(
+    admin_id: str,
+    admin_email: str,
+    action: str,
+    target_user_id: Optional[str] = None,
+    details: Optional[Dict[str, Any]] = None
+) -> str:
+    """
+    Log an admin action to the audit log.
+
+    Args:
+        admin_id: ID of the admin performing the action
+        admin_email: Email of the admin
+        action: Type of action (e.g., 'add_credits', 'delete_user', 'change_role')
+        target_user_id: ID of the user affected (if any)
+        details: Additional details as JSON
+
+    Returns:
+        Audit log entry ID
+    """
+    import json
+
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO admin_audit_log (admin_id, admin_email, action, target_user_id, details, created_at)
+            VALUES ($1, $2, $3, $4, $5, NOW())
+            RETURNING id
+            """,
+            admin_id,
+            admin_email,
+            action,
+            target_user_id,
+            json.dumps(details) if details else None
+        )
+        return str(row["id"])
+
+
+async def get_audit_log(limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    """
+    Get audit log entries.
+
+    Args:
+        limit: Maximum entries to return
+        offset: Offset for pagination
+
+    Returns:
+        List of audit log entries
+    """
+    async with get_connection() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, admin_id, admin_email, action, target_user_id, details, created_at
+            FROM admin_audit_log
+            ORDER BY created_at DESC
+            LIMIT $1 OFFSET $2
+            """,
+            limit,
+            offset
+        )
+        return [
+            {
+                "id": str(row["id"]),
+                "admin_id": row["admin_id"],
+                "admin_email": row["admin_email"],
+                "action": row["action"],
+                "target_user_id": row["target_user_id"],
+                "details": row["details"],
+                "created_at": row["created_at"].isoformat() if row["created_at"] else None
+            }
+            for row in rows
+        ]
