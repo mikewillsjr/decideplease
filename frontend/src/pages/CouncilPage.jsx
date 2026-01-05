@@ -6,6 +6,7 @@ import UnifiedFooter from '../components/UnifiedFooter';
 import Sidebar from '../components/Sidebar';
 import ChatInterface from '../components/ChatInterface';
 import ImpersonationBanner from '../components/ImpersonationBanner';
+import AdminPanel from '../components/AdminPanel';
 import { api, setAuthTokenGetter } from '../api';
 import '../App.css';
 
@@ -22,6 +23,7 @@ function CouncilPage() {
   const [loadError, setLoadError] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userRole, setUserRole] = useState('user');
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   // Define data loading functions with useCallback to avoid hoisting issues
   const loadUserInfo = useCallback(async () => {
@@ -569,7 +571,7 @@ function CouncilPage() {
         onCreditsUpdated={loadUserInfo}
         isAdmin={isAdmin}
         userRole={userRole}
-        onOpenAdmin={() => navigate('/admin')}
+        onOpenAdmin={() => setShowAdminPanel(true)}
         onSignOut={logout}
       />
       <div className="app-body">
@@ -593,6 +595,9 @@ function CouncilPage() {
         />
       </div>
       <UnifiedFooter />
+      {showAdminPanel && (
+        <AdminPanel onClose={() => setShowAdminPanel(false)} />
+      )}
     </div>
   );
 }

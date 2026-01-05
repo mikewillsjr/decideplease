@@ -136,8 +136,12 @@ html[data-theme="light"] .header-nav-link {
   padding: 6px 12px;
   border-radius: 6px;
   font-size: 13px;
-  color: #fbbf24;
+  color: #b45309;
   font-weight: 600;
+}
+
+html[data-theme="dark"] .credits-display {
+  color: #fbbf24;
 }
 
 .credits-icon {

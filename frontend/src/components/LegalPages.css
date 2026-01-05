@@ -13,22 +13,22 @@
 .legal-container {
   max-width: 800px;
   margin: 0 auto;
-  color: var(--text-primary, #f4f4f5);
+  color: var(--text-main, #111827);
 }
 
 .legal-container h1 {
   font-size: 2.5rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
-  color: #fff;
+  color: var(--text-main, #111827);
 }
 
 .legal-updated {
-  color: var(--text-muted, #71717a);
+  color: var(--text-muted, #6b7280);
   font-size: 0.9rem;
   margin-bottom: 3rem;
   padding-bottom: 2rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
 }
 
 .legal-container section {
@@ -46,18 +46,18 @@
   font-size: 1.1rem;
   font-weight: 600;
   margin: 1.5rem 0 0.75rem;
-  color: var(--text-primary, #f4f4f5);
+  color: var(--text-main, #111827);
 }
 
 .legal-container p {
   line-height: 1.7;
-  color: var(--text-secondary, #a1a1aa);
+  color: var(--text-muted, #6b7280);
   margin-bottom: 1rem;
 }
 
 .legal-container ul {
   margin: 0.75rem 0 1rem 1.5rem;
-  color: var(--text-secondary, #a1a1aa);
+  color: var(--text-muted, #6b7280);
 }
 
 .legal-container li {
@@ -66,7 +66,7 @@
 }
 
 .legal-container strong {
-  color: var(--text-primary, #f4f4f5);
+  color: var(--text-main, #111827);
 }
 
 .contact-info {
