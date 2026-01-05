@@ -104,8 +104,9 @@ function CouncilPage() {
 
   const loadConversations = async () => {
     try {
-      const convs = await api.listConversations();
-      setConversations(convs);
+      const result = await api.listConversations();
+      // API returns { conversations: [], total: N, has_more: bool }
+      setConversations(result.conversations || []);
     } catch (error) {
       console.error('Failed to load conversations:', error);
     }
