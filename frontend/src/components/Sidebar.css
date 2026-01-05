@@ -37,7 +37,7 @@
   padding: 24px 24px 10px;
   font-size: 0.75rem;
   text-transform: uppercase;
-  color: var(--text-dim);
+  color: var(--text-muted, #6b7280);
   letter-spacing: 0.05em;
   font-weight: 700;
 }
@@ -51,7 +51,7 @@
 .no-conversations {
   padding: 24px 16px;
   text-align: center;
-  color: var(--text-dim);
+  color: var(--text-muted, #6b7280);
   font-size: 14px;
 }
 

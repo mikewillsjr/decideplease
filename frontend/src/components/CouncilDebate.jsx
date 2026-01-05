@@ -122,6 +122,17 @@ export default function CouncilDebate({
     'deepseek/deepseek-v3.2'
   ];
 
+  // Calculate overall progress percentage
+  const getProgress = () => {
+    if (stage3Data && !loading?.stage3) return 100;
+    if (loading?.stage3) return 80;
+    if (stage2Data?.length > 0 && !loading?.stage2) return 66;
+    if (loading?.stage2) return 50;
+    if (stage1Data?.length > 0 && !loading?.stage1) return 33;
+    if (loading?.stage1) return 15;
+    return 5;
+  };
+
   // Determine status for each model
   const getModelStatus = (modelId, index) => {
     if (loading?.stage3) return 'waiting';
@@ -263,6 +274,19 @@ export default function CouncilDebate({
           <div className={`stage-dot ${loading?.stage3 || stage3Data ? 'active' : ''} ${stage3Data && !loading?.stage3 ? 'complete' : ''}`}>
             <span>3</span>
           </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="progress-bar-container">
+          <div
+            className="progress-bar-fill"
+            style={{ width: `${getProgress()}%` }}
+          />
+        </div>
+        <div className="progress-labels">
+          <span>Responses</span>
+          <span>Peer Review</span>
+          <span>Verdict</span>
         </div>
       </div>
     </div>

@@ -26,15 +26,32 @@ export default function ChatInterface({
   const [showRerunModal, setShowRerunModal] = useState(false);
   const [rerunMessageIndex, setRerunMessageIndex] = useState(null);
   const [attachedFiles, setAttachedFiles] = useState([]);
+  const [userHasScrolled, setUserHasScrolled] = useState(false);
+  const [messageCount, setMessageCount] = useState(0);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Detect when user manually scrolls away from bottom
+  const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+    setUserHasScrolled(!isNearBottom);
+  };
+
+  // Only auto-scroll for new messages, and only if user hasn't scrolled up
   useEffect(() => {
-    scrollToBottom();
-  }, [conversation]);
+    const newCount = conversation?.messages?.length || 0;
+    if (newCount > messageCount) {
+      setMessageCount(newCount);
+      setUserHasScrolled(false); // Reset on new message
+    }
+    if (!userHasScrolled) {
+      scrollToBottom();
+    }
+  }, [conversation, userHasScrolled, messageCount]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -154,7 +171,7 @@ export default function ChatInterface({
 
   return (
     <div className="chat-interface">
-      <div className="messages-container">
+      <div className="messages-container" onScroll={handleScroll}>
         {messages.length === 0 ? (
           <div className="empty-state">
             <h2>What decision are you making?</h2>

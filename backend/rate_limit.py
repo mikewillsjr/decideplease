@@ -5,9 +5,13 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from jose import jwt
 import os
+import uuid
 
 # JWT secret for token verification in rate limit key function
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
+
+# Disable rate limiting for tests (each request gets unique key)
+DISABLE_RATE_LIMIT = os.getenv("DISABLE_RATE_LIMIT", "").lower() in ("true", "1", "yes")
 
 
 def get_rate_limit_key(request: Request) -> str:
@@ -19,6 +23,10 @@ def get_rate_limit_key(request: Request) -> str:
 
     Security: Now verifies JWT signature to prevent rate limit bypass.
     """
+    # Disable rate limiting for tests by using unique key per request
+    if DISABLE_RATE_LIMIT:
+        return f"disabled:{uuid.uuid4()}"
+
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         try:
