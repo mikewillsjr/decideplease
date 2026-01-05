@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { api } from '../api';
 import { useTheme } from '../contexts/ThemeContext';
+import PurchaseModal from './PurchaseModal';
 import './UnifiedHeader.css';
 
 // Sun icon for light mode
@@ -26,21 +26,15 @@ export default function UnifiedHeader({
   onOpenAdmin,
   onOpenAuth,
   onSignOut, // Pass signOut as prop instead of using hook
+  onCreditsUpdated, // Callback to refresh user data after purchase
 }) {
-  const [isBuyingCredits, setIsBuyingCredits] = useState(false);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
-  const handleBuyCredits = async () => {
-    setIsBuyingCredits(true);
-    try {
-      const { checkout_url } = await api.createCheckoutSession();
-      window.location.href = checkout_url;
-    } catch (error) {
-      console.error('Failed to create checkout:', error);
-      alert('Failed to start checkout. Please try again.');
-      setIsBuyingCredits(false);
-    }
+  const handlePurchaseSuccess = () => {
+    // Refresh user data to show new credit balance
+    onCreditsUpdated?.();
   };
 
   const scrollToSection = (id) => {
@@ -104,10 +98,9 @@ export default function UnifiedHeader({
                 {creditPackInfo?.stripe_configured && (
                   <button
                     className="buy-credits-btn"
-                    onClick={handleBuyCredits}
-                    disabled={isBuyingCredits}
+                    onClick={() => setShowPurchaseModal(true)}
                   >
-                    {isBuyingCredits ? '...' : `+${creditPackInfo.credits}`}
+                    +{creditPackInfo.credits}
                   </button>
                 )}
               </div>
@@ -163,6 +156,13 @@ export default function UnifiedHeader({
           )}
         </div>
       </div>
+
+      {/* Purchase Modal */}
+      <PurchaseModal
+        isOpen={showPurchaseModal}
+        onClose={() => setShowPurchaseModal(false)}
+        onSuccess={handlePurchaseSuccess}
+      />
     </header>
   );
 }

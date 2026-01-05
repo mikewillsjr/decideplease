@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
 import './Stage1.css';
 
 export default function Stage1({ responses }) {
@@ -36,7 +37,7 @@ export default function Stage1({ responses }) {
       <div className="tab-content">
         <div className="model-name">{currentResponse.model || 'Unknown Model'}</div>
         <div className="response-text markdown-content">
-          <ReactMarkdown>{currentResponse.response || 'No response available'}</ReactMarkdown>
+          <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{currentResponse.response || 'No response available'}</ReactMarkdown>
         </div>
       </div>
     </div>

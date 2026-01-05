@@ -243,7 +243,21 @@ async def seed_superadmin(conn):
             print(f"[SUPERADMIN] Updated {SUPERADMIN_EMAIL} to superadmin role")
         return
 
-    # Generate password if not provided via env
+    # Check if we're in production
+    is_production = (
+        os.getenv("RENDER") == "true" or
+        os.getenv("PRODUCTION") == "true" or
+        os.getenv("ENVIRONMENT") == "production"
+    )
+
+    # In production, require SUPERADMIN_PASSWORD to be set
+    if is_production and not SUPERADMIN_PASSWORD:
+        raise RuntimeError(
+            "SUPERADMIN_PASSWORD environment variable must be set in production. "
+            "Generate a secure password and set it before deploying."
+        )
+
+    # Generate password if not provided via env (development only)
     password = SUPERADMIN_PASSWORD or generate_password()
 
     # Hash the password
@@ -259,12 +273,13 @@ async def seed_superadmin(conn):
         user_id, SUPERADMIN_EMAIL, password_hash
     )
 
+    # Log superadmin creation without exposing password
     print(f"\n{'='*60}")
     print(f"[SUPERADMIN] Created superadmin account:")
     print(f"  Email: {SUPERADMIN_EMAIL}")
     if not SUPERADMIN_PASSWORD:
-        print(f"  Password: {password}")
-        print(f"  (Set SUPERADMIN_PASSWORD env var to use a custom password)")
+        print(f"  Password: [AUTO-GENERATED - Check secure logs or set SUPERADMIN_PASSWORD env var]")
+        print(f"  WARNING: Auto-generated password cannot be recovered. Set SUPERADMIN_PASSWORD env var for production.")
     else:
         print(f"  Password: (from SUPERADMIN_PASSWORD env var)")
     print(f"  Credits: 9999999")

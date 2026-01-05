@@ -10,9 +10,9 @@ from typing import List, Dict, Any, Optional
 import uuid
 import json
 import asyncio
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from .rate_limit import limiter
 
 # Initialize Sentry for error tracking (if configured)
 SENTRY_DSN = os.getenv("SENTRY_DSN")
@@ -54,9 +54,12 @@ from .auth_custom import (
     OAUTH_ENABLED,
     JWT_SECRET,
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    set_auth_cookies,
+    clear_auth_cookies,
 )
 from .payments import (
     create_checkout_session,
+    create_payment_intent,
     verify_webhook_signature,
     get_credit_pack_info,
     handle_refund,
@@ -158,37 +161,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="DecidePlease API", lifespan=lifespan)
 
 
-def get_rate_limit_key(request: Request) -> str:
-    """
-    Get rate limit key - uses user ID for authenticated requests, IP for anonymous.
-
-    This prevents:
-    - Multiple users behind same NAT from sharing rate limits
-    - A single user from bypassing limits by changing IP
-    """
-    # Try to get user from request state (set by auth middleware/dependency)
-    # For endpoints that don't use auth, fall back to IP
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        try:
-            from jose import jwt
-            token = auth_header.split(" ")[1]
-            # Decode without verification just to get user_id for rate limiting
-            # (actual auth verification happens in the endpoint)
-            payload = jwt.decode(token, options={"verify_signature": False})
-            user_id = payload.get("sub")
-            if user_id:
-                return f"user:{user_id}"
-        except Exception:
-            pass  # Fall back to IP if token parsing fails
-
-    # Fall back to IP address for anonymous requests
-    return f"ip:{get_remote_address(request)}"
-
-
-# Rate limiting configuration
+# Rate limiting configuration (imported from rate_limit module)
 # Uses user ID for authenticated requests, IP for anonymous
-limiter = Limiter(key_func=get_rate_limit_key)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -302,7 +276,9 @@ class CreditPackInfo(BaseModel):
     """Information about credit pack for purchase."""
     credits: int
     price_display: str
+    price_cents: int = 500
     stripe_configured: bool
+    publishable_key: Optional[str] = None
 
 
 @app.get("/")
@@ -356,7 +332,7 @@ async def health_check():
 async def register(request: Request, reg_request: RegisterRequest):
     """
     Register a new user with email and password.
-    Returns access and refresh tokens.
+    Returns access and refresh tokens (also sets httpOnly cookies).
     """
     # Validate password strength
     if len(reg_request.password) < 8:
@@ -378,7 +354,8 @@ async def register(request: Request, reg_request: RegisterRequest):
     from .email import send_welcome_email
     asyncio.create_task(send_welcome_email(user["email"], user["credits"]))
 
-    return {
+    # Create response with both JSON body and httpOnly cookies
+    response_data = {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
@@ -391,13 +368,17 @@ async def register(request: Request, reg_request: RegisterRequest):
         }
     }
 
+    response = JSONResponse(content=response_data)
+    set_auth_cookies(response, access_token, refresh_token)
+    return response
+
 
 @app.post("/api/auth/login")
 @limiter.limit("5/minute")
 async def login(request: Request, login_request: LoginRequest):
     """
     Login with email and password.
-    Returns access and refresh tokens.
+    Returns access and refresh tokens (also sets httpOnly cookies).
     """
     # Get user by email
     user = await storage.get_user_by_email(login_request.email)
@@ -420,7 +401,8 @@ async def login(request: Request, login_request: LoginRequest):
     access_token = create_access_token(user["id"], user["email"], user.get("role", "user"))
     refresh_token = create_refresh_token(user["id"])
 
-    return {
+    # Create response with both JSON body and httpOnly cookies
+    response_data = {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
@@ -433,33 +415,66 @@ async def login(request: Request, login_request: LoginRequest):
         }
     }
 
+    response = JSONResponse(content=response_data)
+    set_auth_cookies(response, access_token, refresh_token)
+    return response
+
 
 @app.post("/api/auth/refresh")
-async def refresh_token(request: RefreshRequest):
+async def refresh_token(request: Request, refresh_request: Optional[RefreshRequest] = None):
     """
     Refresh an access token using a refresh token.
+    Accepts token from body or httpOnly cookie.
     """
+    # Get refresh token from body or cookie
+    token = None
+
+    # Check if body was provided with refresh_token
+    if refresh_request is not None and refresh_request.refresh_token:
+        token = refresh_request.refresh_token
+    else:
+        # Try to get from cookie
+        token = request.cookies.get("refresh_token")
+
+    # If still no token, try parsing body manually (for cases where Optional doesn't work)
+    if not token:
+        try:
+            body = await request.json()
+            token = body.get("refresh_token")
+        except Exception:
+            pass
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Refresh token required")
+
     # Verify refresh token
-    payload = verify_token(request.refresh_token, token_type="refresh")
+    payload = verify_token(token, token_type="refresh")
 
     # Get user
     user = await storage.get_user_by_id(payload["sub"])
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
-    # Generate new access token with role
+    # Generate new tokens
     access_token = create_access_token(user["id"], user["email"], user.get("role", "user"))
+    new_refresh_token = create_refresh_token(user["id"])
 
-    return {
+    # Create response with both JSON body and httpOnly cookies
+    response_data = {
         "access_token": access_token,
+        "refresh_token": new_refresh_token,
         "token_type": "bearer"
     }
+
+    response = JSONResponse(content=response_data)
+    set_auth_cookies(response, access_token, new_refresh_token)
+    return response
 
 
 @app.post("/api/auth/logout")
 async def logout(user: dict = Depends(get_current_user)):
     """
-    Logout the current user by revoking their access token.
+    Logout the current user by revoking their access token and clearing cookies.
     The token will be added to the blacklist and rejected on future requests.
     """
     from datetime import datetime, timedelta, timezone
@@ -470,7 +485,10 @@ async def logout(user: dict = Depends(get_current_user)):
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         await revoke_token(jti, user["user_id"], expires_at)
 
-    return {"message": "Logged out successfully"}
+    # Create response and clear httpOnly cookies
+    response = JSONResponse(content={"message": "Logged out successfully"})
+    clear_auth_cookies(response)
+    return response
 
 
 @app.get("/api/auth/me")
@@ -855,16 +873,18 @@ async def delete_account(user: dict = Depends(get_current_user)):
                 "DELETE FROM payments WHERE user_id = $1",
                 user_id
             )
-        except:
-            pass
+        except Exception as e:
+            # Log but continue - payments table may not exist or be empty
+            logger.warning("delete_account_cleanup_error", component="payments", user_id=user_id, error=str(e))
 
         try:
             await conn.execute(
                 "DELETE FROM password_reset_tokens WHERE user_id = $1",
                 user_id
             )
-        except:
-            pass
+        except Exception as e:
+            # Log but continue - table may not exist or be empty
+            logger.warning("delete_account_cleanup_error", component="reset_tokens", user_id=user_id, error=str(e))
 
         await conn.execute("DELETE FROM users WHERE id = $1", user_id)
 
@@ -1447,12 +1467,31 @@ async def create_credits_checkout(
     request: CreateCheckoutRequest,
     user: dict = Depends(get_current_user)
 ):
-    """Create a Stripe checkout session to purchase credits."""
+    """Create a Stripe checkout session to purchase credits (legacy)."""
     result = await create_checkout_session(
         user_id=user["user_id"],
         user_email=user["email"],
         success_url=request.success_url,
         cancel_url=request.cancel_url,
+    )
+    return result
+
+
+@app.post("/api/credits/create-payment-intent")
+async def create_credits_payment_intent(user: dict = Depends(get_current_user)):
+    """
+    Create a Stripe PaymentIntent for purchasing credits.
+
+    This endpoint is used with the Payment Element for custom checkout UI.
+    Returns client_secret needed to initialize the Payment Element.
+
+    Apple Pay and Google Pay are automatically available when:
+    1. Dynamic payment methods are enabled in Stripe Dashboard
+    2. Customer's device/browser supports them
+    """
+    result = await create_payment_intent(
+        user_id=user["user_id"],
+        user_email=user["email"],
     )
     return result
 
@@ -1511,6 +1550,39 @@ async def stripe_webhook(
         if customer_email:
             amount = session.get("amount_total", 0)
             await send_payment_email(customer_email, "purchase", amount, credits_to_add)
+
+    # Handle PaymentIntent completion (Payment Element flow)
+    elif event["type"] == "payment_intent.succeeded":
+        intent = event["data"]["object"]
+
+        # Get user_id from metadata - this identifies DecidePlease payments
+        user_id = intent.get("metadata", {}).get("user_id")
+
+        # Skip if no user_id - this payment is from another app on the shared account
+        if not user_id:
+            print(f"[WEBHOOK] Ignoring payment_intent.succeeded - no user_id metadata (other app)")
+            return {"status": "success"}
+
+        credits_str = intent.get("metadata", {}).get("credits", str(CREDITS_PER_PURCHASE))
+        credits_to_add = int(credits_str)
+        amount_cents = intent.get("amount", 500)
+
+        # Record payment in database (check for duplicates via payment_intent_id)
+        await storage.record_payment(
+            user_id=user_id,
+            stripe_session_id=None,  # No session for Payment Element flow
+            stripe_payment_intent=intent.get("id"),
+            amount_cents=amount_cents,
+            credits=credits_to_add
+        )
+
+        await storage.add_credits(user_id, credits_to_add)
+        print(f"[WEBHOOK] Added {credits_to_add} credits to user {user_id} (Payment Element)")
+
+        # Send custom purchase confirmation email
+        customer_email = intent.get("receipt_email")
+        if customer_email:
+            await send_payment_email(customer_email, "purchase", amount_cents, credits_to_add)
 
     # Handle refunds
     elif event["type"] == "charge.refunded":

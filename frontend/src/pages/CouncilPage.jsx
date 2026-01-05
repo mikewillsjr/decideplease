@@ -110,7 +110,7 @@ function CouncilPage() {
   const startPollingForUpdates = useCallback((conversationId, initialStage) => {
     // Set up loading state for the current stage
     setCurrentConversation((prev) => {
-      if (!prev) return prev;
+      if (!prev || !prev.messages) return prev;
       const messages = [...prev.messages];
       // Find the last assistant message or create one
       let lastMsg = messages[messages.length - 1];
@@ -120,6 +120,7 @@ function CouncilPage() {
           stage1: null,
           stage2: null,
           stage3: null,
+          metadata: {},
           loading: { stage1: false, stage2: false, stage3: false },
         };
         messages.push(lastMsg);
@@ -127,6 +128,9 @@ function CouncilPage() {
       // Set the current stage as loading
       if (!lastMsg.loading) {
         lastMsg.loading = { stage1: false, stage2: false, stage3: false };
+      }
+      if (!lastMsg.metadata) {
+        lastMsg.metadata = {};
       }
       lastMsg.loading[initialStage] = true;
       lastMsg.processingResumed = true;
@@ -154,10 +158,13 @@ function CouncilPage() {
         } else {
           // Update loading state for current stage
           setCurrentConversation((prev) => {
-            if (!prev) return prev;
+            if (!prev || !prev.messages) return prev;
             const messages = [...prev.messages];
             const lastMsg = messages[messages.length - 1];
-            if (lastMsg && lastMsg.role === 'assistant' && lastMsg.loading) {
+            if (lastMsg && lastMsg.role === 'assistant') {
+              if (!lastMsg.loading) {
+                lastMsg.loading = { stage1: false, stage2: false, stage3: false };
+              }
               lastMsg.loading = {
                 stage1: status.current_stage === 'stage1',
                 stage2: status.current_stage === 'stage2',
@@ -261,6 +268,27 @@ function CouncilPage() {
     }
   };
 
+  // Helper function to safely get/create the last assistant message
+  const getOrCreateLastAssistantMessage = (messages) => {
+    let lastMsg = messages[messages.length - 1];
+    if (!lastMsg || lastMsg.role !== 'assistant') {
+      // This shouldn't happen, but create a fallback assistant message
+      lastMsg = {
+        role: 'assistant',
+        stage1: null,
+        stage2: null,
+        stage3: null,
+        metadata: {},
+        loading: { stage1: false, stage2: false, stage3: false },
+      };
+      messages.push(lastMsg);
+    }
+    // Ensure metadata and loading exist
+    if (!lastMsg.metadata) lastMsg.metadata = {};
+    if (!lastMsg.loading) lastMsg.loading = { stage1: false, stage2: false, stage3: false };
+    return lastMsg;
+  };
+
   // Helper function to handle SSE events for both send and rerun
   const handleStreamEvent = (eventType, event) => {
     switch (eventType) {
@@ -271,8 +299,9 @@ function CouncilPage() {
         }
         // Store mode info in the message
         setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
           const messages = [...prev.messages];
-          const lastMsg = messages[messages.length - 1];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
           lastMsg.metadata = {
             ...lastMsg.metadata,
             mode: event.mode,
@@ -284,8 +313,9 @@ function CouncilPage() {
 
       case 'stage1_start':
         setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
           const messages = [...prev.messages];
-          const lastMsg = messages[messages.length - 1];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
           lastMsg.loading.stage1 = true;
           return { ...prev, messages };
         });
@@ -293,8 +323,9 @@ function CouncilPage() {
 
       case 'stage1_complete':
         setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
           const messages = [...prev.messages];
-          const lastMsg = messages[messages.length - 1];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
           lastMsg.stage1 = event.data;
           lastMsg.loading.stage1 = false;
           return { ...prev, messages };
@@ -303,8 +334,9 @@ function CouncilPage() {
 
       case 'stage2_start':
         setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
           const messages = [...prev.messages];
-          const lastMsg = messages[messages.length - 1];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
           lastMsg.loading.stage2 = true;
           return { ...prev, messages };
         });
@@ -313,8 +345,9 @@ function CouncilPage() {
       case 'stage2_skipped':
         // Mark Stage 2 as skipped (Quick mode)
         setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
           const messages = [...prev.messages];
-          const lastMsg = messages[messages.length - 1];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
           lastMsg.stage2Skipped = true;
           lastMsg.stage2 = [];
           lastMsg.loading.stage2 = false;
@@ -324,8 +357,9 @@ function CouncilPage() {
 
       case 'stage2_complete':
         setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
           const messages = [...prev.messages];
-          const lastMsg = messages[messages.length - 1];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
           lastMsg.stage2 = event.data;
           lastMsg.metadata = { ...lastMsg.metadata, ...event.metadata };
           lastMsg.loading.stage2 = false;
@@ -335,8 +369,9 @@ function CouncilPage() {
 
       case 'stage3_start':
         setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
           const messages = [...prev.messages];
-          const lastMsg = messages[messages.length - 1];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
           lastMsg.loading.stage3 = true;
           return { ...prev, messages };
         });
@@ -344,8 +379,9 @@ function CouncilPage() {
 
       case 'stage3_complete':
         setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
           const messages = [...prev.messages];
-          const lastMsg = messages[messages.length - 1];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
           lastMsg.stage3 = event.data;
           lastMsg.metadata = { ...lastMsg.metadata, ...event.metadata };
           lastMsg.loading.stage3 = false;

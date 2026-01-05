@@ -481,6 +481,155 @@ test.describe('API Tests - Admin Endpoints', () => {
     expect(data.is_admin).toBe(false);
     console.log('  Non-admin correctly identified');
   });
+
+  test('GET /api/admin/stats requires staff permission', async ({ request }) => {
+    console.log('Testing: GET /api/admin/stats permission check');
+
+    const testEmail = generateTestEmail();
+    const testPassword = generateTestPassword();
+
+    const loginResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.register}`, {
+      data: { email: testEmail, password: testPassword },
+    });
+
+    const { access_token } = await loginResponse.json();
+
+    const response = await request.get(`${API_BASE_URL}${API_ENDPOINTS.adminStats}`, {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
+
+    // Regular user should be denied
+    expect([401, 403]).toContain(response.status());
+    console.log(`  Non-staff denied with ${response.status()}`);
+  });
+
+  test('GET /api/admin/users requires staff permission', async ({ request }) => {
+    console.log('Testing: GET /api/admin/users permission check');
+
+    const testEmail = generateTestEmail();
+    const testPassword = generateTestPassword();
+
+    const loginResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.register}`, {
+      data: { email: testEmail, password: testPassword },
+    });
+
+    const { access_token } = await loginResponse.json();
+
+    const response = await request.get(`${API_BASE_URL}${API_ENDPOINTS.adminUsers}`, {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
+
+    // Regular user should be denied
+    expect([401, 403]).toContain(response.status());
+    console.log(`  Non-staff denied with ${response.status()}`);
+  });
+
+  test('POST /api/admin/staff requires admin permission', async ({ request }) => {
+    console.log('Testing: POST /api/admin/staff permission check');
+
+    const testEmail = generateTestEmail();
+    const testPassword = generateTestPassword();
+
+    const loginResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.register}`, {
+      data: { email: testEmail, password: testPassword },
+    });
+
+    const { access_token } = await loginResponse.json();
+
+    const response = await request.post(`${API_BASE_URL}${API_ENDPOINTS.adminStaff}`, {
+      headers: { Authorization: `Bearer ${access_token}` },
+      data: {
+        email: generateTestEmail(),
+        password: generateTestPassword(),
+        role: 'employee',
+      },
+    });
+
+    // Regular user should be denied
+    expect([401, 403]).toContain(response.status());
+    console.log(`  Non-admin denied with ${response.status()}`);
+  });
+
+  test('GET /api/admin/impersonate/:id requires superadmin', async ({ request }) => {
+    console.log('Testing: GET /api/admin/impersonate/:id permission check');
+
+    const testEmail = generateTestEmail();
+    const testPassword = generateTestPassword();
+
+    const loginResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.register}`, {
+      data: { email: testEmail, password: testPassword },
+    });
+
+    const { access_token, user } = await loginResponse.json();
+
+    const response = await request.get(`${API_BASE_URL}${API_ENDPOINTS.adminImpersonate(user.id)}`, {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
+
+    // Regular user should be denied (only superadmin can impersonate)
+    expect([401, 403]).toContain(response.status());
+    console.log(`  Non-superadmin denied with ${response.status()}`);
+  });
+
+  test('POST /api/admin/users/:id/role requires permission', async ({ request }) => {
+    console.log('Testing: POST /api/admin/users/:id/role permission check');
+
+    const testEmail = generateTestEmail();
+    const testPassword = generateTestPassword();
+
+    const loginResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.register}`, {
+      data: { email: testEmail, password: testPassword },
+    });
+
+    const { access_token, user } = await loginResponse.json();
+
+    const response = await request.post(`${API_BASE_URL}${API_ENDPOINTS.adminUserRole(user.id)}`, {
+      headers: { Authorization: `Bearer ${access_token}` },
+      data: { role: 'admin' },
+    });
+
+    // Regular user should be denied
+    expect([401, 403]).toContain(response.status());
+    console.log(`  Non-admin denied with ${response.status()}`);
+  });
+
+  test('GET /api/admin/audit-log requires staff permission', async ({ request }) => {
+    console.log('Testing: GET /api/admin/audit-log permission check');
+
+    const testEmail = generateTestEmail();
+    const testPassword = generateTestPassword();
+
+    const loginResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.register}`, {
+      data: { email: testEmail, password: testPassword },
+    });
+
+    const { access_token } = await loginResponse.json();
+
+    const response = await request.get(`${API_BASE_URL}${API_ENDPOINTS.adminAuditLog}`, {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
+
+    // Regular user should be denied
+    expect([401, 403]).toContain(response.status());
+    console.log(`  Non-staff denied with ${response.status()}`);
+  });
+
+  test('admin endpoints require authentication', async ({ request }) => {
+    console.log('Testing: Admin endpoints auth requirement');
+
+    const endpoints = [
+      API_ENDPOINTS.adminStats,
+      API_ENDPOINTS.adminUsers,
+      API_ENDPOINTS.adminAuditLog,
+    ];
+
+    for (const endpoint of endpoints) {
+      const response = await request.get(`${API_BASE_URL}${endpoint}`);
+      expect(response.status()).toBe(401);
+    }
+
+    console.log('  All admin endpoints require auth');
+  });
 });
 
 test.describe('API Tests - Error Handling', () => {

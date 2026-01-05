@@ -6,8 +6,9 @@ from fastapi import HTTPException
 
 # Initialize Stripe
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID")  # Price ID for credit pack
+STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID")  # Price ID for credit pack (legacy)
 
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
@@ -15,6 +16,7 @@ if STRIPE_SECRET_KEY:
 # Credit pack configuration
 CREDITS_PER_PURCHASE = int(os.getenv("CREDITS_PER_PURCHASE", "20"))
 PRICE_DISPLAY = os.getenv("PRICE_DISPLAY", "$5.00")
+PRICE_CENTS = int(os.getenv("PRICE_CENTS", "500"))  # $5.00 = 500 cents
 
 # Statement descriptor - what appears on customer credit card statements
 # Max 22 characters, must be ASCII, no special characters except space
@@ -100,8 +102,67 @@ def get_credit_pack_info() -> dict:
     return {
         "credits": CREDITS_PER_PURCHASE,
         "price_display": PRICE_DISPLAY,
-        "stripe_configured": bool(STRIPE_SECRET_KEY and STRIPE_PRICE_ID),
+        "price_cents": PRICE_CENTS,
+        "stripe_configured": bool(STRIPE_SECRET_KEY),
+        "publishable_key": STRIPE_PUBLISHABLE_KEY,
     }
+
+
+async def create_payment_intent(user_id: str, user_email: str) -> dict:
+    """
+    Create a Stripe PaymentIntent for purchasing credits.
+
+    This is used with the Payment Element for custom checkout UI.
+    Apple Pay and Google Pay are automatically available when enabled
+    in the Stripe Dashboard with dynamic payment methods.
+
+    Args:
+        user_id: User ID (stored in metadata for webhook)
+        user_email: User's email for receipt
+
+    Returns:
+        Dict with client_secret for Payment Element
+    """
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+
+    try:
+        # Create or retrieve customer
+        customers = stripe.Customer.list(email=user_email, limit=1)
+        if customers.data:
+            customer = customers.data[0]
+        else:
+            customer = stripe.Customer.create(
+                email=user_email,
+                metadata={"user_id": user_id}
+            )
+
+        # Create PaymentIntent with automatic payment methods
+        # This enables Apple Pay, Google Pay, cards, etc. based on Dashboard settings
+        intent = stripe.PaymentIntent.create(
+            amount=PRICE_CENTS,
+            currency="usd",
+            customer=customer.id,
+            # Don't specify payment_method_types - let Stripe choose based on Dashboard
+            automatic_payment_methods={"enabled": True},
+            metadata={
+                "user_id": user_id,
+                "credits": str(CREDITS_PER_PURCHASE),
+            },
+            statement_descriptor=STATEMENT_DESCRIPTOR,
+            receipt_email=user_email,
+            description=f"{CREDITS_PER_PURCHASE} credits for DecidePlease",
+        )
+
+        return {
+            "client_secret": intent.client_secret,
+            "payment_intent_id": intent.id,
+            "amount": PRICE_CENTS,
+            "credits": CREDITS_PER_PURCHASE,
+        }
+
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 async def send_payment_email(email: str, event_type: str, amount: int, credits: int):

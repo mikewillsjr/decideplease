@@ -248,17 +248,30 @@ async def get_current_user(
     """
     FastAPI dependency to get the current authenticated user.
 
+    Checks for token in:
+    1. Authorization header (Bearer token)
+    2. httpOnly cookie (access_token)
+
     Returns:
         Dict with user_id, email, role, jti, and optionally impersonated_by
 
     Raises:
         HTTPException: If not authenticated or token is revoked
     """
-    if not credentials:
+    token = None
+
+    # First check Authorization header
+    if credentials:
+        token = credentials.credentials
+    else:
+        # Fall back to httpOnly cookie
+        token = request.cookies.get("access_token")
+
+    if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     # Use async verification with revocation check
-    payload = await verify_token_async(credentials.credentials, token_type="access")
+    payload = await verify_token_async(token, token_type="access")
 
     result = {
         "user_id": payload.get("sub"),
@@ -281,12 +294,25 @@ async def get_optional_user(
     """
     FastAPI dependency to optionally get the current user.
     Returns None if not authenticated or token is revoked (doesn't raise error).
+
+    Checks for token in:
+    1. Authorization header (Bearer token)
+    2. httpOnly cookie (access_token)
     """
-    if not credentials:
+    token = None
+
+    # First check Authorization header
+    if credentials:
+        token = credentials.credentials
+    else:
+        # Fall back to httpOnly cookie
+        token = request.cookies.get("access_token")
+
+    if not token:
         return None
 
     try:
-        payload = await verify_token_async(credentials.credentials, token_type="access")
+        payload = await verify_token_async(token, token_type="access")
         result = {
             "user_id": payload.get("sub"),
             "email": payload.get("email", ""),
@@ -298,6 +324,60 @@ async def get_optional_user(
         return result
     except HTTPException:
         return None
+
+
+# ============== Cookie Helpers ==============
+
+# Cookie settings
+COOKIE_SECURE = os.getenv("ENVIRONMENT", "development") == "production"  # True in production
+COOKIE_SAMESITE = "lax"  # "lax" allows cookies on top-level navigations
+COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)  # None for same-domain only
+
+
+def set_auth_cookies(response, access_token: str, refresh_token: str):
+    """
+    Set httpOnly cookies for authentication tokens.
+
+    This provides protection against XSS attacks since JavaScript cannot
+    access httpOnly cookies.
+    """
+    # Access token cookie (shorter lived)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+        domain=COOKIE_DOMAIN,
+    )
+
+    # Refresh token cookie (longer lived)
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        path="/api/auth/refresh",  # Only send on refresh endpoint
+        domain=COOKIE_DOMAIN,
+    )
+
+
+def clear_auth_cookies(response):
+    """Clear authentication cookies on logout."""
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        domain=COOKIE_DOMAIN,
+    )
+    response.delete_cookie(
+        key="refresh_token",
+        path="/api/auth/refresh",
+        domain=COOKIE_DOMAIN,
+    )
 
 
 # ============== Request/Response Models ==============

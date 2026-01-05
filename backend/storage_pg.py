@@ -253,19 +253,38 @@ async def update_assistant_message_stage(message_id: int, stage: str, data: Any)
         stage: 'stage1', 'stage2', or 'stage3'
         data: The stage data to save
     """
-    if stage not in ('stage1', 'stage2', 'stage3'):
+    # SECURITY: Use explicit mapping to prevent SQL injection
+    # Column names cannot be parameterized, so we use a whitelist
+    STAGE_COLUMNS = {
+        'stage1': 'stage1',
+        'stage2': 'stage2',
+        'stage3': 'stage3'
+    }
+
+    column = STAGE_COLUMNS.get(stage)
+    if not column:
         raise ValueError(f"Invalid stage: {stage}")
 
     async with get_connection() as conn:
-        await conn.execute(
-            f"""
-            UPDATE messages
-            SET {stage} = $1
-            WHERE id = $2
-            """,
-            json.dumps(data),
-            message_id
-        )
+        # Use the validated column name from our whitelist
+        if column == 'stage1':
+            await conn.execute(
+                "UPDATE messages SET stage1 = $1 WHERE id = $2",
+                json.dumps(data),
+                message_id
+            )
+        elif column == 'stage2':
+            await conn.execute(
+                "UPDATE messages SET stage2 = $1 WHERE id = $2",
+                json.dumps(data),
+                message_id
+            )
+        else:  # stage3
+            await conn.execute(
+                "UPDATE messages SET stage3 = $1 WHERE id = $2",
+                json.dumps(data),
+                message_id
+            )
 
 
 async def update_conversation_title(conversation_id: str, title: str):

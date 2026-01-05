@@ -141,6 +141,7 @@ export default function SettingsPage() {
         credits={credits}
         userEmail={user?.email}
         creditPackInfo={creditPackInfo}
+        onCreditsUpdated={refreshUser}
         onSignOut={logout}
       />
 

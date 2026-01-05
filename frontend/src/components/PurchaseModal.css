@@ -1,0 +1,262 @@
+/* PurchaseModal - Custom checkout UI styles */
+
+.purchase-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.purchase-modal {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.purchase-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.purchase-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.close-button:hover {
+  background-color: #f3f4f6;
+  color: #1a1a2e;
+}
+
+.purchase-content {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.purchase-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  gap: 16px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #4a90e2;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.purchase-loading p {
+  color: #6b7280;
+  margin: 0;
+}
+
+.purchase-error-state {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.purchase-error-state p {
+  color: #dc3545;
+  margin: 0 0 16px 0;
+}
+
+.purchase-error-state button {
+  background: #4a90e2;
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.purchase-error-state button:hover {
+  background: #3a7bc8;
+}
+
+/* Checkout Form */
+.purchase-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.purchase-summary {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.purchase-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.item-name {
+  font-weight: 600;
+  color: #1a1a2e;
+  font-size: 1.1rem;
+}
+
+.item-price {
+  font-weight: 700;
+  color: #4a90e2;
+  font-size: 1.25rem;
+}
+
+.payment-element-container {
+  min-height: 200px;
+}
+
+.payment-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc3545;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.purchase-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.cancel-button {
+  flex: 1;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.cancel-button:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.cancel-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pay-button {
+  flex: 2;
+  background: #4a90e2;
+  border: none;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.pay-button:hover:not(:disabled) {
+  background: #3a7bc8;
+}
+
+.pay-button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.pay-button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Footer */
+.purchase-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.secure-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.secure-notice svg {
+  color: #10b981;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .purchase-modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .purchase-modal {
+    max-width: 100%;
+    max-height: 85vh;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .purchase-actions {
+    flex-direction: column-reverse;
+  }
+
+  .cancel-button,
+  .pay-button {
+    flex: none;
+    width: 100%;
+  }
+}

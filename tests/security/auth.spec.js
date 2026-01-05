@@ -8,8 +8,10 @@ import {
   API_BASE_URL,
   API_ENDPOINTS,
   ROUTES,
+  ROLES,
   generateTestEmail,
   generateTestPassword,
+  setupStaffUser,
 } from '../fixtures/test-helpers.js';
 
 test.describe('Security Tests - Authentication Required', () => {
@@ -260,6 +262,139 @@ test.describe('Security Tests - Admin Access', () => {
     }
 
     console.log('  Admin endpoints protected from non-admins');
+  });
+});
+
+test.describe('Security Tests - Role-Based Access Control', () => {
+  test('regular user cannot access /admin page', async ({ page, request }) => {
+    console.log('Testing: /admin page protection');
+
+    const testEmail = generateTestEmail();
+    const testPassword = generateTestPassword();
+
+    await request.post(`${API_BASE_URL}${API_ENDPOINTS.register}`, {
+      data: { email: testEmail, password: testPassword },
+    });
+
+    await page.goto('/');
+
+    // Set user in localStorage (simulating login)
+    const loginResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.login}`, {
+      data: { email: testEmail, password: testPassword },
+    });
+
+    const loginData = await loginResponse.json();
+
+    await page.evaluate(({ accessToken, refreshToken, user }) => {
+      localStorage.setItem('decideplease_access_token', accessToken);
+      localStorage.setItem('decideplease_refresh_token', refreshToken);
+      localStorage.setItem('decideplease_user', JSON.stringify(user));
+    }, {
+      accessToken: loginData.access_token,
+      refreshToken: loginData.refresh_token,
+      user: loginData.user,
+    });
+
+    await page.reload();
+
+    // Try to access admin page
+    await page.goto(ROUTES.admin);
+    await page.waitForLoadState('networkidle');
+
+    // Should not see admin content
+    const adminContent = await page.locator('.admin-page, [data-testid="admin-page"]').isVisible({ timeout: 3000 }).catch(() => false);
+    expect(adminContent).toBe(false);
+
+    console.log('  Regular user blocked from /admin');
+  });
+
+  test('impersonate endpoint requires superadmin', async ({ request }) => {
+    console.log('Testing: Impersonate endpoint protection');
+
+    const testEmail = generateTestEmail();
+    const testPassword = generateTestPassword();
+
+    const regResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.register}`, {
+      data: { email: testEmail, password: testPassword },
+    });
+
+    const { access_token, user } = await regResponse.json();
+
+    // Try to impersonate (should fail - only superadmin can)
+    const response = await request.get(`${API_BASE_URL}${API_ENDPOINTS.adminImpersonate(user.id)}`, {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
+
+    expect([401, 403]).toContain(response.status());
+    console.log('  Impersonate endpoint requires superadmin');
+  });
+
+  test('staff management requires admin permission', async ({ request }) => {
+    console.log('Testing: Staff management protection');
+
+    const testEmail = generateTestEmail();
+    const testPassword = generateTestPassword();
+
+    const regResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.register}`, {
+      data: { email: testEmail, password: testPassword },
+    });
+
+    const { access_token } = await regResponse.json();
+
+    // Try to create staff (should fail)
+    const response = await request.post(`${API_BASE_URL}${API_ENDPOINTS.adminStaff}`, {
+      headers: { Authorization: `Bearer ${access_token}` },
+      data: {
+        email: generateTestEmail(),
+        password: generateTestPassword(),
+        role: 'employee',
+      },
+    });
+
+    expect([401, 403]).toContain(response.status());
+    console.log('  Staff management requires admin permission');
+  });
+
+  test('role change requires appropriate permission', async ({ request }) => {
+    console.log('Testing: Role change protection');
+
+    const testEmail = generateTestEmail();
+    const testPassword = generateTestPassword();
+
+    const regResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.register}`, {
+      data: { email: testEmail, password: testPassword },
+    });
+
+    const { access_token, user } = await regResponse.json();
+
+    // Try to change own role (should fail)
+    const response = await request.post(`${API_BASE_URL}${API_ENDPOINTS.adminUserRole(user.id)}`, {
+      headers: { Authorization: `Bearer ${access_token}` },
+      data: { role: 'superadmin' },
+    });
+
+    expect([401, 403]).toContain(response.status());
+    console.log('  Role changes require appropriate permission');
+  });
+
+  test('audit log requires staff permission', async ({ request }) => {
+    console.log('Testing: Audit log protection');
+
+    const testEmail = generateTestEmail();
+    const testPassword = generateTestPassword();
+
+    const regResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.register}`, {
+      data: { email: testEmail, password: testPassword },
+    });
+
+    const { access_token } = await regResponse.json();
+
+    const response = await request.get(`${API_BASE_URL}${API_ENDPOINTS.adminAuditLog}`, {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
+
+    expect([401, 403]).toContain(response.status());
+    console.log('  Audit log requires staff permission');
   });
 });
 

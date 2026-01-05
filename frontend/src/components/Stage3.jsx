@@ -1,4 +1,5 @@
 import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
 import './Stage3.css';
 
 export default function Stage3({ finalResponse }) {
@@ -15,7 +16,7 @@ export default function Stage3({ finalResponse }) {
           Chairman: {finalResponse.model?.split('/')[1] || finalResponse.model || 'Unknown'}
         </div>
         <div className="final-text markdown-content">
-          <ReactMarkdown>{finalResponse.response || 'No response available'}</ReactMarkdown>
+          <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{finalResponse.response || 'No response available'}</ReactMarkdown>
         </div>
       </div>
     </div>

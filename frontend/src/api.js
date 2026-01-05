@@ -6,15 +6,10 @@
 // In development, use localhost:8001
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
-// Debug logging
-console.log('[API] Initialized with API_BASE:', API_BASE || '(empty - using relative paths)');
-console.log('[API] VITE_API_URL env var:', import.meta.env.VITE_API_URL);
-
-// Token getter - set by App.jsx when Clerk is ready
+// Token getter - set by App.jsx when auth is ready
 let getAuthToken = null;
 
 export const setAuthTokenGetter = (getter) => {
-  console.log('[API] Auth token getter set');
   getAuthToken = getter;
 };
 
@@ -31,15 +26,10 @@ const getHeaders = async () => {
       const token = await getAuthToken();
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
-        console.log('[API] Auth token obtained (length:', token.length, ')');
-      } else {
-        console.warn('[API] getAuthToken returned null/empty token');
       }
-    } catch (err) {
-      console.error('[API] Failed to get auth token:', err);
+    } catch {
+      // Token retrieval failed - continue without auth header
     }
-  } else {
-    console.warn('[API] No auth token getter set');
   }
 
   return headers;
@@ -342,8 +332,9 @@ export const api = {
             try {
               const event = JSON.parse(data);
               onEvent(event.type, event);
-            } catch (e) {
-              console.error('Failed to parse SSE event:', e, 'Data:', data.substring(0, 100));
+            } catch {
+              // Malformed SSE event - notify via error event
+              onEvent('error', { message: 'Invalid response from server' });
             }
           }
         }
@@ -357,8 +348,9 @@ export const api = {
         try {
           const event = JSON.parse(data);
           onEvent(event.type, event);
-        } catch (e) {
-          console.error('Failed to parse final SSE event:', e);
+        } catch {
+          // Malformed final SSE event - notify via error event
+          onEvent('error', { message: 'Invalid response from server' });
         }
       }
     }
@@ -376,7 +368,7 @@ export const api = {
   },
 
   /**
-   * Create a checkout session to purchase credits.
+   * Create a checkout session to purchase credits (legacy - redirects to Stripe).
    * Returns a URL to redirect the user to Stripe checkout.
    */
   async createCheckoutSession() {
@@ -394,6 +386,27 @@ export const api = {
         throw new Error('Not authenticated');
       }
       throw new Error('Failed to create checkout session');
+    }
+    return response.json();
+  },
+
+  /**
+   * Create a PaymentIntent for purchasing credits.
+   * Returns client_secret for use with Stripe Payment Element.
+   * Supports Apple Pay, Google Pay, and cards.
+   */
+  async createPaymentIntent() {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/credits/create-payment-intent`, {
+      method: 'POST',
+      headers,
+    });
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Not authenticated');
+      }
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to create payment intent');
     }
     return response.json();
   },

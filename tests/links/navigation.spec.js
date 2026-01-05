@@ -10,7 +10,11 @@ import {
   getAllLinks,
   API_ENDPOINTS,
   UI,
+  ROLES,
   setupAuthenticatedUser,
+  setupStaffUser,
+  navigateToCouncil,
+  navigateToAdmin,
 } from '../fixtures/test-helpers.js';
 
 test.describe('Link Tests - Internal Navigation', () => {
@@ -160,6 +164,118 @@ test.describe('Link Tests - Internal Navigation', () => {
       await page.goto(ROUTES.settings);
       expect(page.url()).toContain('settings');
       console.log('  Settings accessible via direct URL');
+    });
+
+    test('council route is accessible', async ({ page }) => {
+      console.log('Checking: Council route');
+
+      await page.goto(ROUTES.council);
+      await page.waitForLoadState('networkidle');
+      expect(page.url()).toContain('council');
+      console.log('  Council route accessible');
+    });
+
+    test('all links on council page are valid', async ({ page }) => {
+      console.log('Checking: Council page links');
+
+      await navigateToCouncil(page);
+
+      const links = await getAllLinks(page);
+      console.log(`  Found ${links.length} links on council page`);
+
+      const internalLinks = links.filter(link =>
+        link.startsWith('/') && !link.startsWith('//')
+      );
+
+      const brokenLinks = [];
+
+      for (const link of internalLinks.slice(0, 15)) {
+        try {
+          const response = await page.request.get(link);
+          if (response.status() >= 400 && response.status() !== 401 && response.status() !== 403) {
+            brokenLinks.push({ link, status: response.status() });
+          }
+        } catch (e) {
+          brokenLinks.push({ link, error: e.message });
+        }
+      }
+
+      if (brokenLinks.length > 0) {
+        console.log('  Broken links:', brokenLinks);
+      }
+      expect(brokenLinks).toHaveLength(0);
+      console.log('  All council page links are valid');
+    });
+  });
+
+  test.describe('Admin Navigation', () => {
+    test('admin route is accessible to staff', async ({ page, request }) => {
+      console.log('Checking: Admin route for staff');
+
+      await setupStaffUser(page, request, ROLES.admin);
+      await navigateToAdmin(page);
+
+      expect(page.url()).toContain('admin');
+      console.log('  Admin route accessible to staff');
+    });
+
+    test('admin link visible in header for staff', async ({ page, request }) => {
+      console.log('Checking: Admin link visibility');
+
+      await setupStaffUser(page, request, ROLES.admin);
+      await navigateToCouncil(page);
+
+      const adminLink = page.locator(UI.header.adminLink);
+      const visible = await adminLink.isVisible({ timeout: 5000 }).catch(() => false);
+      console.log(`  Admin link visible: ${visible}`);
+    });
+
+    test('all links on admin page are valid', async ({ page, request }) => {
+      console.log('Checking: Admin page links');
+
+      await setupStaffUser(page, request, ROLES.admin);
+      await navigateToAdmin(page);
+
+      const links = await getAllLinks(page);
+      console.log(`  Found ${links.length} links on admin page`);
+
+      const internalLinks = links.filter(link =>
+        link.startsWith('/') && !link.startsWith('//')
+      );
+
+      const brokenLinks = [];
+
+      for (const link of internalLinks.slice(0, 15)) {
+        try {
+          const response = await page.request.get(link);
+          // Allow 401/403 for protected routes
+          if (response.status() >= 400 && response.status() !== 401 && response.status() !== 403) {
+            brokenLinks.push({ link, status: response.status() });
+          }
+        } catch (e) {
+          brokenLinks.push({ link, error: e.message });
+        }
+      }
+
+      if (brokenLinks.length > 0) {
+        console.log('  Broken links:', brokenLinks);
+      }
+      expect(brokenLinks).toHaveLength(0);
+      console.log('  All admin page links are valid');
+    });
+
+    test('admin route not accessible to regular users', async ({ page, request }) => {
+      console.log('Checking: Admin route blocked for regular users');
+
+      await setupAuthenticatedUser(page, request);
+      await page.goto(ROUTES.admin);
+      await page.waitForLoadState('networkidle');
+
+      // Should not see admin content
+      const adminContainer = page.locator(UI.admin.container);
+      const visible = await adminContainer.isVisible({ timeout: 3000 }).catch(() => false);
+      expect(visible).toBe(false);
+      console.log('  Admin route correctly blocked for regular users');
     });
   });
 });

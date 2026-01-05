@@ -52,10 +52,38 @@ export const TEST_ADMIN = {
 };
 
 /**
+ * Superadmin test user credentials
+ */
+export const TEST_SUPERADMIN = {
+  email: 'hello@decideplease.com',
+  password: 'SuperAdminPassword123!',
+};
+
+/**
+ * Employee test user credentials
+ */
+export const TEST_EMPLOYEE = {
+  email: 'playwright_employee@example.com',
+  password: 'EmployeePassword123!',
+};
+
+/**
+ * User roles for RBAC testing
+ */
+export const ROLES = {
+  user: 'user',
+  employee: 'employee',
+  admin: 'admin',
+  superadmin: 'superadmin',
+};
+
+/**
  * Common page routes
  */
 export const ROUTES = {
   home: '/',
+  council: '/council',
+  admin: '/admin',
   privacy: '/privacy',
   terms: '/terms',
   settings: '/settings',
@@ -66,9 +94,14 @@ export const ROUTES = {
  * API endpoints for testing
  */
 export const API_ENDPOINTS = {
+  // Health check
+  health: '/health',
+  root: '/',
+
   // Auth
   register: '/api/auth/register',
   login: '/api/auth/login',
+  logout: '/api/auth/logout',
   refresh: '/api/auth/refresh',
   me: '/api/auth/me',
   forgotPassword: '/api/auth/forgot-password',
@@ -91,6 +124,11 @@ export const API_ENDPOINTS = {
   adminCheck: '/api/admin/check',
   adminStats: '/api/admin/stats',
   adminUsers: '/api/admin/users',
+  adminUserRole: (userId) => `/api/admin/users/${userId}/role`,
+  adminStaff: '/api/admin/staff',
+  adminImpersonate: (userId) => `/api/admin/impersonate/${userId}`,
+  adminImpersonateEnd: '/api/admin/impersonate/end',
+  adminAuditLog: '/api/admin/audit-log',
 };
 
 /**
@@ -179,11 +217,37 @@ export const UI = {
     container: 'header, .header',
     logo: '.logo, a[href="/"]',
     userMenu: '.user-menu, .header-user',
+    adminLink: 'a[href="/admin"], button:has-text("Admin")',
   },
 
   // Footer
   footer: {
     container: 'footer, .footer',
+  },
+
+  // Admin Dashboard
+  admin: {
+    container: '.admin-page, [data-testid="admin-page"]',
+    statsCard: '.stats-card, .admin-stats',
+    userTable: '.users-table, table',
+    userRow: 'tr[data-user-id], tbody tr',
+    roleSelect: 'select[name="role"], .role-selector',
+    creditsInput: 'input[name="credits"], .credits-input',
+    addCreditsButton: 'button:has-text("Add Credits")',
+    deleteUserButton: 'button:has-text("Delete")',
+    impersonateButton: 'button:has-text("Impersonate")',
+    staffTab: 'button:has-text("Staff"), [data-tab="staff"]',
+    usersTab: 'button:has-text("Users"), [data-tab="users"]',
+    auditTab: 'button:has-text("Audit Log"), [data-tab="audit"]',
+    createStaffButton: 'button:has-text("Create Staff")',
+    staffForm: '.staff-form, [data-testid="staff-form"]',
+  },
+
+  // Impersonation Banner
+  impersonation: {
+    banner: '.impersonation-banner, [data-testid="impersonation-banner"]',
+    exitButton: 'button:has-text("Exit"), button:has-text("Stop Impersonating")',
+    userInfo: '.impersonation-user, .impersonating-as',
   },
 
   // Common
@@ -542,3 +606,112 @@ export const TestData = {
     invalid: ['application/exe', 'text/javascript'],
   },
 };
+
+/**
+ * Setup an authenticated staff user for admin tests
+ * Creates a user with the specified role via API
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').APIRequestContext} request
+ * @param {'employee' | 'admin' | 'superadmin'} role
+ * @returns {Promise<{email: string, password: string, accessToken: string, role: string}>}
+ */
+export async function setupStaffUser(page, request, role = 'admin') {
+  const email = generateTestEmail();
+  const password = generateTestPassword();
+
+  // First register as regular user
+  const registerResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.register}`, {
+    data: { email, password },
+  });
+
+  if (!registerResponse.ok()) {
+    throw new Error(`Registration failed: ${registerResponse.status()}`);
+  }
+
+  const data = await registerResponse.json();
+
+  // Navigate to page first (needed to set localStorage)
+  await page.goto('/');
+
+  // Set tokens in localStorage with the role
+  await page.evaluate(({ accessToken, refreshToken, user, role }) => {
+    // Override user role for testing (in real app, this comes from backend)
+    user.role = role;
+    localStorage.setItem('decideplease_access_token', accessToken);
+    localStorage.setItem('decideplease_refresh_token', refreshToken);
+    localStorage.setItem('decideplease_user', JSON.stringify(user));
+  }, {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    user: { ...data.user, role },
+    role,
+  });
+
+  // Reload to apply authentication
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+
+  return {
+    email,
+    password,
+    accessToken: data.access_token,
+    user: { ...data.user, role },
+    role,
+  };
+}
+
+/**
+ * Check if admin link is visible in header
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<boolean>}
+ */
+export async function isAdminLinkVisible(page) {
+  const adminLink = page.locator(UI.header.adminLink);
+  return await adminLink.isVisible({ timeout: 2000 }).catch(() => false);
+}
+
+/**
+ * Navigate to admin page
+ * @param {import('@playwright/test').Page} page
+ */
+export async function navigateToAdmin(page) {
+  await page.goto(ROUTES.admin);
+  await page.waitForLoadState('networkidle');
+}
+
+/**
+ * Navigate to council page (main app)
+ * @param {import('@playwright/test').Page} page
+ */
+export async function navigateToCouncil(page) {
+  await page.goto(ROUTES.council);
+  await page.waitForLoadState('networkidle');
+}
+
+/**
+ * Check if user has staff role (employee, admin, or superadmin)
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<boolean>}
+ */
+export async function isStaffUser(page) {
+  return await page.evaluate(() => {
+    const userStr = localStorage.getItem('decideplease_user');
+    if (!userStr) return false;
+    const user = JSON.parse(userStr);
+    return ['employee', 'admin', 'superadmin'].includes(user.role);
+  });
+}
+
+/**
+ * Get current user role from localStorage
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string | null>}
+ */
+export async function getUserRole(page) {
+  return await page.evaluate(() => {
+    const userStr = localStorage.getItem('decideplease_user');
+    if (!userStr) return null;
+    const user = JSON.parse(userStr);
+    return user.role || 'user';
+  });
+}

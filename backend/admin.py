@@ -3,13 +3,14 @@
 import os
 from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, EmailStr
 
 from .auth_custom import get_current_user, hash_password, create_impersonation_token
 from .database import get_connection
 from .permissions import has_permission, can_manage_role, can_assign_role, is_staff, PERMISSIONS
 from . import storage_pg as storage
+from .rate_limit import limiter
 
 # Admin emails - set via environment variable (comma-separated)
 # Kept for backwards compatibility - new system uses role column in DB
@@ -110,7 +111,8 @@ require_impersonate = require_permission('impersonate')
 
 
 @router.get("/stats", response_model=DashboardStats)
-async def get_dashboard_stats(admin: dict = Depends(require_view_dashboard)):
+@limiter.limit("30/minute")
+async def get_dashboard_stats(request: Request, admin: dict = Depends(require_view_dashboard)):
     """Get dashboard statistics for the admin panel."""
     async with get_connection() as conn:
         # Total users
@@ -129,7 +131,9 @@ async def get_dashboard_stats(admin: dict = Depends(require_view_dashboard)):
             total_revenue = await conn.fetchval(
                 "SELECT COALESCE(SUM(amount_cents), 0) FROM payments WHERE status = 'completed'"
             ) or 0
-        except:
+        except Exception as e:
+            # Payments table may not exist yet
+            print(f"[ADMIN] Warning: Could not fetch total revenue: {e}")
             total_revenue = 0
 
         # Today's stats
@@ -150,7 +154,9 @@ async def get_dashboard_stats(admin: dict = Depends(require_view_dashboard)):
                 "SELECT COALESCE(SUM(amount_cents), 0) FROM payments WHERE status = 'completed' AND created_at >= $1",
                 today_start
             ) or 0
-        except:
+        except Exception as e:
+            # Payments table may not exist yet
+            print(f"[ADMIN] Warning: Could not fetch today's revenue: {e}")
             revenue_today = 0
 
         return DashboardStats(
@@ -165,7 +171,9 @@ async def get_dashboard_stats(admin: dict = Depends(require_view_dashboard)):
 
 
 @router.get("/users", response_model=List[UserSummary])
+@limiter.limit("30/minute")
 async def list_users(
+    request: Request,
     limit: int = 50,
     offset: int = 0,
     search: Optional[str] = None,
@@ -222,7 +230,8 @@ async def list_users(
 
 
 @router.get("/users/{user_id}")
-async def get_user_detail(user_id: str, admin: dict = Depends(require_view_users)):
+@limiter.limit("30/minute")
+async def get_user_detail(request: Request, user_id: str, admin: dict = Depends(require_view_users)):
     """Get detailed info for a specific user."""
     async with get_connection() as conn:
         user = await conn.fetchrow(
@@ -260,7 +269,9 @@ async def get_user_detail(user_id: str, admin: dict = Depends(require_view_users
                 """,
                 user_id
             )
-        except:
+        except Exception as e:
+            # Payments table may not exist yet
+            print(f"[ADMIN] Warning: Could not fetch user payments: {e}")
             payments = []
 
         return {
@@ -293,7 +304,9 @@ async def get_user_detail(user_id: str, admin: dict = Depends(require_view_users
 
 
 @router.post("/users/{user_id}/credits")
+@limiter.limit("10/minute")
 async def adjust_user_credits(
+    request: Request,
     user_id: str,
     credits: int,
     admin: dict = Depends(require_modify_credits)
@@ -344,7 +357,9 @@ async def adjust_user_credits(
 
 
 @router.post("/users/set-credits-by-email")
+@limiter.limit("10/minute")
 async def set_credits_by_email(
+    request: Request,
     email: str,
     credits: int,
     admin: dict = Depends(require_modify_credits)
@@ -392,7 +407,9 @@ async def set_credits_by_email(
 
 
 @router.delete("/users/delete-by-email")
+@limiter.limit("5/minute")
 async def delete_user_by_email(
+    request: Request,
     email: str,
     admin: dict = Depends(require_delete_users)
 ):
@@ -445,8 +462,9 @@ async def delete_user_by_email(
                 "DELETE FROM payments WHERE user_id = $1 RETURNING COUNT(*)",
                 user_id
             ) or 0
-        except:
-            pass
+        except Exception as e:
+            # Log but continue - payments table may not exist
+            print(f"[ADMIN] Warning: Could not delete user payments: {e}")
 
         await conn.execute("DELETE FROM users WHERE id = $1", user_id)
 
@@ -477,16 +495,23 @@ async def delete_user_by_email(
 
 
 @router.post("/users/send-password-reset")
+@limiter.limit("5/minute")
 async def admin_send_password_reset(
+    request: Request,
     email: str,
     admin: dict = Depends(require_send_password_reset)
 ):
     """Send a password reset email to a user (admin-triggered)."""
     from .email import send_password_reset_email
+    from jose import jwt
     import secrets
+    import os
 
     admin_id = admin.get("user_id", "")
     admin_email = admin.get("email", "")
+
+    # Get JWT secret
+    JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
 
     async with get_connection() as conn:
         user = await conn.fetchrow(
@@ -497,20 +522,18 @@ async def admin_send_password_reset(
         if not user:
             raise HTTPException(status_code=404, detail=f"User not found: {email}")
 
-        # Generate reset token
-        reset_token = secrets.token_urlsafe(32)
-        expires_at = datetime.utcnow() + timedelta(hours=1)
-
-        # Store the reset token
-        await conn.execute(
-            """
-            INSERT INTO password_reset_tokens (user_id, token, expires_at)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (user_id) DO UPDATE SET token = $2, expires_at = $3
-            """,
-            user["id"],
-            reset_token,
-            expires_at
+        # Generate JWT reset token (consistent with user-initiated reset)
+        reset_token = jwt.encode(
+            {
+                "sub": user["id"],
+                "email": user["email"],
+                "type": "password_reset",
+                "exp": datetime.utcnow() + timedelta(hours=1),
+                "jti": secrets.token_urlsafe(16),
+                "admin_triggered": True,  # Mark as admin-triggered for audit
+            },
+            JWT_SECRET,
+            algorithm="HS256"
         )
 
         # Send the email
@@ -532,7 +555,9 @@ async def admin_send_password_reset(
 
 
 @router.get("/payments", response_model=List[RecentPayment])
+@limiter.limit("30/minute")
 async def list_payments(
+    request: Request,
     limit: int = 50,
     offset: int = 0,
     admin: dict = Depends(require_view_payments)
@@ -570,7 +595,9 @@ async def list_payments(
 
 
 @router.get("/queries")
+@limiter.limit("30/minute")
 async def list_recent_queries(
+    request: Request,
     limit: int = 50,
     offset: int = 0,
     admin: dict = Depends(require_view_queries)
@@ -605,7 +632,9 @@ async def list_recent_queries(
 
 
 @router.get("/metrics/daily")
+@limiter.limit("30/minute")
 async def get_daily_metrics(
+    request: Request,
     days: int = 30,
     admin: dict = Depends(require_view_metrics)
 ):
@@ -649,7 +678,9 @@ async def get_daily_metrics(
                 """,
                 start_date
             )
-        except:
+        except Exception as e:
+            # Payments table may not exist yet
+            print(f"[ADMIN] Warning: Could not fetch daily revenue metrics: {e}")
             revenue = []
 
         return {
@@ -660,7 +691,8 @@ async def get_daily_metrics(
 
 
 @router.get("/check")
-async def check_admin_access(user: dict = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def check_admin_access(request: Request, user: dict = Depends(get_current_user)):
     """Check if current user has admin/staff access and their role."""
     user_email = user.get("email", "").lower()
     user_role = user.get("role", "user")
@@ -708,7 +740,9 @@ async def check_admin_access(user: dict = Depends(get_current_user)):
 
 
 @router.post("/test-emails")
+@limiter.limit("5/minute")
 async def send_test_emails(
+    request: Request,
     email: str,
     admin: dict = Depends(require_view_dashboard)
 ):
@@ -758,14 +792,17 @@ class UpdateRoleRequest(BaseModel):
 
 
 @router.get("/staff")
-async def list_staff_users(admin: dict = Depends(require_manage_employees)):
+@limiter.limit("30/minute")
+async def list_staff_users(request: Request, admin: dict = Depends(require_manage_employees)):
     """List all staff members (employees, admins, superadmins)."""
     staff = await storage.get_staff_users()
     return {"staff": staff}
 
 
 @router.post("/staff")
+@limiter.limit("10/minute")
 async def create_staff_user(
+    http_request: Request,
     request: CreateStaffRequest,
     admin: dict = Depends(require_manage_employees)
 ):
@@ -813,7 +850,9 @@ async def create_staff_user(
 
 
 @router.post("/users/{user_id}/role")
+@limiter.limit("10/minute")
 async def update_user_role(
+    http_request: Request,
     user_id: str,
     request: UpdateRoleRequest,
     admin: dict = Depends(require_manage_employees)
@@ -867,7 +906,9 @@ async def update_user_role(
 # ============== Impersonation Endpoints ==============
 
 @router.get("/impersonate/{user_id}")
+@limiter.limit("5/minute")
 async def impersonate_user(
+    request: Request,
     user_id: str,
     admin: dict = Depends(require_impersonate)
 ):
@@ -924,7 +965,8 @@ async def impersonate_user(
 
 
 @router.post("/impersonate/end")
-async def end_impersonation(admin: dict = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def end_impersonation(request: Request, admin: dict = Depends(get_current_user)):
     """
     Log the end of an impersonation session.
 
@@ -954,7 +996,9 @@ async def end_impersonation(admin: dict = Depends(get_current_user)):
 # ============== Audit Log Endpoints ==============
 
 @router.get("/audit-log")
+@limiter.limit("30/minute")
 async def get_audit_log(
+    request: Request,
     limit: int = 100,
     offset: int = 0,
     admin: dict = Depends(require_view_dashboard)
