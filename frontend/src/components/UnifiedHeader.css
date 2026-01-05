@@ -79,20 +79,25 @@ html[data-theme="light"] .unified-header {
   font-family: inherit;
 }
 
-/* Nav link colors for pure themes */
+/* Nav link colors for pure themes - using solid colors for WCAG compliance */
 html[data-theme="dark"] .header-nav-link {
-  color: #ffffff;
-  opacity: 0.85;
+  color: #e5e7eb;
 }
 
 html[data-theme="light"] .header-nav-link {
-  color: #000000;
-  opacity: 0.85;
+  color: #374151;
 }
 
 .header-nav-link:hover {
-  opacity: 1;
   background: rgba(128, 128, 128, 0.1);
+}
+
+html[data-theme="dark"] .header-nav-link:hover {
+  color: #ffffff;
+}
+
+html[data-theme="light"] .header-nav-link:hover {
+  color: #111827;
 }
 
 .header-nav-link.active {
@@ -277,18 +282,23 @@ html[data-theme="dark"] .credits-display {
 }
 
 html[data-theme="dark"] .theme-toggle {
-  color: #ffffff;
-  opacity: 0.85;
+  color: #e5e7eb;
 }
 
 html[data-theme="light"] .theme-toggle {
-  color: #000000;
-  opacity: 0.85;
+  color: #374151;
 }
 
 .theme-toggle:hover {
   background: rgba(128, 128, 128, 0.1);
-  opacity: 1;
+}
+
+html[data-theme="dark"] .theme-toggle:hover {
+  color: #ffffff;
+}
+
+html[data-theme="light"] .theme-toggle:hover {
+  color: #111827;
 }
 
 .theme-toggle svg {

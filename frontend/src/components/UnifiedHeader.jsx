@@ -85,6 +85,7 @@ export default function UnifiedHeader({
             className="theme-toggle"
             onClick={toggleTheme}
             title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
           </button>
@@ -110,6 +111,8 @@ export default function UnifiedHeader({
                 <button
                   className="user-menu-trigger"
                   onClick={() => setShowUserMenu(!showUserMenu)}
+                  aria-label="User menu"
+                  aria-expanded={showUserMenu}
                 >
                   <span className="user-avatar">
                     {userEmail ? userEmail.charAt(0).toUpperCase() : '?'}

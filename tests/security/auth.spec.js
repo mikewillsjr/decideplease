@@ -20,23 +20,31 @@ test.describe('Security Tests - Authentication Required', () => {
 
     // Try to access settings without auth
     await page.goto(ROUTES.settings);
+    await page.waitForLoadState('networkidle');
 
-    // Should either redirect to login or show landing page
-    await page.waitForTimeout(1000);
-
+    // Should either redirect to landing page, show login, or not show settings content
     const isOnSettings = page.url().includes('settings');
-    const hasAuthModal = await page.locator('.modal, [role="dialog"], .auth-modal').isVisible().catch(() => false);
-    const isOnLanding = await page.locator('button:has-text("Sign In")').isVisible().catch(() => false);
+    const settingsContainer = page.locator('.settings-page, .settings-container');
+    const settingsVisible = await settingsContainer.isVisible({ timeout: 2000 }).catch(() => false);
+    const hasLandingContent = await page.locator('button:has-text("Log in"), button:has-text("Try Free")').first().isVisible({ timeout: 2000 }).catch(() => false);
 
-    // Should not show settings content without auth
-    if (isOnSettings) {
-      expect(hasAuthModal || isOnLanding).toBe(true);
+    // If on settings page without auth, the settings UI should not be visible
+    // OR we should be redirected to landing/login
+    if (isOnSettings && settingsVisible) {
+      // Settings is visible without auth - this would be a security issue
+      expect(settingsVisible).toBe(false);
+    } else {
+      // Either redirected or settings not shown - this is correct
+      console.log(`  On settings: ${isOnSettings}, settings visible: ${settingsVisible}, has landing: ${hasLandingContent}`);
     }
     console.log('  Protected pages require authentication');
   });
 
-  test('API endpoints require authentication', async ({ request }) => {
+  test('API endpoints require authentication', async ({ playwright }) => {
     console.log('Testing: API auth requirements');
+
+    // Use fresh context without cookies to test unauthenticated access
+    const context = await playwright.request.newContext();
 
     const protectedEndpoints = [
       { method: 'GET', path: API_ENDPOINTS.me },
@@ -49,12 +57,15 @@ test.describe('Security Tests - Authentication Required', () => {
 
     for (const endpoint of protectedEndpoints) {
       const response = endpoint.method === 'GET'
-        ? await request.get(`${API_BASE_URL}${endpoint.path}`)
-        : await request.post(`${API_BASE_URL}${endpoint.path}`, { data: {} });
+        ? await context.get(`${API_BASE_URL}${endpoint.path}`)
+        : endpoint.method === 'DELETE'
+        ? await context.delete(`${API_BASE_URL}${endpoint.path}`)
+        : await context.post(`${API_BASE_URL}${endpoint.path}`, { data: {} });
 
       expect(response.status()).toBe(401);
     }
 
+    await context.dispose();
     console.log(`  All ${protectedEndpoints.length} protected endpoints require auth`);
   });
 });
@@ -121,7 +132,9 @@ test.describe('Security Tests - User Isolation', () => {
 
     expect(response.status()).toBe(200);
 
-    const conversations = await response.json();
+    const data = await response.json();
+    // API returns { conversations: [], total: number, has_more: boolean }
+    const conversations = data.conversations || data;
     const hasUser1Conv = conversations.some(c => c.id === user1ConversationId);
 
     expect(hasUser1Conv).toBe(false);

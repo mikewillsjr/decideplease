@@ -268,22 +268,18 @@ test.describe('Authentication - Logout Flow', () => {
     // Should be logged in now - sidebar visible
     await expect(page.locator(UI.app.sidebar)).toBeVisible({ timeout: 10000 });
 
-    // Find and click logout in the sidebar or user menu
-    // Look for sign out / logout button or link
-    const logoutButton = page.locator('button:has-text("Sign Out"), button:has-text("Logout"), a:has-text("Sign Out"), a:has-text("Logout")').first();
+    // First, click the user menu trigger (avatar button)
+    const userMenuTrigger = page.locator('.user-menu-trigger, .user-avatar').first();
+    if (await userMenuTrigger.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await userMenuTrigger.click();
+      await page.waitForTimeout(300); // Wait for dropdown to open
+    }
+
+    // Look for sign out button in the dropdown
+    const logoutButton = page.locator('button:has-text("Sign Out"), button.user-menu-item.danger').first();
 
     if (await logoutButton.isVisible({ timeout: 3000 }).catch(() => false)) {
       await logoutButton.click();
-    } else {
-      // Try looking in a user menu first
-      const userMenu = page.locator(UI.header.userMenu).first();
-      if (await userMenu.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await userMenu.click();
-        const logoutInMenu = page.locator('button:has-text("Sign Out"), button:has-text("Logout")').first();
-        if (await logoutInMenu.isVisible({ timeout: 2000 }).catch(() => false)) {
-          await logoutInMenu.click();
-        }
-      }
     }
 
     // Should be logged out - check localStorage

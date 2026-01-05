@@ -146,6 +146,76 @@ async def stage1_collect_responses_with_files(
     return stage1_results
 
 
+async def stage1_5_cross_review(
+    user_query: str,
+    stage1_results: List[Dict[str, Any]],
+    council_models: Optional[List[str]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Stage 1.5: Cross-Review step for Extra Care mode.
+
+    Each model sees ALL Stage 1 responses and can refine their own answer.
+    This happens BEFORE peer ranking (Stage 2) to improve response quality
+    through exposure to other perspectives.
+
+    Args:
+        user_query: The original user query
+        stage1_results: Results from Stage 1
+        council_models: Optional list of models to use
+
+    Returns:
+        List of refined responses (same format as Stage 1)
+    """
+    models = council_models or COUNCIL_MODELS
+
+    # Build formatted view of all responses
+    all_responses_text = "\n\n".join([
+        f"--- {result['model'].split('/')[-1]}'s Response ---\n{result['response']}"
+        for result in stage1_results
+    ])
+
+    cross_review_prompt = f"""You are participating in a cross-review step of an AI council deliberation.
+
+ORIGINAL QUESTION:
+{user_query}
+
+ALL COUNCIL RESPONSES FROM STAGE 1:
+{all_responses_text}
+
+---
+
+YOUR TASK:
+Having now seen all other responses from the council, provide your REFINED answer to the original question.
+
+You may:
+- Incorporate valuable insights from other responses you hadn't considered
+- Strengthen your argument if you believe your initial position was correct
+- Change or nuance your position if another response convinced you
+- Address points of disagreement directly
+- Correct any errors you notice (in your response or others)
+
+Important: This is your FINAL answer before the peer ranking phase. Make it comprehensive and well-reasoned.
+
+Your refined response:"""
+
+    messages = [{"role": "user", "content": cross_review_prompt}]
+
+    # Query all models in parallel
+    responses = await query_models_parallel(models, messages)
+
+    # Format results
+    stage1_5_results = []
+    for model, response in responses.items():
+        if response is not None:
+            stage1_5_results.append({
+                "model": model,
+                "response": response.get('content', ''),
+                "refined": True  # Flag indicating this is a refined response
+            })
+
+    return stage1_5_results
+
+
 async def stage2_collect_rankings(
     user_query: str,
     stage1_results: List[Dict[str, Any]],
@@ -430,7 +500,7 @@ Title:"""
     return title
 
 
-async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
+async def run_full_council(user_query: str) -> Tuple[List, List, List, Dict, Dict]:
     """
     Run the complete 3-stage council process (backwards compatible, uses standard mode).
 
@@ -438,7 +508,7 @@ async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
         user_query: The user's question
 
     Returns:
-        Tuple of (stage1_results, stage2_results, stage3_result, metadata)
+        Tuple of (stage1_results, stage1_5_results, stage2_results, stage3_result, metadata)
     """
     return await run_council_with_mode(user_query, mode="standard")
 
@@ -450,7 +520,7 @@ async def run_council_with_mode(
     is_rerun: bool = False,
     new_input: Optional[str] = None,
     processed_files: Optional[List[Dict[str, Any]]] = None
-) -> Tuple[List, List, Dict, Dict]:
+) -> Tuple[List, List, List, Dict, Dict]:
     """
     Run the council process with a specific mode.
 
@@ -463,7 +533,7 @@ async def run_council_with_mode(
         processed_files: Optional list of processed file dicts for multimodal queries
 
     Returns:
-        Tuple of (stage1_results, stage2_results, stage3_result, metadata)
+        Tuple of (stage1_results, stage1_5_results, stage2_results, stage3_result, metadata)
     """
     # Get mode configuration
     if mode not in RUN_MODES:
@@ -473,6 +543,7 @@ async def run_council_with_mode(
     council_models = mode_config["council_models"]
     chairman_model = mode_config["chairman_model"]
     enable_peer_review = mode_config["enable_peer_review"]
+    enable_cross_review = mode_config.get("enable_cross_review", False)
 
     # Build the effective query
     if is_rerun and context_packet:
@@ -490,10 +561,21 @@ async def run_council_with_mode(
 
     # If no models responded successfully, return error
     if not stage1_results:
-        return [], [], {
+        return [], [], [], {
             "model": "error",
             "response": "All models failed to respond. Please try again."
         }, {"mode": mode}
+
+    # Stage 1.5: Cross-Review (Extra Care mode only)
+    stage1_5_results = []
+    if enable_cross_review and stage1_results:
+        stage1_5_results = await stage1_5_cross_review(
+            effective_query, stage1_results, council_models
+        )
+        # Use refined responses for subsequent stages if cross-review succeeded
+        responses_for_ranking = stage1_5_results if stage1_5_results else stage1_results
+    else:
+        responses_for_ranking = stage1_results
 
     # Stage 2: Collect rankings (skip if peer review disabled)
     label_to_model = {}
@@ -502,14 +584,14 @@ async def run_council_with_mode(
 
     if enable_peer_review:
         stage2_results, label_to_model = await stage2_collect_rankings(
-            effective_query, stage1_results, council_models
+            effective_query, responses_for_ranking, council_models
         )
         aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
 
-    # Stage 3: Synthesize final answer
+    # Stage 3: Synthesize final answer (use refined responses if available)
     stage3_result = await stage3_synthesize_final(
         effective_query,
-        stage1_results,
+        responses_for_ranking,
         stage2_results,
         chairman_model
     )
@@ -520,11 +602,13 @@ async def run_council_with_mode(
         "aggregate_rankings": aggregate_rankings,
         "mode": mode,
         "enable_peer_review": enable_peer_review,
+        "enable_cross_review": enable_cross_review,
+        "has_stage1_5": bool(stage1_5_results),
         "credit_cost": mode_config["credit_cost"],
         "is_rerun": is_rerun
     }
 
-    return stage1_results, stage2_results, stage3_result, metadata
+    return stage1_results, stage1_5_results, stage2_results, stage3_result, metadata
 
 
 def build_rerun_query(
@@ -634,3 +718,229 @@ def _extract_section(lines: List[str], header_idx: int, max_lines: int = 5) -> s
         elif content_lines:  # Stop at empty line after content
             break
     return ' '.join(content_lines) if content_lines else None
+
+
+def build_context_summary(
+    original_question: str,
+    stage1_results: List[Dict[str, Any]],
+    stage2_results: List[Dict[str, Any]],
+    stage3_result: Dict[str, Any],
+    aggregate_rankings: List[Dict[str, Any]],
+    stage1_5_results: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """
+    Build a context summary packet for follow-up messages.
+
+    This extracts key information from a completed council run to provide
+    context for subsequent messages in the same conversation.
+
+    Args:
+        original_question: The user's original question
+        stage1_results: Individual model responses from Stage 1
+        stage2_results: Rankings from Stage 2 (may be empty for Quick mode)
+        stage3_result: Chairman's final synthesis
+        aggregate_rankings: Calculated aggregate rankings
+        stage1_5_results: Optional refined responses from Stage 1.5
+
+    Returns:
+        Dict with context summary for different verbosity levels
+    """
+    # Extract verdict summary from stage3
+    verdict_text = stage3_result.get("response", "")
+    verdict_summary = _extract_verdict_summary(verdict_text)
+
+    # Extract dissenting points (models that disagreed with top-ranked)
+    dissenting_points = _extract_dissenting_points(
+        stage1_results, stage2_results, aggregate_rankings
+    )
+
+    return {
+        "original_question": original_question,
+        "verdict_summary": verdict_summary,
+        "key_dissenting_points": dissenting_points,
+        "full_stages": {
+            "stage1": stage1_results,
+            "stage1_5": stage1_5_results,
+            "stage2": stage2_results,
+            "stage3": stage3_result,
+        },
+        "aggregate_rankings": aggregate_rankings,
+    }
+
+
+def _extract_verdict_summary(stage3_response: str, max_chars: int = 800) -> str:
+    """
+    Extract a concise verdict summary from the chairman's response.
+
+    Tries to find structured sections first, falls back to truncation.
+    """
+    # Try to find verdict/recommendation sections
+    lines = stage3_response.split('\n')
+    verdict_lines = []
+    in_verdict_section = False
+
+    for line in lines:
+        line_lower = line.lower().strip()
+
+        # Start capturing after verdict-like headers
+        if any(kw in line_lower for kw in ['verdict', 'recommendation', 'conclusion', 'final answer', 'summary']):
+            in_verdict_section = True
+            verdict_lines.append(line)
+        elif in_verdict_section:
+            # Stop at next major section header
+            if line.startswith('#') or (line.strip() and line.strip()[0].isdigit() and '.' in line[:3]):
+                if len(verdict_lines) > 2:  # Have enough content
+                    break
+            verdict_lines.append(line)
+
+    if verdict_lines and len(' '.join(verdict_lines)) > 50:
+        summary = ' '.join(verdict_lines).strip()
+        if len(summary) > max_chars:
+            summary = summary[:max_chars] + "..."
+        return summary
+
+    # Fallback: take first portion of response
+    if len(stage3_response) > max_chars:
+        return stage3_response[:max_chars] + "..."
+    return stage3_response
+
+
+def _extract_dissenting_points(
+    stage1_results: List[Dict[str, Any]],
+    stage2_results: List[Dict[str, Any]],
+    aggregate_rankings: List[Dict[str, Any]]
+) -> List[str]:
+    """
+    Extract key points of disagreement between models.
+
+    Identifies models that ranked lower and extracts their unique perspectives.
+    """
+    dissenting = []
+
+    if not aggregate_rankings or len(aggregate_rankings) < 2:
+        return dissenting
+
+    # Get bottom-ranked models (potential dissenters)
+    bottom_models = [r['model'] for r in aggregate_rankings[-2:]]
+
+    for result in stage1_results:
+        if result['model'] in bottom_models:
+            # Extract first 200 chars as their key point
+            response = result.get('response', '')
+            if response:
+                # Try to get the first substantive paragraph
+                paragraphs = [p.strip() for p in response.split('\n\n') if p.strip()]
+                if paragraphs:
+                    point = paragraphs[0][:200]
+                    if len(paragraphs[0]) > 200:
+                        point += "..."
+                    model_name = result['model'].split('/')[-1]
+                    dissenting.append(f"{model_name}: {point}")
+
+    return dissenting[:3]  # Limit to top 3 dissenting points
+
+
+def build_followup_query(
+    new_question: str,
+    context_summary: Dict[str, Any],
+    context_mode: str
+) -> str:
+    """
+    Build query with appropriate context level for follow-up messages.
+
+    Args:
+        new_question: The user's follow-up question
+        context_summary: Context from previous council run
+        context_mode: "minimal", "standard", or "full"
+
+    Returns:
+        The constructed query string with context
+    """
+    original = context_summary.get('original_question', '')
+    verdict = context_summary.get('verdict_summary', '')
+
+    if context_mode == "minimal":
+        # Quick mode: Original question + verdict summary only
+        return f"""CONTEXT FROM PREVIOUS COUNCIL DECISION:
+
+Previous Question: {original}
+
+Council's Verdict: {verdict}
+
+---
+
+FOLLOW-UP QUESTION:
+{new_question}
+
+Please answer the follow-up question, taking into account the previous council decision."""
+
+    elif context_mode == "standard":
+        # Standard mode: Add key dissenting points
+        dissent = context_summary.get('key_dissenting_points', [])
+        dissent_text = "\n".join(f"- {p}" for p in dissent) if dissent else "None noted"
+
+        return f"""CONTEXT FROM PREVIOUS COUNCIL DECISION:
+
+Previous Question: {original}
+
+Council's Verdict: {verdict}
+
+Key Dissenting Views:
+{dissent_text}
+
+---
+
+FOLLOW-UP QUESTION:
+{new_question}
+
+Please answer the follow-up question, considering both the council's verdict and the dissenting perspectives."""
+
+    else:  # "full" - Extra Care mode
+        # Full context: include stage summaries
+        full_stages = context_summary.get('full_stages', {})
+        stage1 = full_stages.get('stage1', [])
+        rankings = context_summary.get('aggregate_rankings', [])
+
+        # Build model summaries
+        model_summaries = []
+        for result in stage1[:5]:  # Limit to first 5
+            model = result.get('model', '').split('/')[-1]
+            response = result.get('response', '')[:300]
+            if len(result.get('response', '')) > 300:
+                response += "..."
+            model_summaries.append(f"{model}: {response}")
+
+        summaries_text = "\n\n".join(model_summaries)
+
+        # Build rankings text
+        rankings_text = ""
+        if rankings:
+            rankings_text = "Model Rankings (best to worst): " + ", ".join(
+                f"{r['model'].split('/')[-1]} (avg rank: {r['average_rank']})"
+                for r in rankings
+            )
+
+        dissent = context_summary.get('key_dissenting_points', [])
+        dissent_text = "\n".join(f"- {p}" for p in dissent) if dissent else "None noted"
+
+        return f"""FULL CONTEXT FROM PREVIOUS COUNCIL DECISION:
+
+Previous Question: {original}
+
+INDIVIDUAL MODEL PERSPECTIVES (Summaries):
+{summaries_text}
+
+{rankings_text}
+
+COUNCIL'S FINAL VERDICT:
+{verdict}
+
+KEY DISSENTING VIEWS:
+{dissent_text}
+
+---
+
+FOLLOW-UP QUESTION:
+{new_question}
+
+Please provide a comprehensive answer to the follow-up question, building upon the council's previous analysis. Consider all perspectives and rankings when formulating your response."""

@@ -334,6 +334,40 @@ function CouncilPage() {
         });
         break;
 
+      case 'stage1_5_start':
+        setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
+          const messages = [...prev.messages];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
+          lastMsg.loading.stage1_5 = true;
+          return { ...prev, messages };
+        });
+        break;
+
+      case 'stage1_5_complete':
+        setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
+          const messages = [...prev.messages];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
+          lastMsg.stage1_5 = event.data;
+          lastMsg.loading.stage1_5 = false;
+          return { ...prev, messages };
+        });
+        break;
+
+      case 'stage1_5_skipped':
+        // Mark Stage 1.5 as skipped (Quick/Standard mode)
+        setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
+          const messages = [...prev.messages];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
+          lastMsg.stage1_5Skipped = true;
+          lastMsg.stage1_5 = [];
+          lastMsg.loading.stage1_5 = false;
+          return { ...prev, messages };
+        });
+        break;
+
       case 'stage2_start':
         setCurrentConversation((prev) => {
           if (!prev || !prev.messages) return prev;

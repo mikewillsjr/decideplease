@@ -1,10 +1,16 @@
 /**
- * E2E Tests - Council 3-Stage Process
- * Tests for the core DecidePlease functionality: the 3-stage council deliberation
+ * E2E Tests - Council Process
+ * Tests for the core DecidePlease functionality: the multi-stage council deliberation
  *
  * Stage 1: Individual model responses
+ * Stage 1.5: Cross-review (Extra Care mode only) - models see all responses and refine
  * Stage 2: Peer review and rankings (with anonymization)
  * Stage 3: Chairman synthesis
+ *
+ * Run Modes:
+ * - Quick: Haiku-tier models, no peer review (Stage 1 → Stage 3)
+ * - Standard: Premium models, peer review (Stage 1 → Stage 2 → Stage 3)
+ * - Extra Care: Premium models, cross-review + peer review (Stage 1 → Stage 1.5 → Stage 2 → Stage 3)
  */
 
 import { test, expect } from '@playwright/test';
@@ -114,10 +120,20 @@ test.describe.serial('Council Process - API Integration', () => {
       expect(modes).toHaveProperty('standard');
       expect(modes).toHaveProperty('extra_care');
 
-      // Verify mode properties
+      // Verify mode properties - peer review
       expect(modes.quick.enable_peer_review).toBe(false);
       expect(modes.standard.enable_peer_review).toBe(true);
       expect(modes.extra_care.enable_peer_review).toBe(true);
+
+      // Verify mode properties - cross review (Stage 1.5)
+      expect(modes.quick.enable_cross_review).toBe(false);
+      expect(modes.standard.enable_cross_review).toBe(false);
+      expect(modes.extra_care.enable_cross_review).toBe(true);
+
+      // Verify context modes for follow-up handling
+      expect(modes.quick.context_mode).toBe('minimal');
+      expect(modes.standard.context_mode).toBe('standard');
+      expect(modes.extra_care.context_mode).toBe('full');
 
       // Verify credit costs are ordered
       expect(modes.quick.credit_cost).toBeLessThan(modes.standard.credit_cost);
@@ -133,15 +149,36 @@ test.describe.serial('Council Process - API Integration', () => {
       const modes = await response.json();
 
       for (const [modeName, mode] of Object.entries(modes)) {
-        // Each mode should have label, credit_cost, and enable_peer_review
+        // Each mode should have all required properties
         expect(mode.label).toBeDefined();
         expect(typeof mode.label).toBe('string');
         expect(mode.credit_cost).toBeDefined();
         expect(typeof mode.credit_cost).toBe('number');
         expect(mode.enable_peer_review).toBeDefined();
         expect(typeof mode.enable_peer_review).toBe('boolean');
-        console.log(`  ${modeName}: ${mode.credit_cost} credits, peer_review=${mode.enable_peer_review}`);
+        // New properties for tiered models and Stage 1.5
+        expect(mode.enable_cross_review).toBeDefined();
+        expect(typeof mode.enable_cross_review).toBe('boolean');
+        expect(mode.context_mode).toBeDefined();
+        expect(['minimal', 'standard', 'full']).toContain(mode.context_mode);
+        console.log(`  ${modeName}: ${mode.credit_cost} credits, peer=${mode.enable_peer_review}, cross=${mode.enable_cross_review}, context=${mode.context_mode}`);
       }
+    });
+
+    test('extra care mode enables Stage 1.5 cross-review', async ({ request }) => {
+      console.log('Testing: Extra Care mode Stage 1.5 configuration');
+
+      const response = await request.get(`${API_BASE_URL}${API_ENDPOINTS.runModes}`);
+      const modes = await response.json();
+
+      // Extra care should have cross-review (Stage 1.5) enabled
+      expect(modes.extra_care.enable_cross_review).toBe(true);
+      // And full context for follow-ups
+      expect(modes.extra_care.context_mode).toBe('full');
+      // Credit cost should be 4 (more expensive due to extra API calls)
+      expect(modes.extra_care.credit_cost).toBe(4);
+
+      console.log('  Extra Care mode correctly configured for Stage 1.5');
     });
   });
 
@@ -204,6 +241,10 @@ test.describe.serial('Council Process - API Integration', () => {
       // Quick mode should NOT have stage2 (peer review is disabled)
       expect(eventTypes).not.toContain('stage2_start');
       expect(eventTypes).not.toContain('stage2_complete');
+
+      // Quick mode should NOT have stage1_5 (cross-review is disabled)
+      expect(eventTypes).not.toContain('stage1_5_start');
+      expect(eventTypes).not.toContain('stage1_5_complete');
 
       console.log(`  Received ${events.length} events: ${eventTypes.join(', ')}`);
     });

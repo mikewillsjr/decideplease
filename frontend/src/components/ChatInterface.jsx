@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import Stage1 from './Stage1';
+import Stage1_5 from './Stage1_5';
 import Stage2 from './Stage2';
 import Stage3 from './Stage3';
 import CouncilDebate from './CouncilDebate';
@@ -243,10 +244,11 @@ export default function ChatInterface({
                   )}
 
                   {/* Council Debate Visualization (shown during loading) */}
-                  {(msg.loading?.stage1 || msg.loading?.stage2 || msg.loading?.stage3) && (
+                  {(msg.loading?.stage1 || msg.loading?.stage1_5 || msg.loading?.stage2 || msg.loading?.stage3) && (
                     <CouncilDebate
                       loading={msg.loading}
                       stage1Data={msg.stage1}
+                      stage1_5Data={msg.stage1_5}
                       stage2Data={msg.stage2}
                       stage3Data={msg.stage3}
                     />
@@ -254,6 +256,11 @@ export default function ChatInterface({
 
                   {/* Stage 1 - Individual Responses */}
                   {msg.stage1 && !msg.loading?.stage1 && <Stage1 responses={msg.stage1} />}
+
+                  {/* Stage 1.5 - Cross-Review (Extra Care mode only) */}
+                  {msg.stage1_5 && msg.stage1_5.length > 0 && !msg.loading?.stage1_5 && (
+                    <Stage1_5 responses={msg.stage1_5} originalResponses={msg.stage1} />
+                  )}
 
                   {/* Stage 2 - Peer Rankings */}
                   {msg.stage2Skipped && (

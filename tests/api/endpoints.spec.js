@@ -41,7 +41,41 @@ test.describe('API Tests - Public Endpoints', () => {
       expect(mode).toHaveProperty('label');
       expect(mode).toHaveProperty('credit_cost');
       expect(mode).toHaveProperty('enable_peer_review');
+      // New properties for tiered models and Stage 1.5
+      expect(mode).toHaveProperty('enable_cross_review');
+      expect(mode).toHaveProperty('context_mode');
       console.log(`  Found ${modeKeys.length} run modes: ${modeKeys.join(', ')}`);
+    });
+
+    test('GET /api/run-modes has correct mode configurations', async ({ request }) => {
+      console.log('Testing: Run modes configurations');
+
+      const response = await request.get(`${API_BASE_URL}${API_ENDPOINTS.runModes}`);
+      const data = await response.json();
+
+      // Verify quick mode - fast/cheap, no peer review
+      if (data.quick) {
+        expect(data.quick.enable_peer_review).toBe(false);
+        expect(data.quick.enable_cross_review).toBe(false);
+        expect(data.quick.context_mode).toBe('minimal');
+        console.log('  Quick mode: peer_review=false, cross_review=false, context=minimal');
+      }
+
+      // Verify standard mode - peer review enabled, no cross review
+      if (data.standard) {
+        expect(data.standard.enable_peer_review).toBe(true);
+        expect(data.standard.enable_cross_review).toBe(false);
+        expect(data.standard.context_mode).toBe('standard');
+        console.log('  Standard mode: peer_review=true, cross_review=false, context=standard');
+      }
+
+      // Verify extra_care mode - all features enabled (including Stage 1.5)
+      if (data.extra_care) {
+        expect(data.extra_care.enable_peer_review).toBe(true);
+        expect(data.extra_care.enable_cross_review).toBe(true);
+        expect(data.extra_care.context_mode).toBe('full');
+        console.log('  Extra Care mode: peer_review=true, cross_review=true (Stage 1.5), context=full');
+      }
     });
   });
 
@@ -298,13 +332,16 @@ test.describe('API Tests - Authenticated Endpoints', () => {
       console.log('  User info retrieved');
     });
 
-    test('GET /api/auth/me rejects without auth', async ({ request }) => {
+    test('GET /api/auth/me rejects without auth', async ({ playwright }) => {
       console.log('Testing: /api/auth/me without auth');
 
-      const response = await request.get(`${API_BASE_URL}${API_ENDPOINTS.me}`);
+      // Use fresh context without cookies to test unauthenticated access
+      const context = await playwright.request.newContext();
+      const response = await context.get(`${API_BASE_URL}${API_ENDPOINTS.me}`);
 
       expect(response.status()).toBe(401);
       console.log('  Unauthenticated request rejected');
+      await context.dispose();
     });
   });
 
@@ -319,8 +356,10 @@ test.describe('API Tests - Authenticated Endpoints', () => {
       expect(response.status()).toBe(200);
 
       const data = await response.json();
-      expect(Array.isArray(data)).toBe(true);
-      console.log(`  Found ${data.length} conversations`);
+      // API returns { conversations: [], total: number, has_more: boolean }
+      expect(data).toHaveProperty('conversations');
+      expect(Array.isArray(data.conversations)).toBe(true);
+      console.log(`  Found ${data.conversations.length} conversations`);
     });
 
     test('POST /api/conversations creates conversation', async ({ request }) => {
@@ -379,13 +418,16 @@ test.describe('API Tests - Authenticated Endpoints', () => {
       console.log('  Conversation deleted');
     });
 
-    test('Conversations endpoints require auth', async ({ request }) => {
+    test('Conversations endpoints require auth', async ({ playwright }) => {
       console.log('Testing: Conversations auth requirement');
 
-      const response = await request.get(`${API_BASE_URL}${API_ENDPOINTS.conversations}`);
+      // Use fresh context without cookies to test unauthenticated access
+      const context = await playwright.request.newContext();
+      const response = await context.get(`${API_BASE_URL}${API_ENDPOINTS.conversations}`);
 
       expect(response.status()).toBe(401);
       console.log('  Auth required');
+      await context.dispose();
     });
   });
 
@@ -433,7 +475,7 @@ test.describe('API Tests - Authenticated Endpoints', () => {
         headers: { Authorization: `Bearer ${accessToken}` },
         data: {
           new_email: newEmail,
-          password: testPassword,
+          current_password: testPassword,
         },
       });
 
@@ -448,7 +490,7 @@ test.describe('API Tests - Authenticated Endpoints', () => {
         headers: { Authorization: `Bearer ${accessToken}` },
         data: {
           new_email: generateTestEmail(),
-          password: 'WrongPassword123!',
+          current_password: 'WrongPassword123!',
         },
       });
 

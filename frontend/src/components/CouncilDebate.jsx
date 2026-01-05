@@ -3,36 +3,22 @@ import './CouncilDebate.css';
 
 // Model configurations with brand colors and icons
 const MODEL_CONFIG = {
-  'openai/gpt-5.2-chat': {
-    name: 'GPT',
-    color: '#10a37f',
-    icon: '◯',
-    shortName: 'GPT'
-  },
-  'anthropic/claude-sonnet-4.5': {
-    name: 'Claude',
-    color: '#d97706',
-    icon: '◐',
-    shortName: 'Claude'
-  },
-  'google/gemini-3-flash-preview': {
-    name: 'Gemini',
-    color: '#4285f4',
-    icon: '◇',
-    shortName: 'Gemini'
-  },
-  'x-ai/grok-4-fast': {
-    name: 'Grok',
-    color: '#ffffff',
-    icon: '✕',
-    shortName: 'Grok'
-  },
-  'deepseek/deepseek-v3.2': {
-    name: 'DeepSeek',
-    color: '#6366f1',
-    icon: '◈',
-    shortName: 'DeepSeek'
-  },
+  // Premium tier
+  'openai/gpt-5.2-chat': { name: 'GPT', color: '#10a37f', icon: '◯', shortName: 'GPT' },
+  'openai/gpt-5.2': { name: 'GPT', color: '#10a37f', icon: '◯', shortName: 'GPT' },
+  'anthropic/claude-sonnet-4.5': { name: 'Claude', color: '#d97706', icon: '◐', shortName: 'Claude' },
+  'anthropic/claude-opus-4.5': { name: 'Claude', color: '#d97706', icon: '◐', shortName: 'Claude' },
+  'google/gemini-3-flash-preview': { name: 'Gemini', color: '#4285f4', icon: '◇', shortName: 'Gemini' },
+  'google/gemini-3-pro-preview': { name: 'Gemini', color: '#4285f4', icon: '◇', shortName: 'Gemini' },
+  'x-ai/grok-4-fast': { name: 'Grok', color: '#ffffff', icon: '✕', shortName: 'Grok' },
+  'x-ai/grok-4.1-fast': { name: 'Grok', color: '#ffffff', icon: '✕', shortName: 'Grok' },
+  'deepseek/deepseek-v3.2': { name: 'DeepSeek', color: '#6366f1', icon: '◈', shortName: 'DeepSeek' },
+  // Haiku tier
+  'openai/gpt-4o-mini': { name: 'GPT', color: '#10a37f', icon: '◯', shortName: 'GPT' },
+  'anthropic/claude-3-haiku': { name: 'Claude', color: '#d97706', icon: '◐', shortName: 'Claude' },
+  'google/gemini-2.0-flash-exp': { name: 'Gemini', color: '#4285f4', icon: '◇', shortName: 'Gemini' },
+  'x-ai/grok-2-mini': { name: 'Grok', color: '#ffffff', icon: '✕', shortName: 'Grok' },
+  'deepseek/deepseek-chat': { name: 'DeepSeek', color: '#6366f1', icon: '◈', shortName: 'DeepSeek' },
   // Fallback configs for different model names
   'openai': { name: 'GPT', color: '#10a37f', icon: '◯', shortName: 'GPT' },
   'anthropic': { name: 'Claude', color: '#d97706', icon: '◐', shortName: 'Claude' },
@@ -76,12 +62,15 @@ function ModelIcon({ modelId, status, message, isChairman }) {
 export default function CouncilDebate({
   stage,
   stage1Data,
+  stage1_5Data,
   stage2Data,
   stage3Data,
   loading,
   isMinimized,
   onToggleMinimize,
 }) {
+  // Check if this is Extra Care mode (has Stage 1.5)
+  const hasStage1_5 = loading?.stage1_5 || (stage1_5Data && stage1_5Data.length > 0);
   const [viewMode, setViewMode] = useState(() => {
     return localStorage.getItem('decideplease_debate_view') || 'full';
   });
@@ -98,6 +87,7 @@ export default function CouncilDebate({
           <div className="spinner-small"></div>
           <span>
             {loading?.stage1 && 'Collecting responses...'}
+            {loading?.stage1_5 && 'Cross-reviewing responses...'}
             {loading?.stage2 && 'Peer review in progress...'}
             {loading?.stage3 && 'Synthesizing verdict...'}
           </span>
@@ -125,11 +115,13 @@ export default function CouncilDebate({
   // Calculate overall progress percentage
   const getProgress = () => {
     if (stage3Data && !loading?.stage3) return 100;
-    if (loading?.stage3) return 80;
-    if (stage2Data?.length > 0 && !loading?.stage2) return 66;
-    if (loading?.stage2) return 50;
-    if (stage1Data?.length > 0 && !loading?.stage1) return 33;
-    if (loading?.stage1) return 15;
+    if (loading?.stage3) return 85;
+    if (stage2Data?.length > 0 && !loading?.stage2) return 70;
+    if (loading?.stage2) return 55;
+    if (stage1_5Data?.length > 0 && !loading?.stage1_5) return 45;
+    if (loading?.stage1_5) return 35;
+    if (stage1Data?.length > 0 && !loading?.stage1) return 25;
+    if (loading?.stage1) return 10;
     return 5;
   };
 
@@ -140,6 +132,11 @@ export default function CouncilDebate({
       // Check if this model has submitted ranking
       const hasRanked = stage2Data?.some(r => r.model === modelId);
       return hasRanked ? 'complete' : 'thinking';
+    }
+    if (loading?.stage1_5) {
+      // Check if this model has refined response
+      const hasRefined = stage1_5Data?.some(r => r.model === modelId);
+      return hasRefined ? 'complete' : 'thinking';
     }
     if (loading?.stage1) {
       // Check if this model has responded
@@ -195,6 +192,7 @@ export default function CouncilDebate({
           </div>
           <div className="bar-status">
             {loading?.stage1 && 'Stage 1: Gathering opinions...'}
+            {loading?.stage1_5 && 'Stage 1.5: Cross-review...'}
             {loading?.stage2 && 'Stage 2: Peer review...'}
             {loading?.stage3 && 'Stage 3: Final synthesis...'}
           </div>
@@ -219,6 +217,7 @@ export default function CouncilDebate({
       <div className="debate-header">
         <span className="debate-title">
           {loading?.stage1 && 'Stage 1: Models are forming opinions...'}
+          {loading?.stage1_5 && 'Stage 1.5: Cross-reviewing all responses...'}
           {loading?.stage2 && 'Stage 2: Anonymous peer review...'}
           {loading?.stage3 && 'Stage 3: Chairman synthesizing verdict...'}
         </span>
@@ -267,6 +266,15 @@ export default function CouncilDebate({
             <span>1</span>
           </div>
           <div className="stage-line"></div>
+          {/* Stage 1.5 - only shown for Extra Care mode */}
+          {hasStage1_5 && (
+            <>
+              <div className={`stage-dot stage1-5-dot ${loading?.stage1_5 || stage1_5Data?.length > 0 ? 'active' : ''} ${stage1_5Data?.length > 0 && !loading?.stage1_5 ? 'complete' : ''}`}>
+                <span className="stage-1-5-label">1.5</span>
+              </div>
+              <div className="stage-line"></div>
+            </>
+          )}
           <div className={`stage-dot ${loading?.stage2 || stage2Data?.length > 0 ? 'active' : ''} ${stage2Data?.length > 0 && !loading?.stage2 ? 'complete' : ''}`}>
             <span>2</span>
           </div>
@@ -285,6 +293,7 @@ export default function CouncilDebate({
         </div>
         <div className="progress-labels">
           <span>Responses</span>
+          {hasStage1_5 && <span>Cross-Review</span>}
           <span>Peer Review</span>
           <span>Verdict</span>
         </div>

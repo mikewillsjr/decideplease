@@ -250,13 +250,14 @@ async def update_assistant_message_stage(message_id: int, stage: str, data: Any)
 
     Args:
         message_id: The message ID
-        stage: 'stage1', 'stage2', or 'stage3'
+        stage: 'stage1', 'stage1_5', 'stage2', or 'stage3'
         data: The stage data to save
     """
     # SECURITY: Use explicit mapping to prevent SQL injection
     # Column names cannot be parameterized, so we use a whitelist
     STAGE_COLUMNS = {
         'stage1': 'stage1',
+        'stage1_5': 'stage1_5',
         'stage2': 'stage2',
         'stage3': 'stage3'
     }
@@ -270,6 +271,12 @@ async def update_assistant_message_stage(message_id: int, stage: str, data: Any)
         if column == 'stage1':
             await conn.execute(
                 "UPDATE messages SET stage1 = $1 WHERE id = $2",
+                json.dumps(data),
+                message_id
+            )
+        elif column == 'stage1_5':
+            await conn.execute(
+                "UPDATE messages SET stage1_5 = $1 WHERE id = $2",
                 json.dumps(data),
                 message_id
             )
@@ -468,7 +475,7 @@ async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
     async with get_connection() as conn:
         row = await conn.fetchrow(
             """
-            SELECT id, email, credits, email_verified, auth_provider, role
+            SELECT id, email, credits, email_verified, auth_provider, role, password_hash
             FROM users WHERE id = $1
             """,
             user_id
@@ -481,7 +488,8 @@ async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
                 "credits": row["credits"],
                 "email_verified": row["email_verified"] or False,
                 "auth_provider": row["auth_provider"] or "email",
-                "role": row["role"] or "user"
+                "role": row["role"] or "user",
+                "password_hash": row["password_hash"]
             }
         return None
 
@@ -1225,3 +1233,78 @@ async def get_audit_log(limit: int = 100, offset: int = 0) -> List[Dict[str, Any
             }
             for row in rows
         ]
+
+
+# ============== Follow-up Context Functions ==============
+
+async def save_context_summary(message_id: int, context_summary: Dict[str, Any]):
+    """
+    Save context summary for a message for use in follow-ups.
+
+    Args:
+        message_id: The assistant message ID
+        context_summary: The context summary dict from build_context_summary()
+    """
+    async with get_connection() as conn:
+        await conn.execute(
+            """
+            UPDATE messages
+            SET context_summary = $1
+            WHERE id = $2
+            """,
+            json.dumps(context_summary),
+            message_id
+        )
+
+
+async def get_conversation_context(conversation_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get the context summary from the most recent completed assistant message.
+
+    Args:
+        conversation_id: Conversation identifier
+
+    Returns:
+        Context summary dict or None if no previous context exists
+    """
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT context_summary
+            FROM messages
+            WHERE conversation_id = $1
+              AND role = 'assistant'
+              AND stage3 IS NOT NULL
+              AND context_summary IS NOT NULL
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            UUID(conversation_id)
+        )
+
+        if row and row["context_summary"]:
+            return parse_json_field(row["context_summary"])
+        return None
+
+
+async def get_conversation_message_count(conversation_id: str) -> int:
+    """
+    Get the count of user messages in a conversation.
+    Used to determine if this is a follow-up message.
+
+    Args:
+        conversation_id: Conversation identifier
+
+    Returns:
+        Number of user messages in the conversation
+    """
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT COUNT(*) as count
+            FROM messages
+            WHERE conversation_id = $1 AND role = 'user'
+            """,
+            UUID(conversation_id)
+        )
+        return row["count"] if row else 0

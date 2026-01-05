@@ -117,6 +117,9 @@ async def init_database():
             await conn.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS rerun_input TEXT")
             await conn.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS revision_number INTEGER DEFAULT 0")
             await conn.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS parent_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL")
+            # Stage 1.5 (cross-review) and context summary for follow-ups
+            await conn.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS stage1_5 JSONB")
+            await conn.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS context_summary JSONB")
         except Exception:
             pass  # Columns may already exist
 

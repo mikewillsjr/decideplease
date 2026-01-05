@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api, setAuthTokenGetter } from '../api';
 import UnifiedHeader from './UnifiedHeader';
@@ -6,11 +7,19 @@ import UnifiedFooter from './UnifiedFooter';
 import './SettingsPage.css';
 
 export default function SettingsPage() {
-  const { user, logout, getAccessToken, refreshUser } = useAuth();
+  const navigate = useNavigate();
+  const { user, logout, getAccessToken, refreshUser, isLoading: authLoading } = useAuth();
   const [activeSection, setActiveSection] = useState('profile');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState(null);
+
+  // Redirect unauthenticated users to home page
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, authLoading, navigate]);
 
   // Profile form state
   const [newEmail, setNewEmail] = useState('');
@@ -133,6 +142,11 @@ export default function SettingsPage() {
       setLoading(false);
     }
   };
+
+  // Don't render settings page for unauthenticated users
+  if (authLoading || !user) {
+    return null;
+  }
 
   return (
     <div className="settings-page">

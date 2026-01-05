@@ -8,46 +8,51 @@ load_dotenv()
 # OpenRouter API key
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
+# Model tiers for different quality/cost tradeoffs
+HAIKU_TIER = [
+    "openai/gpt-4o-mini",
+    "anthropic/claude-3-haiku",
+    "google/gemini-2.0-flash-exp",
+    "x-ai/grok-2-mini",
+    "deepseek/deepseek-chat",
+]
+
+PREMIUM_TIER = [
+    "openai/gpt-5.2",
+    "anthropic/claude-opus-4.5",
+    "google/gemini-3-pro-preview",
+    "x-ai/grok-4.1-fast",
+    "deepseek/deepseek-v3.2",
+]
+
 # Run modes with different speed/cost/quality tradeoffs
 RUN_MODES = {
     "quick": {
         "credit_cost": 1,
         "enable_peer_review": False,
+        "enable_cross_review": False,
         "label": "Quick Answer",
-        "council_models": [
-            "openai/gpt-5.2-chat",
-            "anthropic/claude-sonnet-4.5",
-            "google/gemini-3-flash-preview",
-            "x-ai/grok-4-fast",
-            "deepseek/deepseek-v3.2",
-        ],
-        "chairman_model": "google/gemini-3-flash-preview",
+        "council_models": HAIKU_TIER,
+        "chairman_model": "anthropic/claude-sonnet-4",
+        "context_mode": "minimal",
     },
     "standard": {
         "credit_cost": 2,
         "enable_peer_review": True,
+        "enable_cross_review": False,
         "label": "Standard Answer",
-        "council_models": [
-            "openai/gpt-5.2-chat",
-            "anthropic/claude-sonnet-4.5",
-            "google/gemini-3-flash-preview",
-            "x-ai/grok-4-fast",
-            "deepseek/deepseek-v3.2",
-        ],
-        "chairman_model": "google/gemini-3-flash-preview",
+        "council_models": PREMIUM_TIER,
+        "chairman_model": "anthropic/claude-opus-4.5",
+        "context_mode": "standard",
     },
     "extra_care": {
-        "credit_cost": 3,
+        "credit_cost": 4,
         "enable_peer_review": True,
+        "enable_cross_review": True,
         "label": "Extra Care",
-        "council_models": [
-            "openai/gpt-5.2",
-            "anthropic/claude-opus-4.5",
-            "google/gemini-3-pro-preview",
-            "x-ai/grok-4.1-fast",
-            "deepseek/deepseek-v3.2",
-        ],
-        "chairman_model": "google/gemini-3-pro-preview",
+        "council_models": PREMIUM_TIER,
+        "chairman_model": "anthropic/claude-opus-4.5",
+        "context_mode": "full",
     },
 }
 
@@ -64,23 +69,26 @@ DATA_DIR = "data/conversations"
 # ============== Vision Model Configuration ==============
 # Models that support vision/image input
 VISION_MODELS = [
-    "openai/gpt-5.2-chat",
+    # Premium tier
     "openai/gpt-5.2",
-    "anthropic/claude-sonnet-4.5",
     "anthropic/claude-opus-4.5",
-    "google/gemini-3-flash-preview",
     "google/gemini-3-pro-preview",
-    "x-ai/grok-4-fast",
     "x-ai/grok-4.1-fast",
+    # Haiku tier
+    "openai/gpt-4o-mini",
+    "anthropic/claude-3-haiku",
+    "google/gemini-2.0-flash-exp",
+    "x-ai/grok-2-mini",
 ]
 
 # Models that are text-only (need image descriptions)
 TEXT_ONLY_MODELS = [
     "deepseek/deepseek-v3.2",
+    "deepseek/deepseek-chat",
 ]
 
 # Model used to generate image descriptions for text-only models
-DESCRIPTION_MODEL = "google/gemini-3-flash-preview"
+DESCRIPTION_MODEL = "google/gemini-2.0-flash-exp"
 
 # ============== File Upload Configuration ==============
 FILE_UPLOAD_CREDIT_COST = 1  # Additional credit cost when files are attached

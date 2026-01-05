@@ -71,10 +71,13 @@ from .council import (
     run_council_with_mode,
     generate_conversation_title,
     stage1_collect_responses,
+    stage1_5_cross_review,
     stage2_collect_rankings,
     stage3_synthesize_final,
     calculate_aggregate_rankings,
-    extract_tldr_packet
+    extract_tldr_packet,
+    build_context_summary,
+    build_followup_query
 )
 from .config import RUN_MODES, FILE_UPLOAD_CREDIT_COST, MAX_FILES, MAX_FILE_SIZE
 from .admin import router as admin_router, ADMIN_EMAILS
@@ -1100,12 +1103,22 @@ async def _process_council_request(
         council_models = mode_config["council_models"]
         chairman_model = mode_config["chairman_model"]
         enable_peer_review = mode_config["enable_peer_review"]
+        enable_cross_review = mode_config.get("enable_cross_review", False)
+        context_mode = mode_config.get("context_mode", "standard")
 
-        # Build effective query for reruns
+        # Build effective query - check for reruns first, then follow-ups
         effective_content = content
+        conversation_context = None
+
         if is_rerun and context_packet:
+            # Rerun case: use the rerun query builder
             from .council import build_rerun_query
             effective_content = build_rerun_query(content, context_packet, rerun_input)
+        elif not is_first_message:
+            # Follow-up case: get context from previous message
+            conversation_context = await storage.get_conversation_context(conversation_id)
+            if conversation_context:
+                effective_content = build_followup_query(content, conversation_context, context_mode)
 
         # Stage 1: Collect responses (with or without files)
         _active_status[conversation_id] = "stage1"
@@ -1119,6 +1132,26 @@ async def _process_council_request(
         await storage.update_assistant_message_stage(message_id, 'stage1', stage1_results)
         await event_queue.put({'type': 'stage1_complete', 'data': stage1_results})
 
+        # Stage 1.5: Cross-Review (Extra Care mode only)
+        stage1_5_results = []
+        responses_for_ranking = stage1_results  # Default to Stage 1 responses
+
+        if enable_cross_review and stage1_results:
+            _active_status[conversation_id] = "stage1_5"
+            await event_queue.put({'type': 'stage1_5_start'})
+            stage1_5_results = await stage1_5_cross_review(
+                effective_content, stage1_results, council_models
+            )
+            if stage1_5_results:
+                # Use refined responses for subsequent stages
+                responses_for_ranking = stage1_5_results
+                await storage.update_assistant_message_stage(message_id, 'stage1_5', stage1_5_results)
+            await event_queue.put({'type': 'stage1_5_complete', 'data': stage1_5_results})
+        else:
+            # Emit skipped event if not using cross-review
+            if not enable_cross_review:
+                await event_queue.put({'type': 'stage1_5_skipped', 'reason': 'Cross-review disabled for this mode'})
+
         # Stage 2: Collect rankings (skip if peer review disabled)
         stage2_results = []
         label_to_model = {}
@@ -1128,7 +1161,7 @@ async def _process_council_request(
             _active_status[conversation_id] = "stage2"
             await event_queue.put({'type': 'stage2_start'})
             stage2_results, label_to_model = await stage2_collect_rankings(
-                effective_content, stage1_results, council_models
+                effective_content, responses_for_ranking, council_models
             )
             aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
             await storage.update_assistant_message_stage(message_id, 'stage2', stage2_results)
@@ -1142,11 +1175,11 @@ async def _process_council_request(
             await event_queue.put({'type': 'stage2_skipped', 'reason': 'Quick mode - peer review disabled'})
             await storage.update_assistant_message_stage(message_id, 'stage2', [])
 
-        # Stage 3: Synthesize final answer
+        # Stage 3: Synthesize final answer (use refined responses if available)
         _active_status[conversation_id] = "stage3"
         await event_queue.put({'type': 'stage3_start'})
         stage3_result = await stage3_synthesize_final(
-            effective_content, stage1_results, stage2_results, chairman_model
+            effective_content, responses_for_ranking, stage2_results, chairman_model
         )
         await storage.update_assistant_message_stage(message_id, 'stage3', stage3_result)
         await event_queue.put({
@@ -1156,9 +1189,26 @@ async def _process_council_request(
                 'label_to_model': label_to_model,
                 'aggregate_rankings': aggregate_rankings,
                 'mode': mode,
-                'enable_peer_review': enable_peer_review
+                'enable_peer_review': enable_peer_review,
+                'enable_cross_review': enable_cross_review,
+                'has_stage1_5': bool(stage1_5_results)
             }
         })
+
+        # Save context summary for future follow-ups
+        try:
+            context_summary = build_context_summary(
+                original_question=content,
+                stage1_results=stage1_results,
+                stage2_results=stage2_results,
+                stage3_result=stage3_result,
+                aggregate_rankings=aggregate_rankings,
+                stage1_5_results=stage1_5_results if stage1_5_results else None
+            )
+            await storage.save_context_summary(message_id, context_summary)
+        except Exception as ctx_err:
+            # Log but don't fail the request if context saving fails
+            print(f"Warning: Failed to save context summary: {ctx_err}")
 
         # Wait for title generation
         if title_task:
@@ -1442,12 +1492,16 @@ async def get_revisions(
 async def get_run_modes():
     """
     Get available run modes and their configurations.
+    Exposes: label, credit_cost, enable_peer_review, enable_cross_review, context_mode
+    Note: Does NOT expose council_models or chairman_model to keep those internal
     """
     return {
         mode: {
             "label": config["label"],
             "credit_cost": config["credit_cost"],
             "enable_peer_review": config["enable_peer_review"],
+            "enable_cross_review": config["enable_cross_review"],
+            "context_mode": config["context_mode"],
         }
         for mode, config in RUN_MODES.items()
     }
