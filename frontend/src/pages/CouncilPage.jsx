@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import UnifiedHeader from '../components/UnifiedHeader';
@@ -23,6 +23,64 @@ function CouncilPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [userRole, setUserRole] = useState('user');
 
+  // Define data loading functions with useCallback to avoid hoisting issues
+  const loadUserInfo = useCallback(async () => {
+    try {
+      const userInfo = await api.getUserInfo();
+      setCredits(userInfo.credits);
+    } catch (err) {
+      console.error('Failed to load user info:', err);
+    }
+  }, []);
+
+  const loadCreditPackInfo = useCallback(async () => {
+    try {
+      const info = await api.getCreditPackInfo();
+      setCreditPackInfo(info);
+    } catch (err) {
+      console.error('Failed to load credit pack info:', err);
+    }
+  }, []);
+
+  const loadConversations = useCallback(async () => {
+    try {
+      const result = await api.listConversations();
+      // API returns { conversations: [], total: N, has_more: bool }
+      setConversations(result.conversations || []);
+    } catch (err) {
+      console.error('Failed to load conversations:', err);
+    }
+  }, []);
+
+  const checkAdminAccess = useCallback(async () => {
+    try {
+      const result = await api.checkAdminAccess();
+      setIsAdmin(result.is_admin || result.is_staff);
+      setUserRole(result.role || 'user');
+    } catch (err) {
+      console.error('Failed to check admin access:', err);
+    }
+  }, []);
+
+  const checkPaymentStatus = useCallback(() => {
+    // Check URL params for payment status
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get('payment');
+
+    if (paymentStatus === 'success') {
+      // Reload user info to get updated credits
+      setTimeout(() => {
+        loadUserInfo();
+        refreshUser();
+      }, 1000);
+      // Clear the URL param
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (paymentStatus === 'cancelled') {
+      // Clear the URL param
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [loadUserInfo, refreshUser]);
+
   // Set up auth token getter for API calls
   useEffect(() => {
     if (isAuthenticated) {
@@ -46,103 +104,10 @@ function CouncilPage() {
       checkPaymentStatus();
       checkAdminAccess();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, loadConversations, loadUserInfo, loadCreditPackInfo, checkPaymentStatus, checkAdminAccess]);
 
-  const checkAdminAccess = async () => {
-    try {
-      const result = await api.checkAdminAccess();
-      setIsAdmin(result.is_admin || result.is_staff);
-      setUserRole(result.role || 'user');
-    } catch (error) {
-      console.error('Failed to check admin access:', error);
-    }
-  };
-
-  // Load conversation details when selected
-  useEffect(() => {
-    if (currentConversationId && isAuthenticated) {
-      loadConversation(currentConversationId);
-    }
-  }, [currentConversationId, isAuthenticated]);
-
-  const loadUserInfo = async () => {
-    try {
-      const userInfo = await api.getUserInfo();
-      setCredits(userInfo.credits);
-    } catch (error) {
-      console.error('Failed to load user info:', error);
-    }
-  };
-
-  const loadCreditPackInfo = async () => {
-    try {
-      const info = await api.getCreditPackInfo();
-      setCreditPackInfo(info);
-    } catch (error) {
-      console.error('Failed to load credit pack info:', error);
-    }
-  };
-
-  const checkPaymentStatus = () => {
-    // Check URL params for payment status
-    const params = new URLSearchParams(window.location.search);
-    const paymentStatus = params.get('payment');
-
-    if (paymentStatus === 'success') {
-      // Reload user info to get updated credits
-      setTimeout(() => {
-        loadUserInfo();
-        refreshUser();
-      }, 1000);
-      // Clear the URL param
-      window.history.replaceState({}, '', window.location.pathname);
-    } else if (paymentStatus === 'cancelled') {
-      // Clear the URL param
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  };
-
-  const loadConversations = async () => {
-    try {
-      const result = await api.listConversations();
-      // API returns { conversations: [], total: N, has_more: bool }
-      setConversations(result.conversations || []);
-    } catch (error) {
-      console.error('Failed to load conversations:', error);
-    }
-  };
-
-  const loadConversation = async (id) => {
-    setLoadError(false);
-    try {
-      const conv = await api.getConversation(id);
-      console.log('[CouncilPage] Loaded conversation:', conv);
-      // Ensure messages is always an array
-      if (conv && !conv.messages) {
-        conv.messages = [];
-      }
-      setCurrentConversation(conv);
-
-      // Check if this conversation is still being processed
-      try {
-        const status = await api.getConversationStatus(id);
-        if (status.processing) {
-          console.log('[CouncilPage] Conversation still processing, stage:', status.current_stage);
-          // Start polling for updates
-          startPollingForUpdates(id, status.current_stage);
-        }
-      } catch (statusError) {
-        console.error('Failed to check conversation status:', statusError);
-      }
-    } catch (error) {
-      console.error('Failed to load conversation:', error);
-      // Set error state so user can retry or delete
-      setLoadError(true);
-      setCurrentConversation({ id, messages: [], title: 'Error loading' });
-    }
-  };
-
-  const startPollingForUpdates = (conversationId, initialStage) => {
+  // Polling function defined as useCallback since it's used by loadConversation
+  const startPollingForUpdates = useCallback((conversationId, initialStage) => {
     // Set up loading state for the current stage
     setCurrentConversation((prev) => {
       if (!prev) return prev;
@@ -202,8 +167,8 @@ function CouncilPage() {
             return { ...prev, messages };
           });
         }
-      } catch (error) {
-        console.error('Polling error:', error);
+      } catch (err) {
+        console.error('Polling error:', err);
         clearInterval(pollInterval);
         setIsLoading(false);
       }
@@ -211,7 +176,44 @@ function CouncilPage() {
 
     // Stop polling if conversation changes
     return () => clearInterval(pollInterval);
-  };
+  }, [loadUserInfo, loadConversations]);
+
+  const loadConversation = useCallback(async (id) => {
+    setLoadError(false);
+    try {
+      const conv = await api.getConversation(id);
+      console.log('[CouncilPage] Loaded conversation:', conv);
+      // Ensure messages is always an array
+      if (conv && !conv.messages) {
+        conv.messages = [];
+      }
+      setCurrentConversation(conv);
+
+      // Check if this conversation is still being processed
+      try {
+        const status = await api.getConversationStatus(id);
+        if (status.processing) {
+          console.log('[CouncilPage] Conversation still processing, stage:', status.current_stage);
+          // Start polling for updates
+          startPollingForUpdates(id, status.current_stage);
+        }
+      } catch (statusError) {
+        console.error('Failed to check conversation status:', statusError);
+      }
+    } catch (err) {
+      console.error('Failed to load conversation:', err);
+      // Set error state so user can retry or delete
+      setLoadError(true);
+      setCurrentConversation({ id, messages: [], title: 'Error loading' });
+    }
+  }, [startPollingForUpdates]);
+
+  // Load conversation details when selected
+  useEffect(() => {
+    if (currentConversationId && isAuthenticated) {
+      loadConversation(currentConversationId);
+    }
+  }, [currentConversationId, isAuthenticated, loadConversation]);
 
   const handleRetryLoad = () => {
     if (currentConversationId) {
@@ -260,7 +262,7 @@ function CouncilPage() {
   };
 
   // Helper function to handle SSE events for both send and rerun
-  const handleStreamEvent = (eventType, event, isRerun = false) => {
+  const handleStreamEvent = (eventType, event) => {
     switch (eventType) {
       case 'run_started':
         // Update credits immediately after debit
@@ -492,7 +494,7 @@ function CouncilPage() {
 
       // Send rerun request with streaming
       await api.rerunDecision(currentConversationId, newInput, mode, (eventType, event) => {
-        handleStreamEvent(eventType, event, true);
+        handleStreamEvent(eventType, event);
       });
     } catch (error) {
       console.error('Failed to rerun decision:', error);
