@@ -202,7 +202,7 @@
   border-radius: 8px;
   padding: 8px 12px;
   max-width: 160px;
-  animation: fadeInUp 0.3s ease;
+  animation: bubbleFadeInUp 0.3s ease;
   z-index: 10;
 }
 
@@ -224,7 +224,7 @@
   display: block;
 }
 
-@keyframes fadeInUp {
+@keyframes bubbleFadeInUp {
   from {
     opacity: 0;
     transform: translateX(-50%) translateY(8px);
