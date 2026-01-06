@@ -1,0 +1,218 @@
+/* DossierBody - Markdown content with legal briefing transformation */
+
+.dossier-body {
+  padding: 40px 48px;
+  color: var(--text-secondary, #d4d4d8);
+  line-height: 1.7;
+  font-size: 15px;
+}
+
+.dossier-body.loading,
+.dossier-body.empty {
+  padding: 60px 48px;
+  text-align: center;
+  color: var(--text-dim, #6b7280);
+}
+
+/* Loading skeleton */
+.loading-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.skeleton-line {
+  height: 16px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+.skeleton-line.wide { width: 100%; }
+.skeleton-line.medium { width: 75%; }
+.skeleton-line.short { width: 40%; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ===== CSS MARKDOWN TRANSFORMATION (The Magic) ===== */
+
+/* Force headers to look like Section Dividers */
+.dossier-content h1,
+.dossier-content h2,
+.dossier-content h3,
+.dossier-content h4 {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted, #9ca3af);
+  margin: 32px 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Remove top margin for first heading */
+.dossier-content h1:first-child,
+.dossier-content h2:first-child,
+.dossier-content h3:first-child,
+.dossier-content h4:first-child {
+  margin-top: 0;
+}
+
+/* Transform Bullet Points into Cards */
+.dossier-content ul,
+.dossier-content ol {
+  padding: 0;
+  margin: 0 0 24px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dossier-content li {
+  position: relative;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 14px 18px;
+  border-radius: 8px;
+  border-left: 3px solid var(--primary, #6366f1);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Ordered lists get numbers */
+.dossier-content ol {
+  counter-reset: dossier-counter;
+}
+
+.dossier-content ol li {
+  counter-increment: dossier-counter;
+}
+
+.dossier-content ol li::before {
+  content: counter(dossier-counter) ".";
+  position: absolute;
+  left: -24px;
+  top: 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary, #6366f1);
+}
+
+/* Bold text inside lists becomes mini-headlines */
+.dossier-content li strong {
+  display: block;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main, #fff);
+  margin-bottom: 4px;
+}
+
+/* Bold text elsewhere */
+.dossier-content p strong {
+  color: var(--text-main, #fff);
+  font-weight: 600;
+}
+
+/* Paragraphs */
+.dossier-content p {
+  margin: 0 0 20px;
+}
+
+/* Blockquotes become "key insight" callouts */
+.dossier-content blockquote {
+  margin: 24px 0;
+  padding: 16px 20px;
+  background: rgba(99, 102, 241, 0.06);
+  border-left: 4px solid var(--primary, #6366f1);
+  border-radius: 0 8px 8px 0;
+  font-style: normal;
+}
+
+.dossier-content blockquote p {
+  margin: 0;
+}
+
+/* Code blocks */
+.dossier-content code {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+.dossier-content pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 20px 0;
+}
+
+.dossier-content pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Links */
+.dossier-content a {
+  color: var(--primary, #6366f1);
+  text-decoration: none;
+}
+
+.dossier-content a:hover {
+  text-decoration: underline;
+}
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+  .dossier-body {
+    padding: 24px 20px;
+    font-size: 14px;
+  }
+
+  .dossier-content li {
+    padding: 12px 14px;
+  }
+}
+
+/* Light mode */
+[data-theme="light"] .dossier-body {
+  color: var(--text-secondary, #4b5563);
+}
+
+[data-theme="light"] .dossier-content li {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="light"] .dossier-content li strong {
+  color: var(--text-main, #111827);
+}
+
+[data-theme="light"] .dossier-content blockquote {
+  background: rgba(99, 102, 241, 0.05);
+}
+
+[data-theme="light"] .skeleton-line {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.04) 0%,
+    rgba(0, 0, 0, 0.08) 50%,
+    rgba(0, 0, 0, 0.04) 100%
+  );
+  background-size: 200% 100%;
+}

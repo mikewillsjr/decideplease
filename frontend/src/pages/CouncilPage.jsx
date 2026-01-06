@@ -5,6 +5,7 @@ import UnifiedHeader from '../components/UnifiedHeader';
 import UnifiedFooter from '../components/UnifiedFooter';
 import Sidebar from '../components/Sidebar';
 import ChatInterface from '../components/ChatInterface';
+import CouncilChamber from '../components/CouncilChamber';
 import ImpersonationBanner from '../components/ImpersonationBanner';
 import AdminPanel from '../components/AdminPanel';
 import { api, setAuthTokenGetter } from '../api';
@@ -25,6 +26,17 @@ function CouncilPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [userRole, setUserRole] = useState('user');
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+
+  // Interface mode: 'chamber' (new) or 'classic' (old ChatInterface)
+  const [interfaceMode, setInterfaceMode] = useState(() => {
+    const saved = localStorage.getItem('decideplease_interface');
+    return saved === 'classic' ? 'classic' : 'chamber';
+  });
+
+  // Save interface preference
+  useEffect(() => {
+    localStorage.setItem('decideplease_interface', interfaceMode);
+  }, [interfaceMode]);
 
   // Define data loading functions with useCallback to avoid hoisting issues
   const loadUserInfo = useCallback(async () => {
@@ -597,19 +609,29 @@ function CouncilPage() {
           onNewConversation={handleNewConversation}
           onDeleteConversation={handleDeleteConversation}
         />
-        <ChatInterface
-          conversation={currentConversation}
-          onSendMessage={handleSendMessage}
-          isLoading={isLoading}
-          error={error}
-          onDismissError={() => setError(null)}
-          loadError={loadError}
-          onDeleteConversation={handleDeleteFailedConversation}
-          onRetryLoad={handleRetryLoad}
-          respondingToMessageId={respondingToMessageId}
-          onRespondToMessage={setRespondingToMessageId}
-          onClearRespondingTo={() => setRespondingToMessageId(null)}
-        />
+        {interfaceMode === 'chamber' ? (
+          <CouncilChamber
+            conversation={currentConversation}
+            onSendMessage={handleSendMessage}
+            isLoading={isLoading}
+            error={error}
+            onDismissError={() => setError(null)}
+          />
+        ) : (
+          <ChatInterface
+            conversation={currentConversation}
+            onSendMessage={handleSendMessage}
+            isLoading={isLoading}
+            error={error}
+            onDismissError={() => setError(null)}
+            loadError={loadError}
+            onDeleteConversation={handleDeleteFailedConversation}
+            onRetryLoad={handleRetryLoad}
+            respondingToMessageId={respondingToMessageId}
+            onRespondToMessage={setRespondingToMessageId}
+            onClearRespondingTo={() => setRespondingToMessageId(null)}
+          />
+        )}
       </div>
       <UnifiedFooter />
       {showAdminPanel && (

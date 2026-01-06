@@ -99,6 +99,11 @@ export default function SettingsPage() {
   // Delete account state
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
+  // Preferences state
+  const [interfaceMode, setInterfaceMode] = useState(() => {
+    return localStorage.getItem('decideplease_interface') || 'chamber';
+  });
+
   // Credits info
   const [credits, setCredits] = useState(null);
   const [creditPackInfo, setCreditPackInfo] = useState(null);
@@ -324,6 +329,12 @@ export default function SettingsPage() {
                 onClick={() => { setActiveSection('payment'); clearMessages(); }}
               >
                 Payment
+              </button>
+              <button
+                className={activeSection === 'preferences' ? 'active' : ''}
+                onClick={() => { setActiveSection('preferences'); clearMessages(); }}
+              >
+                Preferences
               </button>
             </nav>
 
@@ -570,6 +581,68 @@ export default function SettingsPage() {
                     <p className="settings-description">
                       When you purchase credits, we'll try your default card first. If it fails, we'll automatically try your other saved cards before asking you to add a new payment method.
                     </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Preferences Section */}
+              {activeSection === 'preferences' && (
+                <div className="settings-section">
+                  <h2>Preferences</h2>
+
+                  <div className="settings-card">
+                    <h3>Interface Style</h3>
+                    <p className="settings-description">
+                      Choose how your deliberation sessions are displayed.
+                    </p>
+
+                    <div className="interface-toggle">
+                      <button
+                        className={`interface-option ${interfaceMode === 'chamber' ? 'active' : ''}`}
+                        onClick={() => {
+                          setInterfaceMode('chamber');
+                          localStorage.setItem('decideplease_interface', 'chamber');
+                          setSuccess('Interface changed to Council Chamber');
+                        }}
+                      >
+                        <div className="option-icon">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="8" r="3" />
+                            <circle cx="5" cy="14" r="2" />
+                            <circle cx="19" cy="14" r="2" />
+                            <circle cx="7" cy="20" r="2" />
+                            <circle cx="17" cy="20" r="2" />
+                          </svg>
+                        </div>
+                        <div className="option-content">
+                          <span className="option-title">Council Chamber</span>
+                          <span className="option-desc">Theatrical experience with AI models in an arc formation and legal briefing-style verdicts</span>
+                        </div>
+                        {interfaceMode === 'chamber' && <span className="active-badge">Active</span>}
+                      </button>
+
+                      <button
+                        className={`interface-option ${interfaceMode === 'classic' ? 'active' : ''}`}
+                        onClick={() => {
+                          setInterfaceMode('classic');
+                          localStorage.setItem('decideplease_interface', 'classic');
+                          setSuccess('Interface changed to Classic Chat');
+                        }}
+                      >
+                        <div className="option-icon">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <line x1="3" y1="9" x2="21" y2="9" />
+                            <line x1="9" y1="21" x2="9" y2="9" />
+                          </svg>
+                        </div>
+                        <div className="option-content">
+                          <span className="option-title">Classic Chat</span>
+                          <span className="option-desc">Traditional chat interface with expandable stages and tabbed model responses</span>
+                        </div>
+                        {interfaceMode === 'classic' && <span className="active-badge">Active</span>}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

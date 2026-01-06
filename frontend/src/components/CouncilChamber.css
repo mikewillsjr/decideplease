@@ -1,0 +1,182 @@
+/* CouncilChamber - Main container with state transitions */
+
+.council-chamber {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-deep, #09090b);
+  position: relative;
+  overflow: hidden;
+}
+
+.chamber-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+/* Error banner */
+.chamber-error {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(239, 68, 68, 0.15);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  z-index: 100;
+}
+
+.chamber-error button {
+  background: none;
+  border: none;
+  color: #fca5a5;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 8px;
+  opacity: 0.7;
+}
+
+.chamber-error button:hover {
+  opacity: 1;
+}
+
+/* Dossier container */
+.dossier-container {
+  width: 100%;
+  max-width: 900px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  animation: dossierSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes dossierSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Placeholder for dossier content */
+.dossier-placeholder {
+  width: 100%;
+  background: var(--bg-card, #141417);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 60px;
+  text-align: center;
+  color: var(--text-muted, #9ca3af);
+}
+
+/* Loading indicator */
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-muted, #9ca3af);
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+}
+
+.loading-indicator .elapsed {
+  color: var(--text-dim, #6b7280);
+  font-size: 12px;
+}
+
+/* Round tabs (simple version - will be replaced by CaseFileTabs) */
+.round-tabs {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.round-tab {
+  background: var(--bg-panel, #1e1e24);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px 0 0 4px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-muted, #9ca3af);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.round-tab:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main, #fff);
+}
+
+.round-tab.active {
+  background: var(--primary, #6366f1);
+  border-color: var(--primary, #6366f1);
+  color: white;
+}
+
+/* State transitions */
+.council-chamber.state-assembly .dossier-container {
+  display: none;
+}
+
+.council-chamber.state-loading .assembly-state,
+.council-chamber.state-dossier .assembly-state {
+  display: none;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .chamber-content {
+    padding: 16px;
+  }
+
+  .round-tabs {
+    position: relative;
+    right: auto;
+    top: auto;
+    transform: none;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 0 16px 16px;
+    gap: 8px;
+  }
+
+  .round-tab {
+    border-radius: 6px;
+    padding: 6px 10px;
+  }
+}
+
+/* Light mode */
+[data-theme="light"] .council-chamber {
+  background: var(--background, #f8fafc);
+}
+
+[data-theme="light"] .chamber-error {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+[data-theme="light"] .dossier-placeholder {
+  background: var(--surface, #ffffff);
+}

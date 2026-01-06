@@ -1,0 +1,118 @@
+/* VerdictDossier - The paper container */
+
+.verdict-dossier {
+  width: 100%;
+  max-width: 800px;
+  background: var(--bg-card, #18181b);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  position: relative;
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Current dossier (on top of stack) */
+.verdict-dossier.current {
+  z-index: 10;
+}
+
+/* Previous dossier (stacked behind) */
+.verdict-dossier.previous {
+  transform: translateY(20px) scale(0.96);
+  opacity: 0.6;
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+/* Loading state */
+.verdict-dossier.loading {
+  /* Subtle pulsing border */
+  animation: dossierPulse 2s ease-in-out infinite;
+}
+
+@keyframes dossierPulse {
+  0%, 100% {
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
+  50% {
+    border-color: rgba(99, 102, 241, 0.2);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(99, 102, 241, 0.1);
+  }
+}
+
+/* Action buttons */
+.dossier-actions {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: var(--text-muted, #9ca3af);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-main, #fff);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.action-btn svg {
+  opacity: 0.7;
+}
+
+.action-btn:hover svg {
+  opacity: 1;
+}
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+  .verdict-dossier {
+    border-radius: 12px 12px 0 0;
+    margin-bottom: 0;
+  }
+
+  .dossier-actions {
+    position: relative;
+    bottom: auto;
+    right: auto;
+    padding: 16px 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.1);
+    justify-content: center;
+  }
+}
+
+/* Light mode */
+[data-theme="light"] .verdict-dossier {
+  background: var(--surface, #ffffff);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .action-btn {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: var(--text-muted, #6b7280);
+}
+
+[data-theme="light"] .action-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-main, #111827);
+}
