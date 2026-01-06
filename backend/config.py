@@ -33,7 +33,7 @@ RUN_MODES = {
         "enable_cross_review": False,
         "label": "Quick Answer",
         "council_models": HAIKU_TIER,
-        "chairman_model": "anthropic/claude-sonnet-4",
+        "chairman_model": "anthropic/claude-sonnet-4.5",
         "context_mode": "minimal",
     },
     "standard": {
@@ -42,7 +42,7 @@ RUN_MODES = {
         "enable_cross_review": False,
         "label": "Standard Answer",
         "council_models": PREMIUM_TIER,
-        "chairman_model": "anthropic/claude-opus-4.5",
+        "chairman_model": "anthropic/claude-sonnet-4.5",
         "context_mode": "standard",
     },
     "extra_care": {
@@ -51,7 +51,7 @@ RUN_MODES = {
         "enable_cross_review": True,
         "label": "Extra Care",
         "council_models": PREMIUM_TIER,
-        "chairman_model": "anthropic/claude-opus-4.5",
+        "chairman_model": "anthropic/claude-sonnet-4.5",
         "context_mode": "full",
     },
 }
