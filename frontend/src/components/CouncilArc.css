@@ -34,6 +34,32 @@
   /* Keep interactive during loading */
 }
 
+/* Dimmed state (default) - waiting for user to start typing */
+.council-arc.dimmed .model-seat {
+  opacity: 0.3;
+  filter: grayscale(50%);
+}
+
+.council-arc.dimmed .seat-circle {
+  box-shadow: none;
+}
+
+/* Active state - user has focused the input */
+.council-arc.active .model-seat {
+  opacity: 1;
+  filter: none;
+}
+
+.council-arc.active .seat-circle {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3),
+              0 0 30px rgba(99, 102, 241, 0.15);
+}
+
+.council-arc.active .model-seat.highlighted .seat-circle {
+  box-shadow: 0 0 30px rgba(99, 102, 241, 0.4),
+              0 0 60px rgba(99, 102, 241, 0.2);
+}
+
 /* Mobile responsive - convert arc to horizontal strip */
 @media (max-width: 768px) {
   .arc-container {

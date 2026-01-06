@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import SpeedSelector from './SpeedSelector';
 import FileUpload from './FileUpload';
 import './DecisionConsole.css';
@@ -9,6 +9,7 @@ import './DecisionConsole.css';
  */
 export default function DecisionConsole({
   onSubmit,
+  onFocusChange, // Callback when focus state changes
   isLoading = false,
   disabled = false,
   placeholder = "Describe your dilemma. The Council will deliberate...",
@@ -16,7 +17,13 @@ export default function DecisionConsole({
   const [input, setInput] = useState('');
   const [mode, setMode] = useState('standard');
   const [files, setFiles] = useState([]);
+  const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef(null);
+
+  // Notify parent of focus changes
+  useEffect(() => {
+    onFocusChange?.(isFocused || input.length > 0);
+  }, [isFocused, input, onFocusChange]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -55,6 +62,8 @@ export default function DecisionConsole({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           placeholder={placeholder}
           disabled={isLoading || disabled}
           rows={4}

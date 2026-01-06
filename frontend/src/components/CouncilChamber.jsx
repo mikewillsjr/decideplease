@@ -155,6 +155,7 @@ export default function CouncilChamber({
   const models = getModels();
   const currentRound = rounds[currentRoundIndex] || null;
   const showDossier = uiState === 'dossier' || (uiState === 'loading' && currentRound?.stage1);
+  const showInitialLoading = uiState === 'loading' && !currentRound?.stage1;
 
   return (
     <div className={`council-chamber state-${uiState}`}>
@@ -177,6 +178,28 @@ export default function CouncilChamber({
             isLoading={isLoading}
             disabled={false}
           />
+        )}
+
+        {/* Initial Loading State - shown while waiting for first stage1 results */}
+        {showInitialLoading && (
+          <div className="initial-loading-container">
+            <CouncilArc
+              models={models}
+              modelStatuses={Object.fromEntries(models.map(m => [m, 'thinking']))}
+              isLoading={true}
+              isActive={true}
+            />
+            <div className="initial-loading-message">
+              <div className="loading-spinner"></div>
+              <span className="loading-title">Council Convening</span>
+              <span className="loading-subtitle">
+                {currentRound?.question ? `"${currentRound.question.substring(0, 60)}${currentRound.question.length > 60 ? '...' : ''}"` : 'Gathering the council...'}
+              </span>
+              {currentRound?.loading?.heartbeat?.elapsed && (
+                <span className="loading-elapsed">{currentRound.loading.heartbeat.elapsed}s</span>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Loading/Dossier State - shown when processing or complete */}
