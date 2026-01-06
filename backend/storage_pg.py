@@ -1340,6 +1340,42 @@ async def get_conversation_context(conversation_id: str) -> Optional[Dict[str, A
         return None
 
 
+async def get_last_stage3_response(conversation_id: str) -> Optional[str]:
+    """
+    Get the chairman's decision (stage3 response) from the most recent completed message.
+
+    This is a simple approach for follow-ups: just include the full previous decision
+    so the council can reconsider it with new information.
+
+    Args:
+        conversation_id: Conversation identifier
+
+    Returns:
+        The stage3 response text, or None if no completed decision exists
+    """
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT stage3
+            FROM messages
+            WHERE conversation_id = $1
+              AND role = 'assistant'
+              AND stage3 IS NOT NULL
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            UUID(conversation_id)
+        )
+
+        if row and row["stage3"]:
+            stage3_data = parse_json_field(row["stage3"])
+            # stage3 is stored as {"model": "...", "response": "..."}
+            if isinstance(stage3_data, dict):
+                return stage3_data.get("response", "")
+            return str(stage3_data)
+        return None
+
+
 async def get_conversation_message_count(conversation_id: str) -> int:
     """
     Get the count of user messages in a conversation.

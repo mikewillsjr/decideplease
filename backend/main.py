@@ -77,7 +77,6 @@ from .council import (
     calculate_aggregate_rankings,
     extract_tldr_packet,
     build_context_summary,
-    build_followup_query
 )
 from .config import RUN_MODES, FILE_UPLOAD_CREDIT_COST, MAX_FILES, MAX_FILE_SIZE
 from .admin import router as admin_router, ADMIN_EMAILS
@@ -1128,29 +1127,32 @@ async def _process_council_request(
 
         # Build effective query - check for reruns first, then follow-ups
         effective_content = content
-        conversation_context = None
 
         if is_rerun and context_packet:
             # Rerun case: use the rerun query builder
             from .council import build_rerun_query
             effective_content = build_rerun_query(content, context_packet, rerun_input)
         elif not is_first_message:
-            # Follow-up case: get context from previous message
-            logger.info("followup_fetching_context",
-                conversation_id=conversation_id,
-                is_first_message=is_first_message,
-                context_mode=context_mode)
-            conversation_context = await storage.get_conversation_context(conversation_id)
-            if conversation_context:
-                logger.info("followup_context_found",
+            # Follow-up case: include the previous decision for context
+            previous_decision = await storage.get_last_stage3_response(conversation_id)
+            if previous_decision:
+                logger.info("followup_with_previous_decision",
                     conversation_id=conversation_id,
-                    has_verdict=bool(conversation_context.get('verdict_summary')),
-                    has_original=bool(conversation_context.get('original_question')))
-                effective_content = build_followup_query(content, conversation_context, context_mode)
+                    decision_length=len(previous_decision))
+                effective_content = f"""PREVIOUS DECISION:
+{previous_decision}
+
+---
+
+NEW INPUT FROM USER:
+{content}
+
+---
+
+Respond to the new input above. If it's new information that affects the decision, update your recommendation. If it's a question, answer it based on the previous decision."""
             else:
-                logger.warning("followup_context_missing",
-                    conversation_id=conversation_id,
-                    is_first_message=is_first_message)
+                logger.warning("followup_no_previous_decision",
+                    conversation_id=conversation_id)
 
         # Stage 1: Collect responses (with or without files)
         _active_status[conversation_id] = "stage1"
