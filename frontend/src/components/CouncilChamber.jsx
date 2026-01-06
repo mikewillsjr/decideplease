@@ -4,6 +4,7 @@ import CouncilArc from './CouncilArc';
 import VerdictDossier from './VerdictDossier';
 import ChairpersonRemarks from './ChairpersonRemarks';
 import CaseFileTabs from './CaseFileTabs';
+import WaitingGame from './WaitingGame';
 import { DEFAULT_MODELS } from '../utils/confidenceCalculator';
 import './CouncilChamber.css';
 
@@ -195,10 +196,13 @@ export default function CouncilChamber({
               <span className="loading-subtitle">
                 {currentRound?.question ? `"${currentRound.question.substring(0, 60)}${currentRound.question.length > 60 ? '...' : ''}"` : 'Gathering the council...'}
               </span>
-              {currentRound?.loading?.heartbeat?.elapsed && (
-                <span className="loading-elapsed">{currentRound.loading.heartbeat.elapsed}s</span>
-              )}
             </div>
+
+            {/* Mini-game while waiting */}
+            <WaitingGame
+              mode={currentRound?.metadata?.mode || 'standard'}
+              elapsed={currentRound?.loading?.heartbeat?.elapsed || 0}
+            />
           </div>
         )}
 
