@@ -149,11 +149,11 @@ async def list_conversations(
             user_id
         )
 
-        # Get paginated results
+        # Get paginated results - only count user messages (queries), not assistant responses
         rows = await conn.fetch(
             """
             SELECT c.id, c.title, c.created_at,
-                   COUNT(m.id) as message_count
+                   COUNT(m.id) FILTER (WHERE m.role = 'user') as message_count
             FROM conversations c
             LEFT JOIN messages m ON m.conversation_id = c.id
             WHERE c.user_id = $1

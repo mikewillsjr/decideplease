@@ -1,4 +1,4 @@
-/* VerdictDossier - Clean, minimal design */
+/* VerdictDossier - Clean, minimal design with modal for stages */
 
 .verdict-dossier {
   width: 100%;
@@ -8,7 +8,9 @@
   border-radius: 16px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   overflow: hidden;
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
 }
 
 /* Loading state */
@@ -25,11 +27,12 @@
   }
 }
 
-/* Question section */
+/* Question section - fixed at top */
 .verdict-question {
   padding: 20px 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.02);
+  flex-shrink: 0;
 }
 
 .verdict-question .question-text {
@@ -39,7 +42,13 @@
   line-height: 1.5;
 }
 
-/* Main response area */
+/* Scrollable response area */
+.verdict-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
 .verdict-response {
   padding: 24px;
 }
@@ -48,6 +57,30 @@
   color: var(--text-main, #e5e7eb);
   font-size: 15px;
   line-height: 1.7;
+}
+
+/* Table styles for remark-gfm */
+.verdict-response .markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+.verdict-response .markdown-content th,
+.verdict-response .markdown-content td {
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: left;
+}
+
+.verdict-response .markdown-content th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+}
+
+.verdict-response .markdown-content tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .verdict-response .awaiting {
@@ -83,43 +116,46 @@
   100% { background-position: -200% 0; }
 }
 
-/* Collapsible stages section */
-.verdict-stages {
+/* Actions bar - fixed at bottom of scrollable area */
+.verdict-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 24px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
 }
 
-.verdict-stages .collapsible-stage {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+/* Mode indicator */
+.mode-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 6px;
+  cursor: help;
 }
 
-.verdict-stages .collapsible-stage:last-child {
-  border-bottom: none;
+.mode-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #a5b4fc;
 }
 
-.verdict-stages .collapsible-header {
-  padding: 14px 24px;
-  font-size: 13px;
+.mode-stages {
+  font-size: 11px;
   color: var(--text-muted, #9ca3af);
-}
-
-.verdict-stages .collapsible-header:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.verdict-stages .collapsible-content {
-  padding: 0 24px 16px;
-  max-height: 400px;
-  overflow-y: auto;
+  font-family: monospace;
 }
 
 /* Action buttons */
-.dossier-actions {
+.action-buttons {
   display: flex;
   gap: 8px;
-  padding: 16px 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.1);
 }
 
 .action-btn {
@@ -151,10 +187,145 @@
   opacity: 1;
 }
 
+.deliberation-btn {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+}
+
+.deliberation-btn:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #c7d2fe;
+}
+
+/* Sticky supplement area */
+.verdict-supplement-area {
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-card, #18181b);
+  flex-shrink: 0;
+}
+
+/* Deliberation Modal */
+.deliberation-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.deliberation-modal {
+  background: var(--bg-card, #1f1f23);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 900px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-main, #fff);
+  margin: 0;
+}
+
+.modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text-muted, #9ca3af);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-main, #fff);
+}
+
+/* Modal tabs */
+.modal-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.modal-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-muted, #9ca3af);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-tab:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main, #fff);
+}
+
+.modal-tab.active {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+}
+
+.tab-count {
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.modal-tab.active .tab-count {
+  background: rgba(99, 102, 241, 0.3);
+}
+
+/* Modal content */
+.modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
 /* Mobile responsive */
 @media (max-width: 640px) {
   .verdict-dossier {
     border-radius: 12px;
+    max-height: 85vh;
   }
 
   .verdict-question {
@@ -165,17 +336,44 @@
     padding: 20px;
   }
 
-  .verdict-stages .collapsible-header {
-    padding: 12px 20px;
+  .verdict-actions-bar {
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 20px;
   }
 
-  .verdict-stages .collapsible-content {
-    padding: 0 20px 12px;
-  }
-
-  .dossier-actions {
-    padding: 12px 20px;
+  .mode-indicator {
+    width: 100%;
     justify-content: center;
+  }
+
+  .action-buttons {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .verdict-supplement-area {
+    padding: 12px 20px;
+  }
+
+  .deliberation-modal {
+    max-height: 90vh;
+  }
+
+  .modal-tabs {
+    overflow-x: auto;
+    padding: 12px 16px;
+  }
+
+  .modal-tab {
+    white-space: nowrap;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .modal-content {
+    padding: 16px;
   }
 }
 
@@ -199,18 +397,31 @@
   color: var(--text-main, #374151);
 }
 
-[data-theme="light"] .verdict-stages {
-  background: rgba(0, 0, 0, 0.02);
-  border-color: rgba(0, 0, 0, 0.06);
+[data-theme="light"] .verdict-response .markdown-content th,
+[data-theme="light"] .verdict-response .markdown-content td {
+  border-color: rgba(0, 0, 0, 0.1);
 }
 
-[data-theme="light"] .verdict-stages .collapsible-header:hover {
+[data-theme="light"] .verdict-response .markdown-content th {
   background: rgba(0, 0, 0, 0.03);
 }
 
-[data-theme="light"] .dossier-actions {
+[data-theme="light"] .verdict-response .markdown-content tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="light"] .verdict-actions-bar {
   background: rgba(0, 0, 0, 0.02);
   border-color: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .mode-indicator {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.15);
+}
+
+[data-theme="light"] .mode-label {
+  color: #6366f1;
 }
 
 [data-theme="light"] .action-btn {
@@ -222,6 +433,78 @@
 [data-theme="light"] .action-btn:hover {
   background: rgba(0, 0, 0, 0.06);
   color: var(--text-main, #111827);
+}
+
+[data-theme="light"] .deliberation-btn {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.15);
+  color: #6366f1;
+}
+
+[data-theme="light"] .deliberation-btn:hover {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.25);
+}
+
+[data-theme="light"] .verdict-supplement-area {
+  background: var(--surface, #ffffff);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .deliberation-modal-overlay {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="light"] .deliberation-modal {
+  background: var(--surface, #ffffff);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .modal-header {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .modal-header h3 {
+  color: var(--text-main, #111827);
+}
+
+[data-theme="light"] .modal-close {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: var(--text-muted, #6b7280);
+}
+
+[data-theme="light"] .modal-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-main, #111827);
+}
+
+[data-theme="light"] .modal-tabs {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .modal-tab {
+  color: var(--text-muted, #6b7280);
+}
+
+[data-theme="light"] .modal-tab:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--text-main, #111827);
+}
+
+[data-theme="light"] .modal-tab.active {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.2);
+  color: #6366f1;
+}
+
+[data-theme="light"] .tab-count {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .modal-tab.active .tab-count {
+  background: rgba(99, 102, 241, 0.2);
 }
 
 [data-theme="light"] .skeleton-line {

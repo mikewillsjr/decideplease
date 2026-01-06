@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
 import './Stage2.css';
 
@@ -57,7 +58,7 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
           {currentRanking.model || 'Unknown Model'}
         </div>
         <div className="ranking-content markdown-content">
-          <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
             {deAnonymizeText(currentRanking.ranking || '', labelToModel)}
           </ReactMarkdown>
         </div>

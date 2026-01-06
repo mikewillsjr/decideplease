@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
 import './Stage1_5.css';
 
@@ -59,7 +60,7 @@ export default function Stage1_5({ responses, originalResponses }) {
           <div className="original-response">
             <div className="original-label">Original Response (Stage 1):</div>
             <div className="response-text markdown-content">
-              <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
                 {originalResponse.response || 'No original response available'}
               </ReactMarkdown>
             </div>
@@ -69,7 +70,7 @@ export default function Stage1_5({ responses, originalResponses }) {
         <div className={showComparison ? 'refined-section' : ''}>
           {showComparison && <div className="refined-label">Refined Response (Stage 1.5):</div>}
           <div className="response-text markdown-content">
-            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
               {currentResponse.response || 'No response available'}
             </ReactMarkdown>
           </div>

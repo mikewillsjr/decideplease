@@ -242,11 +242,11 @@ async def get_user_detail(request: Request, user_id: str, admin: dict = Depends(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Get user's conversations
+        # Get user's conversations - only count user messages (queries)
         conversations = await conn.fetch(
             """
             SELECT c.id, c.title, c.created_at,
-                   COUNT(m.id) as message_count
+                   COUNT(m.id) FILTER (WHERE m.role = 'user') as message_count
             FROM conversations c
             LEFT JOIN messages m ON m.conversation_id = c.id
             WHERE c.user_id = $1

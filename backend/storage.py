@@ -93,12 +93,13 @@ def list_conversations() -> List[Dict[str, Any]]:
             path = os.path.join(DATA_DIR, filename)
             with open(path, 'r') as f:
                 data = json.load(f)
-                # Return metadata only
+                # Return metadata only - count only user messages (queries)
+                user_message_count = sum(1 for m in data["messages"] if m.get("role") == "user")
                 conversations.append({
                     "id": data["id"],
                     "created_at": data["created_at"],
                     "title": data.get("title", "New Conversation"),
-                    "message_count": len(data["messages"])
+                    "message_count": user_message_count
                 })
 
     # Sort by creation time, newest first

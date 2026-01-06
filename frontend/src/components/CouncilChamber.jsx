@@ -219,7 +219,7 @@ export default function CouncilChamber({
               isMini={true}
             />
 
-            {/* Verdict Dossier */}
+            {/* Verdict Dossier with Supplement inside */}
             <VerdictDossier
               question={currentRound?.question}
               stage1={currentRound?.stage1}
@@ -232,7 +232,16 @@ export default function CouncilChamber({
                 stage1_5Skipped: currentRound?.stage1_5Skipped,
               }}
               isLoading={uiState === 'loading' && !currentRound?.stage3}
-            />
+            >
+              {/* Supplement (ChairpersonRemarks) as children - sticky inside dossier */}
+              {uiState === 'dossier' && currentRound?.stage3 && (
+                <ChairpersonRemarks
+                  onSubmit={handleFollowUp}
+                  isLoading={isLoading}
+                  disabled={false}
+                />
+              )}
+            </VerdictDossier>
 
             {/* Loading indicator for current stage */}
             {uiState === 'loading' && currentRound?.loading && (
@@ -248,15 +257,6 @@ export default function CouncilChamber({
                   <span className="elapsed">({currentRound.loading.heartbeat.elapsed}s)</span>
                 )}
               </div>
-            )}
-
-            {/* Chairperson Remarks - Follow-up input bar */}
-            {uiState === 'dossier' && currentRound?.stage3 && (
-              <ChairpersonRemarks
-                onSubmit={handleFollowUp}
-                isLoading={isLoading}
-                disabled={false}
-              />
             )}
           </div>
         )}
