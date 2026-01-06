@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeSanitize from 'rehype-sanitize';
 import Stage1 from './Stage1';
 import Stage1_5 from './Stage1_5';
 import Stage2 from './Stage2';
@@ -147,7 +148,7 @@ export default function VerdictDossier({
             </div>
           ) : stage3Content ? (
             <div className="markdown-content">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{stage3Content}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{stage3Content}</ReactMarkdown>
             </div>
           ) : (
             <p className="awaiting">Awaiting council verdict...</p>

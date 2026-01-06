@@ -46,6 +46,7 @@ from .auth_custom import (
     create_access_token,
     create_refresh_token,
     verify_token,
+    verify_token_async,
     revoke_token,
     RegisterRequest,
     LoginRequest,
@@ -606,8 +607,8 @@ async def refresh_token(request: Request, refresh_request: Optional[RefreshReque
     if not token:
         raise HTTPException(status_code=401, detail="Refresh token required")
 
-    # Verify refresh token
-    payload = verify_token(token, token_type="refresh")
+    # Verify refresh token (use async version to check revocation status)
+    payload = await verify_token_async(token, token_type="refresh")
 
     # Get user
     user = await storage.get_user_by_id(payload["sub"])
@@ -1171,7 +1172,7 @@ async def send_message(
         await storage.update_conversation_title(conversation_id, title)
 
     # Run the 3-stage council process
-    stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
+    stage1_results, stage1_5_results, stage2_results, stage3_result, metadata = await run_full_council(
         msg_request.content
     )
 
@@ -1186,6 +1187,7 @@ async def send_message(
     # Return the complete response with metadata
     return {
         "stage1": stage1_results,
+        "stage1_5": stage1_5_results,
         "stage2": stage2_results,
         "stage3": stage3_result,
         "metadata": metadata
@@ -1480,6 +1482,19 @@ Respond to the new input above. If it's new information that affects the decisio
         })
 
     except Exception as e:
+        # Refund credits on error - user shouldn't pay for failed requests
+        try:
+            credit_cost = mode_config['credit_cost']
+            await storage.refund_credits(user_id, credit_cost)
+            logger.warning("credits_refunded_on_error",
+                user_id=user_id,
+                credit_cost=credit_cost,
+                error=str(e))
+        except Exception as refund_error:
+            logger.error("credits_refund_failed",
+                user_id=user_id,
+                original_error=str(e),
+                refund_error=str(refund_error))
         await event_queue.put({'type': 'error', 'message': str(e)})
     finally:
         # Signal completion

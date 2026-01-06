@@ -60,10 +60,22 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, password_hash: str) -> bool:
     """Verify a password against its hash."""
+    # Guard against None/empty hash (indicates user has no password set)
+    if not password_hash:
+        return False
     try:
         return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
-    except Exception:
+    except (ValueError, AttributeError) as e:
+        # ValueError: invalid hash format, AttributeError: encoding issues
+        # These are expected failures that mean the password doesn't match
+        print(f"[AUTH] Password verification format error: {type(e).__name__}")
         return False
+    except Exception as e:
+        # Unexpected errors should be logged but not crash the app
+        # This could indicate bcrypt library issues or memory problems
+        print(f"[AUTH] Unexpected password verification error: {type(e).__name__}: {e}")
+        # Re-raise unexpected errors so they're visible in monitoring
+        raise
 
 
 # ============== JWT Tokens ==============
