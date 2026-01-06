@@ -1,51 +1,112 @@
-import DossierHeader from './DossierHeader';
-import DossierBody from './DossierBody';
-import DossierFooter from './DossierFooter';
+import ReactMarkdown from 'react-markdown';
+import CollapsibleStage from './CollapsibleStage';
+import Stage1 from './Stage1';
+import Stage1_5 from './Stage1_5';
+import Stage2 from './Stage2';
 import './VerdictDossier.css';
 
 /**
- * Verdict Dossier - The legal briefing-style output document.
- * Contains header, body (markdown), and footer (voting record).
+ * Verdict Dossier - Shows the final answer with collapsible access to all stages.
+ * Simplified: no chrome/labels, just the raw response with stage access.
  */
 export default function VerdictDossier({
   question,
   stage1,
+  stage1_5,
+  stage2,
   stage3,
   metadata = {},
   isLoading = false,
-  isPrevious = false, // Stacked behind current dossier
 }) {
   const {
     aggregate_rankings: aggregateRankings,
+    label_to_model: labelToModel,
     stage2Skipped,
+    stage1_5Skipped,
     mode,
   } = metadata;
 
-  // Get chairman model from stage3 or metadata
-  const chairmanModel = stage3?.model || 'google/gemini-3-pro-preview';
-  const modelCount = stage1?.length || 5;
   const stage3Content = stage3?.response || '';
+  const hasStage1 = stage1 && stage1.length > 0;
+  const hasStage1_5 = stage1_5 && stage1_5.length > 0 && !stage1_5Skipped;
+  const hasStage2 = stage2 && stage2.length > 0 && !stage2Skipped;
 
   return (
-    <div className={`verdict-dossier ${isLoading ? 'loading' : ''} ${isPrevious ? 'previous' : 'current'}`}>
-      <DossierHeader
-        question={question}
-        chairmanModel={chairmanModel}
-        modelCount={modelCount}
-        aggregateRankings={aggregateRankings}
-      />
+    <div className={`verdict-dossier ${isLoading ? 'loading' : ''}`}>
+      {/* Question at the top */}
+      {question && (
+        <div className="verdict-question">
+          <div className="question-text">{question}</div>
+        </div>
+      )}
 
-      <DossierBody
-        content={stage3Content}
-        isLoading={isLoading && !stage3Content}
-      />
+      {/* Main response - raw markdown, no chrome */}
+      <div className="verdict-response">
+        {isLoading ? (
+          <div className="loading-skeleton">
+            <div className="skeleton-line wide" />
+            <div className="skeleton-line medium" />
+            <div className="skeleton-line wide" />
+            <div className="skeleton-line short" />
+          </div>
+        ) : stage3Content ? (
+          <div className="markdown-content">
+            <ReactMarkdown>{stage3Content}</ReactMarkdown>
+          </div>
+        ) : (
+          <p className="awaiting">Awaiting council verdict...</p>
+        )}
+      </div>
 
-      <DossierFooter
-        aggregateRankings={aggregateRankings}
-        stage2Skipped={stage2Skipped || mode === 'quick'}
-      />
+      {/* Collapsible stages - only show when we have data */}
+      {!isLoading && stage3Content && (
+        <div className="verdict-stages">
+          {/* Stage 1: Individual Responses */}
+          {hasStage1 && (
+            <CollapsibleStage
+              title="Stage 1: Individual Responses"
+              count={stage1.length}
+              countLabel="models"
+              defaultExpanded={false}
+              className="stage-1-section"
+            >
+              <Stage1 stage1={stage1} />
+            </CollapsibleStage>
+          )}
 
-      {/* Actions (Copy, PDF) - positioned at bottom right */}
+          {/* Stage 1.5: Cross-Review (Extra Care mode only) */}
+          {hasStage1_5 && (
+            <CollapsibleStage
+              title="Stage 1.5: Cross-Review"
+              count={stage1_5.length}
+              countLabel="refined"
+              defaultExpanded={false}
+              className="stage-1-5-section"
+            >
+              <Stage1_5 stage1_5={stage1_5} />
+            </CollapsibleStage>
+          )}
+
+          {/* Stage 2: Peer Rankings */}
+          {hasStage2 && (
+            <CollapsibleStage
+              title="Stage 2: Peer Rankings"
+              count={stage2.length}
+              countLabel="evaluations"
+              defaultExpanded={false}
+              className="stage-2-section"
+            >
+              <Stage2
+                stage2={stage2}
+                labelToModel={labelToModel}
+                aggregateRankings={aggregateRankings}
+              />
+            </CollapsibleStage>
+          )}
+        </div>
+      )}
+
+      {/* Actions (Copy, PDF) */}
       {stage3Content && !isLoading && (
         <div className="dossier-actions">
           <button
@@ -83,15 +144,13 @@ export default function VerdictDossier({
 function handleCopy(question, content) {
   const text = `QUESTION:\n${question}\n\nDECISION:\n${content}`;
   navigator.clipboard.writeText(text).then(() => {
-    // Could show a toast notification here
     console.log('Copied to clipboard');
   });
 }
 
-// PDF handler (basic implementation)
+// PDF handler
 async function handlePDF(question, content) {
   try {
-    // Dynamic import jsPDF
     const { default: jsPDF } = await import('jspdf');
     const doc = new jsPDF();
 

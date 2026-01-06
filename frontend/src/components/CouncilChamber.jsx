@@ -155,8 +155,10 @@ export default function CouncilChamber({
 
   const models = getModels();
   const currentRound = rounds[currentRoundIndex] || null;
-  const showDossier = uiState === 'dossier' || (uiState === 'loading' && currentRound?.stage1);
-  const showInitialLoading = uiState === 'loading' && !currentRound?.stage1;
+  // Only show dossier when Stage 3 is complete - don't show it prematurely
+  const showDossier = uiState === 'dossier' && currentRound?.stage3;
+  // Show loading state until Stage 3 is complete
+  const showInitialLoading = uiState === 'loading' || (currentRound && !currentRound?.stage3);
 
   return (
     <div className={`council-chamber state-${uiState}`}>
@@ -221,10 +223,13 @@ export default function CouncilChamber({
             <VerdictDossier
               question={currentRound?.question}
               stage1={currentRound?.stage1}
+              stage1_5={currentRound?.stage1_5}
+              stage2={currentRound?.stage2}
               stage3={currentRound?.stage3}
               metadata={{
                 ...currentRound?.metadata,
                 stage2Skipped: currentRound?.stage2Skipped,
+                stage1_5Skipped: currentRound?.stage1_5Skipped,
               }}
               isLoading={uiState === 'loading' && !currentRound?.stage3}
             />

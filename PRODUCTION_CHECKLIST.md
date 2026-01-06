@@ -18,29 +18,37 @@ This document outlines everything needed to take DecidePlease live with proper b
 
 ## 1. Stripe Configuration
 
-### 1.1 Create Separate Stripe Account (CRITICAL for Branding)
-- [ ] Create a **new Stripe account** specifically for DecidePlease
-  - Go to https://dashboard.stripe.com/register
-  - Use a business email associated with DecidePlease
-  - **Why**: This ensures customers ONLY see "DecidePlease" branding, not parent company or other apps
+### 1.1 Shared Stripe Account Setup
 
-### 1.2 Business Profile Setup
+DecidePlease uses a **shared Stripe account** (Postalzap LLC) with other apps. This approach provides:
+- ✅ Per-transaction statement descriptors (card statements show "DECIDEPLEASE")
+- ✅ Custom checkout UI (your branding, not Stripe-hosted)
+- ✅ Custom emails via Resend (DecidePlease branding)
+- ✅ Metadata tracking to filter DecidePlease transactions
+- ⚠️ Apple Pay/Google Pay sheets show account DBA (shared across apps)
+- ⚠️ Dispute communications use legal business name
+
+**Note**: You can migrate to a separate Stripe account later if full branding isolation becomes necessary.
+
+### 1.2 Business Profile Setup (Account-Level - Affects All Apps)
 - [ ] Go to **Settings → Business → Public details**
-  - Business name: `DecidePlease`
-  - Statement descriptor: `DECIDEPLEASE` (max 22 chars, appears on card statements)
-  - Shortened descriptor: `DECIDEPLEASE`
-  - Support phone: Your support number
-  - Support email: `support@decideplease.com`
+  - **Legal business name**: Keep as `Postalzap LLC` (required for compliance)
+  - **Doing business as (DBA)**: Set to `DecidePlease` (shown on Apple Pay/Google Pay)
+  - Statement descriptor: `DECIDEPLEASE` (max 22 chars) - *Note: DecidePlease overrides this per-transaction*
+  - Support email: Your shared support email
 
-- [ ] Go to **Settings → Business → Branding**
-  - Upload DecidePlease logo (square, 128x128px minimum)
-  - Set brand color (your primary purple: `#5d5dff`)
-  - Set accent color
-  - **This branding appears on all Stripe-hosted pages and emails**
+- [ ] **DO NOT change** Settings → Business → Branding (affects all apps on this account)
 
-### 1.3 Create Product & Price
+### 1.3 Disable Stripe Automated Emails (IMPORTANT)
+Since account-level email branding would show shared branding:
+- [ ] Go to **Settings → Emails → Customer emails**
+- [ ] **Turn OFF** "Successful payments" receipts
+- [ ] **Turn OFF** "Refunds" notifications
+- DecidePlease sends its own branded emails via Resend
+
+### 1.4 Create Product & Price
 - [ ] Go to **Products → Add product**
-  - Name: `20 Credits`
+  - Name: `DecidePlease - 20 Credits` (prefix helps identify in shared account)
   - Description: `20 AI Council deliberation credits for DecidePlease`
   - Image: Upload a branded image
   - **Add Price**:
@@ -48,7 +56,7 @@ This document outlines everything needed to take DecidePlease live with proper b
     - Type: One-time
     - Copy the `price_xxxxx` ID → You'll need this for `STRIPE_PRICE_ID`
 
-### 1.4 Enable Apple Pay
+### 1.5 Enable Apple Pay
 - [ ] Go to **Settings → Payments → Payment methods**
 - [ ] Find **Apple Pay** and click **Enable**
 - [ ] **Register your domain**:
@@ -59,24 +67,24 @@ This document outlines everything needed to take DecidePlease live with proper b
   - Stripe provides instructions for this
 - [ ] Complete Apple Pay verification (usually instant)
 
-### 1.5 Enable Google Pay
+### 1.6 Enable Google Pay
 - [ ] Go to **Settings → Payments → Payment methods**
 - [ ] Find **Google Pay** and click **Enable**
 - [ ] No domain verification needed (automatic)
 
-### 1.6 Enable Dynamic Payment Methods
+### 1.7 Enable Dynamic Payment Methods
 - [ ] Go to **Settings → Payments → Payment methods**
 - [ ] Enable **Dynamic payment methods** toggle
   - This allows Stripe to automatically show the best payment options based on customer's device/region
 
-### 1.7 Get Live API Keys
+### 1.8 Get Live API Keys
 - [ ] Toggle to **Live mode** (top right of Stripe Dashboard)
 - [ ] Go to **Developers → API keys**
 - [ ] Copy these values:
   - `Publishable key` → `pk_live_xxxxx` (for frontend)
   - `Secret key` → `sk_live_xxxxx` (for backend)
 
-### 1.8 Configure Webhook
+### 1.9 Configure Webhook
 - [ ] Go to **Developers → Webhooks**
 - [ ] Click **Add endpoint**
   - URL: `https://decideplease-api.onrender.com/api/payments/webhook`
@@ -87,11 +95,42 @@ This document outlines everything needed to take DecidePlease live with proper b
     - `charge.refunded`
 - [ ] Copy **Signing secret** → `whsec_xxxxx` (for `STRIPE_WEBHOOK_SECRET`)
 
-### 1.9 Configure Stripe Emails (Optional Override)
-By default, Stripe sends its own receipts. To use only DecidePlease-branded emails:
-- [ ] Go to **Settings → Emails**
-- [ ] Disable **Successful payments** and **Refunds** if you want to use only custom emails from Resend
-- [ ] Or keep enabled for backup (they'll use your branding from 1.2)
+### 1.10 Tracking DecidePlease Payments (Shared Account)
+
+Since multiple apps share this Stripe account, DecidePlease uses **metadata** to identify its transactions:
+
+**Metadata included on every PaymentIntent/CheckoutSession:**
+```json
+{
+  "app": "decideplease",
+  "user_id": "<user_id>",
+  "credits": "20"
+}
+```
+
+**Filter in Stripe Dashboard:**
+1. Go to **Payments** (or **Customers**)
+2. Click **+ Add filter**
+3. Select **Metadata**
+4. Enter: `app` = `decideplease`
+
+**Filter via API:**
+```python
+# List all DecidePlease payments
+stripe.PaymentIntent.list(
+    limit=100,
+    metadata={"app": "decideplease"}
+)
+
+# Search payments (more flexible)
+stripe.PaymentIntent.search(
+    query="metadata['app']:'decideplease'"
+)
+```
+
+**Export for accounting:**
+- Use Dashboard filters + Export to CSV
+- Or use the API search to generate reports
 
 ---
 
@@ -297,11 +336,13 @@ The current implementation doesn't support saved cards. To add this:
 - [ ] Test in Stripe test mode initially
 
 ### 8.4 Branding Verification
-- [ ] Check Stripe Checkout page shows DecidePlease branding
+- [ ] Check your custom checkout page shows DecidePlease branding (not Stripe-hosted)
 - [ ] Check card statement will show "DECIDEPLEASE"
-- [ ] Check emails come from DecidePlease
+- [ ] Check emails come from DecidePlease (via Resend, not Stripe)
 - [ ] Check OAuth consent shows DecidePlease only
-- [ ] **Nowhere should parent company name appear**
+- [ ] **Expected exceptions** (shared account limitations):
+  - Apple Pay/Google Pay payment sheets show account DBA
+  - Dispute communications use legal business name
 
 ### 8.5 Go Live Checklist
 - [ ] All tests passing (`npx playwright test`)
@@ -344,14 +385,20 @@ The current implementation doesn't support saved cards. To add this:
 
 ## Notes
 
-1. **Branding Isolation**: The most important thing is that you use a separate Stripe account for DecidePlease. This ensures:
-   - Customers see only "DecidePlease" in emails, receipts, and statements
-   - No reference to parent company or other apps
-   - Complete separation for accounting/reporting
+1. **Shared Stripe Account Strategy**: DecidePlease uses a shared Stripe account (Postalzap LLC) with per-transaction branding:
+   - ✅ Card statements show "DECIDEPLEASE" via per-transaction `statement_descriptor`
+   - ✅ Emails branded via Resend (Stripe auto-emails disabled)
+   - ✅ Custom checkout UI (no Stripe-hosted pages)
+   - ✅ Metadata filtering: `app: "decideplease"` on all transactions
+   - ⚠️ Apple Pay/Google Pay sheets show account DBA
+   - ⚠️ Disputes use legal business name
+   - **Future option**: Migrate to separate Stripe account if full branding isolation needed
 
-2. **Saved Cards**: This feature needs to be built. It's a moderate effort (~2-4 hours of development) but significantly improves UX for repeat customers.
+2. **Saved Cards**: Already implemented with auto-fallback logic.
 
-3. **Apple Pay**: Requires domain verification. Cannot be fully tested until the domain is live and verified with Stripe.
+3. **Apple Pay**: Requires domain verification. Cannot be fully tested until the domain is live and verified with Stripe. Note: Shows account DBA, not per-transaction name.
 
-4. **Google Pay**: Works automatically once enabled in Stripe Dashboard. No domain verification needed.
+4. **Google Pay**: Works automatically once enabled in Stripe Dashboard. No domain verification needed. Note: Shows account DBA, not per-transaction name.
+
+5. **Tracking DecidePlease Payments**: Filter in Stripe Dashboard using metadata: `app = decideplease`. All PaymentIntents, CheckoutSessions, and Customers include this metadata.
 

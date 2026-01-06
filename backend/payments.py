@@ -56,6 +56,7 @@ async def create_checkout_session(user_id: str, user_email: str, success_url: st
             cancel_url=cancel_url,
             customer_email=user_email,
             metadata={
+                "app": "decideplease",
                 "user_id": user_id,
                 "credits": str(CREDITS_PER_PURCHASE),
             },
@@ -134,7 +135,7 @@ async def create_payment_intent(user_id: str, user_email: str) -> dict:
         else:
             customer = stripe.Customer.create(
                 email=user_email,
-                metadata={"user_id": user_id}
+                metadata={"app": "decideplease", "user_id": user_id}
             )
 
         # Create PaymentIntent with automatic payment methods
@@ -146,6 +147,7 @@ async def create_payment_intent(user_id: str, user_email: str) -> dict:
             # Don't specify payment_method_types - let Stripe choose based on Dashboard
             automatic_payment_methods={"enabled": True},
             metadata={
+                "app": "decideplease",
                 "user_id": user_id,
                 "credits": str(CREDITS_PER_PURCHASE),
             },
@@ -251,7 +253,7 @@ async def get_or_create_customer(user_id: str, user_email: str, existing_custome
     try:
         customer = stripe.Customer.create(
             email=user_email,
-            metadata={"user_id": user_id}
+            metadata={"app": "decideplease", "user_id": user_id}
         )
         return customer.id
     except stripe.error.StripeError as e:
@@ -457,6 +459,7 @@ async def charge_with_saved_cards(
                 off_session=True,
                 confirm=True,
                 metadata={
+                    "app": "decideplease",
                     "user_id": user_id,
                     "credits": str(CREDITS_PER_PURCHASE),
                 },
