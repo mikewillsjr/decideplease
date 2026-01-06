@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import UnifiedHeader from '../components/UnifiedHeader';
@@ -26,6 +26,9 @@ function CouncilPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [userRole, setUserRole] = useState('user');
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+
+  // Ref to track polling cleanup function
+  const pollingCleanupRef = useRef(null);
 
   // Interface mode: 'chamber' (new) or 'classic' (old ChatInterface)
   const [interfaceMode, setInterfaceMode] = useState(() => {
@@ -162,6 +165,7 @@ function CouncilPage() {
         if (!status.processing) {
           // Processing complete, reload conversation
           clearInterval(pollInterval);
+          pollingCleanupRef.current = null;
           setIsLoading(false);
           const conv = await api.getConversation(conversationId);
           if (conv && !conv.messages) {
@@ -192,6 +196,7 @@ function CouncilPage() {
       } catch (err) {
         console.error('Polling error:', err);
         clearInterval(pollInterval);
+        pollingCleanupRef.current = null;
         setIsLoading(false);
       }
     }, 2000);
@@ -202,6 +207,13 @@ function CouncilPage() {
 
   const loadConversation = useCallback(async (id) => {
     setLoadError(false);
+
+    // Clear any existing polling before loading new conversation
+    if (pollingCleanupRef.current) {
+      pollingCleanupRef.current();
+      pollingCleanupRef.current = null;
+    }
+
     try {
       const conv = await api.getConversation(id);
       console.log('[CouncilPage] Loaded conversation:', conv);
@@ -216,8 +228,8 @@ function CouncilPage() {
         const status = await api.getConversationStatus(id);
         if (status.processing) {
           console.log('[CouncilPage] Conversation still processing, stage:', status.current_stage);
-          // Start polling for updates
-          startPollingForUpdates(id, status.current_stage);
+          // Start polling for updates and store cleanup function
+          pollingCleanupRef.current = startPollingForUpdates(id, status.current_stage);
         }
       } catch (statusError) {
         console.error('Failed to check conversation status:', statusError);
@@ -237,6 +249,16 @@ function CouncilPage() {
     }
   }, [currentConversationId, isAuthenticated, loadConversation]);
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingCleanupRef.current) {
+        pollingCleanupRef.current();
+        pollingCleanupRef.current = null;
+      }
+    };
+  }, []);
+
   const handleRetryLoad = () => {
     if (currentConversationId) {
       loadConversation(currentConversationId);
@@ -253,9 +275,9 @@ function CouncilPage() {
   const handleNewConversation = async () => {
     try {
       const newConv = await api.createConversation();
-      setConversations([
+      setConversations((prev) => [
         { id: newConv.id, created_at: newConv.created_at, title: 'New Conversation', message_count: 0 },
-        ...conversations,
+        ...prev,
       ]);
       setCurrentConversationId(newConv.id);
     } catch (error) {
@@ -503,9 +525,9 @@ function CouncilPage() {
       try {
         const newConv = await api.createConversation();
         conversationId = newConv.id;
-        setConversations([
+        setConversations((prev) => [
           { id: newConv.id, created_at: newConv.created_at, title: 'New Decision', message_count: 0 },
-          ...conversations,
+          ...prev,
         ]);
         setCurrentConversationId(newConv.id);
         setCurrentConversation({ id: newConv.id, messages: [], title: 'New Decision' });

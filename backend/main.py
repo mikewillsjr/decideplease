@@ -133,6 +133,14 @@ def validate_environment():
             "Generate a secure secret with: openssl rand -hex 32"
         )
 
+    # CRITICAL: Check for dangerous DEVELOPMENT_MODE in production
+    if is_production and os.getenv("DEVELOPMENT_MODE") == "true":
+        raise RuntimeError(
+            "CRITICAL SECURITY ERROR: DEVELOPMENT_MODE=true is enabled in production! "
+            "This grants all authenticated users superadmin access. "
+            "Remove DEVELOPMENT_MODE from your environment variables immediately."
+        )
+
     # Warn about missing vars in development
     if missing_required:
         print(f"[WARNING] Missing required env vars (OK in dev): {', '.join(missing_required)}")
@@ -881,8 +889,8 @@ async def forgot_password(request: Request, forgot_request: ForgotPasswordReques
             algorithm="HS256"
         )
 
-        # Send reset email
-        await send_password_reset_email(email, reset_token)
+        # Send reset email (fire-and-forget to prevent timing enumeration)
+        asyncio.create_task(send_password_reset_email(email, reset_token))
 
     # Always return success to prevent email enumeration
     return {"message": "If an account exists with this email, a password reset link has been sent."}
