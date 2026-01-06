@@ -4,7 +4,7 @@ import rehypeSanitize from 'rehype-sanitize';
 import { jsPDF } from 'jspdf';
 import './Stage3.css';
 
-export default function Stage3({ finalResponse, originalQuestion, messageId, onRespond, isLoading }) {
+export default function Stage3({ finalResponse, originalQuestion, messageId, onRespond, isLoading, isLatestDecision = true }) {
   const [copied, setCopied] = useState(false);
 
   // Safety check for invalid data
@@ -106,13 +106,16 @@ export default function Stage3({ finalResponse, originalQuestion, messageId, onR
 
         {!isLoading && (
           <div className="stage3-actions">
-            <button
-              className="action-btn respond-btn"
-              onClick={handleRespond}
-              title="Add information or ask a follow-up about this decision"
-            >
-              Respond
-            </button>
+            {/* Only show Respond button on previous decisions, not the latest one */}
+            {!isLatestDecision && (
+              <button
+                className="action-btn respond-btn"
+                onClick={handleRespond}
+                title="Add information or ask a follow-up about this specific decision"
+              >
+                Respond to this decision
+              </button>
+            )}
             <button
               className="action-btn copy-btn"
               onClick={handleCopy}

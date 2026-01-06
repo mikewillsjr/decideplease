@@ -1,13 +1,13 @@
 .stage3 {
-  background: #f0fff0;
-  border-color: #c8e6c8;
+  background: transparent;
+  border: none;
 }
 
 .final-response {
-  background: #ffffff;
-  padding: 20px;
-  border-radius: 6px;
-  border: 1px solid #c8e6c8;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  border: none;
 }
 
 .chairman-label {

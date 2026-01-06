@@ -4,9 +4,9 @@
   background: var(--bg-panel);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  padding: 20px;
   margin: 16px 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 }
 
 .decision-card.loading {
@@ -14,7 +14,66 @@
   box-shadow: 0 0 0 1px var(--primary), 0 2px 8px rgba(93, 93, 255, 0.15);
 }
 
-/* Question section at top of card */
+/* Card header - always visible, clickable to expand/collapse */
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 16px 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s;
+}
+
+.card-header:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.card-header:disabled {
+  cursor: default;
+}
+
+.card-chevron {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.card-header-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-header-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+}
+
+.card-header-preview {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Card body - shown when expanded */
+.card-body {
+  padding: 0 20px 20px;
+}
+
+/* Question section */
 .decision-question {
   margin-bottom: 16px;
   padding-bottom: 16px;
@@ -51,10 +110,4 @@
   background: transparent;
   border: none;
   padding: 0;
-}
-
-/* Adjust Stage3 final-response styling inside card */
-.decision-card .final-response {
-  background: rgba(46, 139, 87, 0.1);
-  border: 1px solid rgba(46, 139, 87, 0.2);
 }

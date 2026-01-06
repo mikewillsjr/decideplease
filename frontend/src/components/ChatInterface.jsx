@@ -214,6 +214,12 @@ export default function ChatInterface({
               .find(m => m.role === 'user');
             const question = precedingUserMsg?.content || '';
 
+            // Check if this is the latest assistant message (for Respond button logic)
+            const lastAssistantIndex = messages.map((m, i) => m.role === 'assistant' ? i : -1)
+              .filter(i => i !== -1)
+              .pop();
+            const isLatestDecision = index === lastAssistantIndex;
+
             const isCardLoading = msg.loading?.stage1 || msg.loading?.stage1_5 ||
                                   msg.loading?.stage2 || msg.loading?.stage3 ||
                                   msg.loading?.preparing;
@@ -302,6 +308,7 @@ export default function ChatInterface({
                     messageId={msg.id}
                     onRespond={onRespondToMessage}
                     isLoading={isLoading}
+                    isLatestDecision={isLatestDecision}
                   />
                 )}
 
