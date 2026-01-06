@@ -647,15 +647,28 @@
   border-color: rgba(0, 0, 0, 0.1);
 }
 
-/* Agent Nodes */
+/* Agent Nodes - positioning only */
 .agent-node {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 32px;
-  height: 32px;
-  margin-top: -16px;
-  margin-left: -16px;
+  width: 48px;
+  height: 48px;
+  margin-top: -24px;
+  margin-left: -24px;
+}
+
+/* Node positions - 72deg apart (no animation here) */
+.agent-node.pos-1 { transform: rotate(0deg) translate(75px) rotate(0deg); }
+.agent-node.pos-2 { transform: rotate(72deg) translate(75px) rotate(-72deg); }
+.agent-node.pos-3 { transform: rotate(144deg) translate(75px) rotate(-144deg); }
+.agent-node.pos-4 { transform: rotate(216deg) translate(75px) rotate(-216deg); }
+.agent-node.pos-5 { transform: rotate(288deg) translate(75px) rotate(-288deg); }
+
+/* Agent Inner - styling and counter-rotation animation */
+.agent-inner {
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -668,43 +681,45 @@
   height: 16px;
 }
 
-/* Node positions - 72deg apart */
-.agent-node.pos-1 { transform: rotate(0deg) translate(90px) rotate(0deg); }
-.agent-node.pos-2 { transform: rotate(72deg) translate(90px) rotate(-72deg); }
-.agent-node.pos-3 { transform: rotate(144deg) translate(90px) rotate(-144deg); }
-.agent-node.pos-4 { transform: rotate(216deg) translate(90px) rotate(-216deg); }
-.agent-node.pos-5 { transform: rotate(288deg) translate(90px) rotate(-288deg); }
+/* Agent label text */
+.agent-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: inherit;
+}
 
 /* Model-specific colors */
-.agent-node.chatgpt {
+.agent-inner.chatgpt {
   background: rgba(16, 185, 129, 0.1);
   border: 1px solid rgba(16, 185, 129, 0.3);
   color: var(--accent-emerald);
   box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
 }
 
-.agent-node.claude {
+.agent-inner.claude {
   background: rgba(249, 115, 22, 0.1);
   border: 1px solid rgba(249, 115, 22, 0.3);
   color: var(--accent-orange);
   box-shadow: 0 0 15px rgba(249, 115, 22, 0.3);
 }
 
-.agent-node.gemini {
+.agent-inner.gemini {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
   color: var(--accent-blue);
   box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
 }
 
-.agent-node.grok {
+.agent-inner.grok {
   background: rgba(161, 161, 170, 0.1);
   border: 1px solid rgba(161, 161, 170, 0.3);
   color: #a1a1aa;
   box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
 }
 
-.agent-node.deepseek {
+.agent-inner.deepseek {
   background: rgba(168, 85, 247, 0.1);
   border: 1px solid rgba(168, 85, 247, 0.3);
   color: var(--accent-purple);
@@ -1626,24 +1641,35 @@
   }
 
   .agent-orbit {
-    width: 140px;
-    height: 140px;
+    width: 160px;
+    height: 160px;
   }
 
-  .agent-node.pos-1 { transform: rotate(0deg) translate(70px) rotate(0deg); }
-  .agent-node.pos-2 { transform: rotate(72deg) translate(70px) rotate(-72deg); }
-  .agent-node.pos-3 { transform: rotate(144deg) translate(70px) rotate(-144deg); }
-  .agent-node.pos-4 { transform: rotate(216deg) translate(70px) rotate(-216deg); }
-  .agent-node.pos-5 { transform: rotate(288deg) translate(70px) rotate(-288deg); }
+  .agent-node {
+    width: 40px;
+    height: 40px;
+    margin-top: -20px;
+    margin-left: -20px;
+  }
+
+  .agent-label {
+    font-size: 7px;
+  }
+
+  .agent-node.pos-1 { transform: rotate(0deg) translate(65px) rotate(0deg); }
+  .agent-node.pos-2 { transform: rotate(72deg) translate(65px) rotate(-72deg); }
+  .agent-node.pos-3 { transform: rotate(144deg) translate(65px) rotate(-144deg); }
+  .agent-node.pos-4 { transform: rotate(216deg) translate(65px) rotate(-216deg); }
+  .agent-node.pos-5 { transform: rotate(288deg) translate(65px) rotate(-288deg); }
 
   .orbit-ring.ring-1 {
-    width: 140px;
-    height: 140px;
+    width: 160px;
+    height: 160px;
   }
 
   .orbit-ring.ring-2 {
-    width: 90px;
-    height: 90px;
+    width: 110px;
+    height: 110px;
   }
 
   .consensus-center {

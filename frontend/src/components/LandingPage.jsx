@@ -211,24 +211,34 @@ export default function LandingPage() {
                     <div className="orbit-container">
                       <div className="agent-orbit">
                         {/* Agent 1: ChatGPT */}
-                        <div className="agent-node pos-1 chatgpt">
-                          <GPTIcon />
+                        <div className="agent-node pos-1">
+                          <div className="agent-inner chatgpt">
+                            <span className="agent-label">GPT</span>
+                          </div>
                         </div>
                         {/* Agent 2: Claude */}
-                        <div className="agent-node pos-2 claude">
-                          <ClaudeIcon />
+                        <div className="agent-node pos-2">
+                          <div className="agent-inner claude">
+                            <span className="agent-label">Claude</span>
+                          </div>
                         </div>
                         {/* Agent 3: Gemini */}
-                        <div className="agent-node pos-3 gemini">
-                          <GeminiIcon />
+                        <div className="agent-node pos-3">
+                          <div className="agent-inner gemini">
+                            <span className="agent-label">Gemini</span>
+                          </div>
                         </div>
                         {/* Agent 4: Grok */}
-                        <div className="agent-node pos-4 grok">
-                          <GrokIcon />
+                        <div className="agent-node pos-4">
+                          <div className="agent-inner grok">
+                            <span className="agent-label">Grok</span>
+                          </div>
                         </div>
                         {/* Agent 5: DeepSeek */}
-                        <div className="agent-node pos-5 deepseek">
-                          <DeepSeekIcon />
+                        <div className="agent-node pos-5">
+                          <div className="agent-inner deepseek">
+                            <span className="agent-label">Deep</span>
+                          </div>
                         </div>
                       </div>
 
