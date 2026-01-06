@@ -81,6 +81,12 @@ async def init_database():
         except Exception:
             pass  # Column may already exist
 
+        # Add Stripe customer ID for saved payment methods
+        try:
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT")
+        except Exception:
+            pass  # Column may already exist
+
         # Create conversations table
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS conversations (

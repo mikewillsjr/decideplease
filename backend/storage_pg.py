@@ -7,6 +7,9 @@ from uuid import UUID
 
 from .database import get_connection
 from .config import RUN_MODES
+from .logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def parse_json_field(value):
@@ -475,7 +478,7 @@ async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
     async with get_connection() as conn:
         row = await conn.fetchrow(
             """
-            SELECT id, email, credits, email_verified, auth_provider, role, password_hash
+            SELECT id, email, credits, email_verified, auth_provider, role, password_hash, stripe_customer_id
             FROM users WHERE id = $1
             """,
             user_id
@@ -489,9 +492,30 @@ async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
                 "email_verified": row["email_verified"] or False,
                 "auth_provider": row["auth_provider"] or "email",
                 "role": row["role"] or "user",
-                "password_hash": row["password_hash"]
+                "password_hash": row["password_hash"],
+                "stripe_customer_id": row["stripe_customer_id"]
             }
         return None
+
+
+async def update_user_stripe_customer(user_id: str, stripe_customer_id: str) -> bool:
+    """
+    Update a user's Stripe customer ID.
+
+    Args:
+        user_id: User ID
+        stripe_customer_id: Stripe customer ID (cus_xxxxx)
+
+    Returns:
+        True if updated, False if user not found
+    """
+    async with get_connection() as conn:
+        result = await conn.execute(
+            "UPDATE users SET stripe_customer_id = $1 WHERE id = $2",
+            stripe_customer_id,
+            user_id
+        )
+        return result == "UPDATE 1"
 
 
 async def update_user_password(user_id: str, password_hash: str) -> bool:
@@ -1246,7 +1270,7 @@ async def save_context_summary(message_id: int, context_summary: Dict[str, Any])
         context_summary: The context summary dict from build_context_summary()
     """
     async with get_connection() as conn:
-        await conn.execute(
+        result = await conn.execute(
             """
             UPDATE messages
             SET context_summary = $1
@@ -1255,6 +1279,10 @@ async def save_context_summary(message_id: int, context_summary: Dict[str, Any])
             json.dumps(context_summary),
             message_id
         )
+        logger.debug("save_context_summary",
+            message_id=message_id,
+            result=result,
+            context_keys=list(context_summary.keys()) if context_summary else [])
 
 
 async def get_conversation_context(conversation_id: str) -> Optional[Dict[str, Any]]:
@@ -1268,6 +1296,24 @@ async def get_conversation_context(conversation_id: str) -> Optional[Dict[str, A
         Context summary dict or None if no previous context exists
     """
     async with get_connection() as conn:
+        # First, check if there are any assistant messages with stage3 complete
+        debug_row = await conn.fetchrow(
+            """
+            SELECT id, stage3 IS NOT NULL as has_stage3, context_summary IS NOT NULL as has_context
+            FROM messages
+            WHERE conversation_id = $1
+              AND role = 'assistant'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            UUID(conversation_id)
+        )
+        logger.debug("get_conversation_context_debug",
+            conversation_id=conversation_id,
+            has_assistant_msg=debug_row is not None,
+            has_stage3=debug_row["has_stage3"] if debug_row else None,
+            has_context=debug_row["has_context"] if debug_row else None)
+
         row = await conn.fetchrow(
             """
             SELECT context_summary
@@ -1283,7 +1329,14 @@ async def get_conversation_context(conversation_id: str) -> Optional[Dict[str, A
         )
 
         if row and row["context_summary"]:
-            return parse_json_field(row["context_summary"])
+            context = parse_json_field(row["context_summary"])
+            logger.info("get_conversation_context_found",
+                conversation_id=conversation_id,
+                context_keys=list(context.keys()) if context else [])
+            return context
+
+        logger.warning("get_conversation_context_not_found",
+            conversation_id=conversation_id)
         return None
 
 

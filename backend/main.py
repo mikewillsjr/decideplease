@@ -1136,9 +1136,21 @@ async def _process_council_request(
             effective_content = build_rerun_query(content, context_packet, rerun_input)
         elif not is_first_message:
             # Follow-up case: get context from previous message
+            logger.info("followup_fetching_context",
+                conversation_id=conversation_id,
+                is_first_message=is_first_message,
+                context_mode=context_mode)
             conversation_context = await storage.get_conversation_context(conversation_id)
             if conversation_context:
+                logger.info("followup_context_found",
+                    conversation_id=conversation_id,
+                    has_verdict=bool(conversation_context.get('verdict_summary')),
+                    has_original=bool(conversation_context.get('original_question')))
                 effective_content = build_followup_query(content, conversation_context, context_mode)
+            else:
+                logger.warning("followup_context_missing",
+                    conversation_id=conversation_id,
+                    is_first_message=is_first_message)
 
         # Stage 1: Collect responses (with or without files)
         _active_status[conversation_id] = "stage1"
@@ -1271,9 +1283,17 @@ async def _process_council_request(
                 stage1_5_results=stage1_5_results if stage1_5_results else None
             )
             await storage.save_context_summary(message_id, context_summary)
+            logger.info("context_summary_saved",
+                conversation_id=conversation_id,
+                message_id=message_id,
+                original_question_len=len(content))
         except Exception as ctx_err:
             # Log but don't fail the request if context saving fails
-            print(f"Warning: Failed to save context summary: {ctx_err}")
+            logger.error("context_summary_save_failed",
+                conversation_id=conversation_id,
+                message_id=message_id,
+                error=str(ctx_err),
+                exc_info=True)
 
         # Wait for title generation
         if title_task:

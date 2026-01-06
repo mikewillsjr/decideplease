@@ -7,14 +7,12 @@ import Stage2 from './Stage2';
 import Stage3 from './Stage3';
 import CouncilDebate from './CouncilDebate';
 import SpeedSelector, { SPEED_OPTIONS } from './SpeedSelector';
-import RerunModal from './RerunModal';
 import FileUpload from './FileUpload';
 import './ChatInterface.css';
 
 export default function ChatInterface({
   conversation,
   onSendMessage,
-  onRerunDecision,
   isLoading,
   error,
   onDismissError,
@@ -24,8 +22,6 @@ export default function ChatInterface({
 }) {
   const [input, setInput] = useState('');
   const [selectedMode, setSelectedMode] = useState('standard');
-  const [showRerunModal, setShowRerunModal] = useState(false);
-  const [rerunMessageIndex, setRerunMessageIndex] = useState(null);
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [userHasScrolled, setUserHasScrolled] = useState(false);
   const [messageCount, setMessageCount] = useState(0);
@@ -60,18 +56,6 @@ export default function ChatInterface({
       onSendMessage(input, selectedMode, attachedFiles);
       setInput('');
       setAttachedFiles([]); // Clear files after send
-    }
-  };
-
-  const handleRerunClick = (msgIndex) => {
-    setRerunMessageIndex(msgIndex);
-    setShowRerunModal(true);
-  };
-
-  const handleRerunSubmit = (newInput, mode) => {
-    setShowRerunModal(false);
-    if (onRerunDecision) {
-      onRerunDecision(newInput, mode);
     }
   };
 
@@ -280,21 +264,13 @@ export default function ChatInterface({
                   {/* Stage 3 - Final Synthesis */}
                   {msg.stage3 && !msg.loading?.stage3 && <Stage3 finalResponse={msg.stage3} />}
 
-                  {/* Re-run button (shown after Stage 3 completes) */}
-                  {msg.stage3 && !isLoading && (
-                    <div className="rerun-section">
-                      <button
-                        className="rerun-button"
-                        onClick={() => handleRerunClick(index)}
-                      >
-                        Re-run this decision
-                      </button>
-                      {msg.metadata?.mode && (
-                        <span className="run-mode-badge">
-                          {msg.metadata.mode === 'quick' ? 'Quick' :
-                           msg.metadata.mode === 'extra_care' ? 'Extra Care' : 'Standard'}
-                        </span>
-                      )}
+                  {/* Mode badge (shown after Stage 3 completes) */}
+                  {msg.stage3 && msg.metadata?.mode && (
+                    <div className="mode-badge-section">
+                      <span className="run-mode-badge">
+                        {msg.metadata.mode === 'quick' ? 'Quick' :
+                         msg.metadata.mode === 'extra_care' ? 'Extra Care' : 'Standard'}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -322,7 +298,7 @@ export default function ChatInterface({
         <div className="input-wrapper">
           <textarea
             className="message-input"
-            placeholder="Refine this decision or ask a follow-up..."
+            placeholder="Add new details or constraints, or ask a follow-up question..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -340,20 +316,11 @@ export default function ChatInterface({
               className="send-button"
               disabled={!input.trim() || isLoading}
             >
-              Run Decision ({getSelectedCredits()} cr)
+              Ask Follow-up ({getSelectedCredits()} cr)
             </button>
           </div>
         </div>
       </form>
-
-      {/* Rerun Modal */}
-      {showRerunModal && (
-        <RerunModal
-          isOpen={showRerunModal}
-          onClose={() => setShowRerunModal(false)}
-          onSubmit={handleRerunSubmit}
-        />
-      )}
     </div>
   );
 }

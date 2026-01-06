@@ -560,60 +560,6 @@ function CouncilPage() {
     }
   };
 
-  const handleRerunDecision = async (newInput, mode = 'standard') => {
-    if (!currentConversationId) return;
-
-    // Check credits before sending
-    if (credits !== null && credits <= 0) {
-      setError('No credits remaining. Please purchase more credits to continue.');
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Create a partial assistant message for the rerun
-      const assistantMessage = {
-        role: 'assistant',
-        stage1: null,
-        stage2: null,
-        stage2Skipped: false,
-        stage3: null,
-        metadata: { mode, is_rerun: true },
-        loading: {
-          stage1: false,
-          stage2: false,
-          stage3: false,
-        },
-      };
-
-      // Add the partial assistant message
-      setCurrentConversation((prev) => ({
-        ...prev,
-        messages: [...prev.messages, assistantMessage],
-      }));
-
-      // Send rerun request with streaming
-      await api.rerunDecision(currentConversationId, newInput, mode, (eventType, event) => {
-        handleStreamEvent(eventType, event);
-      });
-    } catch (error) {
-      console.error('Failed to rerun decision:', error);
-      if (error.message === 'Insufficient credits') {
-        setError('No credits remaining. Please purchase more credits to continue.');
-      } else {
-        setError('Failed to rerun decision. Please try again.');
-      }
-      // Remove optimistic message on error
-      setCurrentConversation((prev) => ({
-        ...prev,
-        messages: prev.messages.slice(0, -1),
-      }));
-      setIsLoading(false);
-    }
-  };
-
   // Show nothing while auth is loading (prevents flash)
   if (authLoading) {
     return null;
@@ -649,7 +595,6 @@ function CouncilPage() {
         <ChatInterface
           conversation={currentConversation}
           onSendMessage={handleSendMessage}
-          onRerunDecision={handleRerunDecision}
           isLoading={isLoading}
           error={error}
           onDismissError={() => setError(null)}

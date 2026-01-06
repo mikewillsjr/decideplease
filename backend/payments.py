@@ -208,3 +208,294 @@ async def handle_refund(charge_id: str, amount_refunded: int, user_email: str):
         amount=amount_refunded,
         credits=CREDITS_PER_PURCHASE  # Approximate - ideally track per purchase
     )
+
+
+# ============== Saved Payment Methods ==============
+
+MAX_SAVED_CARDS = 3
+
+
+async def get_or_create_customer(user_id: str, user_email: str, existing_customer_id: str = None) -> str:
+    """
+    Get existing Stripe customer or create a new one.
+
+    Args:
+        user_id: Our user ID
+        user_email: User's email
+        existing_customer_id: Stripe customer ID from database (if exists)
+
+    Returns:
+        Stripe customer ID
+    """
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+
+    # If we already have a customer ID, verify it exists
+    if existing_customer_id:
+        try:
+            customer = stripe.Customer.retrieve(existing_customer_id)
+            if not customer.deleted:
+                return customer.id
+        except stripe.error.InvalidRequestError:
+            pass  # Customer doesn't exist, create new one
+
+    # Search by email first
+    try:
+        customers = stripe.Customer.list(email=user_email, limit=1)
+        if customers.data:
+            return customers.data[0].id
+    except stripe.error.StripeError:
+        pass
+
+    # Create new customer
+    try:
+        customer = stripe.Customer.create(
+            email=user_email,
+            metadata={"user_id": user_id}
+        )
+        return customer.id
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+async def list_payment_methods(customer_id: str) -> list:
+    """
+    List saved payment methods for a customer.
+
+    Args:
+        customer_id: Stripe customer ID
+
+    Returns:
+        List of payment methods with card details
+    """
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+
+    try:
+        methods = stripe.PaymentMethod.list(
+            customer=customer_id,
+            type="card",
+            limit=MAX_SAVED_CARDS
+        )
+
+        return [
+            {
+                "id": pm.id,
+                "brand": pm.card.brand,
+                "last4": pm.card.last4,
+                "exp_month": pm.card.exp_month,
+                "exp_year": pm.card.exp_year,
+                "is_default": pm.id == _get_default_payment_method(customer_id),
+            }
+            for pm in methods.data
+        ]
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+def _get_default_payment_method(customer_id: str) -> str:
+    """Get the customer's default payment method ID."""
+    try:
+        customer = stripe.Customer.retrieve(customer_id)
+        return customer.invoice_settings.default_payment_method
+    except:
+        return None
+
+
+async def create_setup_intent(customer_id: str) -> dict:
+    """
+    Create a SetupIntent for adding a new payment method.
+
+    Args:
+        customer_id: Stripe customer ID
+
+    Returns:
+        Dict with client_secret for SetupIntent
+    """
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+
+    # Check current card count
+    try:
+        existing = stripe.PaymentMethod.list(customer=customer_id, type="card", limit=MAX_SAVED_CARDS)
+        if len(existing.data) >= MAX_SAVED_CARDS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Maximum of {MAX_SAVED_CARDS} cards allowed. Please remove a card first."
+            )
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    try:
+        setup_intent = stripe.SetupIntent.create(
+            customer=customer_id,
+            payment_method_types=["card"],
+            usage="off_session",  # Allow charging later without customer present
+        )
+
+        return {
+            "client_secret": setup_intent.client_secret,
+            "setup_intent_id": setup_intent.id,
+        }
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+async def detach_payment_method(payment_method_id: str, customer_id: str) -> bool:
+    """
+    Detach (delete) a payment method from customer.
+
+    Args:
+        payment_method_id: Stripe payment method ID
+        customer_id: Stripe customer ID (for verification)
+
+    Returns:
+        True if successful
+    """
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+
+    try:
+        # Verify the payment method belongs to this customer
+        pm = stripe.PaymentMethod.retrieve(payment_method_id)
+        if pm.customer != customer_id:
+            raise HTTPException(status_code=403, detail="Payment method does not belong to this customer")
+
+        stripe.PaymentMethod.detach(payment_method_id)
+        return True
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+async def set_default_payment_method(payment_method_id: str, customer_id: str) -> bool:
+    """
+    Set a payment method as the default for the customer.
+
+    Args:
+        payment_method_id: Stripe payment method ID
+        customer_id: Stripe customer ID
+
+    Returns:
+        True if successful
+    """
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+
+    try:
+        # Verify the payment method belongs to this customer
+        pm = stripe.PaymentMethod.retrieve(payment_method_id)
+        if pm.customer != customer_id:
+            raise HTTPException(status_code=403, detail="Payment method does not belong to this customer")
+
+        stripe.Customer.modify(
+            customer_id,
+            invoice_settings={"default_payment_method": payment_method_id}
+        )
+        return True
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+async def charge_with_saved_cards(
+    user_id: str,
+    user_email: str,
+    customer_id: str,
+    preferred_method_id: str = None
+) -> dict:
+    """
+    Attempt to charge using saved cards with automatic fallback.
+
+    Tries the preferred card first, then falls back to other saved cards.
+    If all saved cards fail, returns error with option to add new card.
+
+    Args:
+        user_id: Our user ID
+        user_email: User's email
+        customer_id: Stripe customer ID
+        preferred_method_id: Optional preferred payment method to try first
+
+    Returns:
+        Dict with payment result and payment_intent details
+    """
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+
+    # Get all saved payment methods
+    try:
+        methods = stripe.PaymentMethod.list(customer=customer_id, type="card", limit=MAX_SAVED_CARDS)
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not methods.data:
+        return {
+            "success": False,
+            "error": "no_saved_cards",
+            "message": "No saved payment methods. Please add a card.",
+        }
+
+    # Order: preferred first, then default, then others
+    ordered_methods = []
+    default_pm = _get_default_payment_method(customer_id)
+
+    for pm in methods.data:
+        if preferred_method_id and pm.id == preferred_method_id:
+            ordered_methods.insert(0, pm)
+        elif pm.id == default_pm:
+            ordered_methods.insert(0 if not preferred_method_id else 1, pm)
+        else:
+            ordered_methods.append(pm)
+
+    # Try each card
+    errors = []
+    for pm in ordered_methods:
+        try:
+            intent = stripe.PaymentIntent.create(
+                amount=PRICE_CENTS,
+                currency="usd",
+                customer=customer_id,
+                payment_method=pm.id,
+                off_session=True,
+                confirm=True,
+                metadata={
+                    "user_id": user_id,
+                    "credits": str(CREDITS_PER_PURCHASE),
+                },
+                statement_descriptor=STATEMENT_DESCRIPTOR,
+                receipt_email=user_email,
+                description=f"{CREDITS_PER_PURCHASE} credits for DecidePlease",
+            )
+
+            if intent.status == "succeeded":
+                return {
+                    "success": True,
+                    "payment_intent_id": intent.id,
+                    "payment_method_used": pm.id,
+                    "card_brand": pm.card.brand,
+                    "card_last4": pm.card.last4,
+                    "amount": PRICE_CENTS,
+                    "credits": CREDITS_PER_PURCHASE,
+                }
+
+        except stripe.error.CardError as e:
+            errors.append({
+                "payment_method_id": pm.id,
+                "card_last4": pm.card.last4,
+                "error": e.user_message or str(e),
+            })
+            continue  # Try next card
+
+        except stripe.error.StripeError as e:
+            errors.append({
+                "payment_method_id": pm.id,
+                "card_last4": pm.card.last4,
+                "error": str(e),
+            })
+            continue
+
+    # All cards failed
+    return {
+        "success": False,
+        "error": "all_cards_failed",
+        "message": "All saved cards failed. Please add a new card or try a different payment method.",
+        "failed_attempts": errors,
+    }

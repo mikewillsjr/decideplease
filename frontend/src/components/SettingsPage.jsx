@@ -1,10 +1,76 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { useAuth } from '../contexts/AuthContext';
 import { api, setAuthTokenGetter } from '../api';
 import UnifiedHeader from './UnifiedHeader';
 import UnifiedFooter from './UnifiedFooter';
 import './SettingsPage.css';
+
+// Card brand icons (simple text for now, could be replaced with SVGs)
+const CARD_BRANDS = {
+  visa: '💳 Visa',
+  mastercard: '💳 Mastercard',
+  amex: '💳 Amex',
+  discover: '💳 Discover',
+  default: '💳',
+};
+
+// Stripe promise - initialized lazily
+let stripePromise = null;
+const getStripePromise = (publishableKey) => {
+  if (!stripePromise && publishableKey) {
+    stripePromise = loadStripe(publishableKey);
+  }
+  return stripePromise;
+};
+
+// Add Card Form component (inside Elements provider)
+function AddCardForm({ onSuccess, onCancel }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    setIsProcessing(true);
+    setErrorMessage('');
+
+    const { error } = await stripe.confirmSetup({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/settings?card_added=true`,
+      },
+      redirect: 'if_required',
+    });
+
+    if (error) {
+      setErrorMessage(error.message);
+      setIsProcessing(false);
+    } else {
+      onSuccess();
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="add-card-form">
+      <PaymentElement options={{ layout: 'tabs' }} />
+      {errorMessage && <div className="card-error">{errorMessage}</div>}
+      <div className="card-form-actions">
+        <button type="button" onClick={onCancel} disabled={isProcessing}>
+          Cancel
+        </button>
+        <button type="submit" className="btn-primary" disabled={!stripe || isProcessing}>
+          {isProcessing ? 'Saving...' : 'Save Card'}
+        </button>
+      </div>
+    </form>
+  );
+}
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -37,10 +103,19 @@ export default function SettingsPage() {
   const [credits, setCredits] = useState(null);
   const [creditPackInfo, setCreditPackInfo] = useState(null);
 
+  // Payment methods state
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [maxCards, setMaxCards] = useState(3);
+  const [loadingCards, setLoadingCards] = useState(false);
+  const [showAddCard, setShowAddCard] = useState(false);
+  const [setupClientSecret, setSetupClientSecret] = useState(null);
+  const [deletingCardId, setDeletingCardId] = useState(null);
+
   useEffect(() => {
     setAuthTokenGetter(() => getAccessToken());
     loadUserInfo();
     loadCreditPackInfo();
+    loadPaymentMethods();
   }, [getAccessToken]);
 
   const loadUserInfo = async () => {
@@ -58,6 +133,64 @@ export default function SettingsPage() {
       setCreditPackInfo(info);
     } catch (err) {
       console.error('Failed to load credit pack info:', err);
+    }
+  };
+
+  const loadPaymentMethods = async () => {
+    setLoadingCards(true);
+    try {
+      const data = await api.getPaymentMethods();
+      setPaymentMethods(data.methods || []);
+      setMaxCards(data.max_cards || 3);
+    } catch (err) {
+      console.error('Failed to load payment methods:', err);
+    }
+    setLoadingCards(false);
+  };
+
+  const handleAddCard = async () => {
+    setLoading(true);
+    clearMessages();
+    try {
+      const data = await api.createSetupIntent();
+      setSetupClientSecret(data.client_secret);
+      setShowAddCard(true);
+    } catch (err) {
+      setError(err.message || 'Failed to start card setup');
+    }
+    setLoading(false);
+  };
+
+  const handleCardAdded = () => {
+    setShowAddCard(false);
+    setSetupClientSecret(null);
+    setSuccess('Card added successfully');
+    loadPaymentMethods();
+  };
+
+  const handleDeleteCard = async (paymentMethodId) => {
+    if (!window.confirm('Are you sure you want to remove this card?')) return;
+
+    setDeletingCardId(paymentMethodId);
+    clearMessages();
+    try {
+      await api.deletePaymentMethod(paymentMethodId);
+      setSuccess('Card removed successfully');
+      loadPaymentMethods();
+    } catch (err) {
+      setError(err.message || 'Failed to remove card');
+    }
+    setDeletingCardId(null);
+  };
+
+  const handleSetDefault = async (paymentMethodId) => {
+    clearMessages();
+    try {
+      await api.setDefaultPaymentMethod(paymentMethodId);
+      setSuccess('Default card updated');
+      loadPaymentMethods();
+    } catch (err) {
+      setError(err.message || 'Failed to set default card');
     }
   };
 
@@ -185,6 +318,12 @@ export default function SettingsPage() {
                 onClick={() => { setActiveSection('account'); clearMessages(); }}
               >
                 Account
+              </button>
+              <button
+                className={activeSection === 'payment' ? 'active' : ''}
+                onClick={() => { setActiveSection('payment'); clearMessages(); }}
+              >
+                Payment
               </button>
             </nav>
 
@@ -337,6 +476,100 @@ export default function SettingsPage() {
                     >
                       {loading ? 'Deleting...' : 'Delete Account'}
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment Section */}
+              {activeSection === 'payment' && (
+                <div className="settings-section">
+                  <h2>Payment Methods</h2>
+
+                  <div className="settings-card">
+                    <h3>Saved Cards</h3>
+                    <p className="settings-description">
+                      Manage your saved payment methods. You can save up to {maxCards} cards.
+                    </p>
+
+                    {loadingCards ? (
+                      <div className="loading-cards">Loading payment methods...</div>
+                    ) : paymentMethods.length === 0 ? (
+                      <div className="no-cards">
+                        <p>No saved payment methods.</p>
+                      </div>
+                    ) : (
+                      <div className="saved-cards-list">
+                        {paymentMethods.map((card) => (
+                          <div key={card.id} className={`saved-card ${card.is_default ? 'default' : ''}`}>
+                            <div className="card-info">
+                              <span className="card-brand">{CARD_BRANDS[card.brand] || CARD_BRANDS.default}</span>
+                              <span className="card-number">•••• {card.last4}</span>
+                              <span className="card-expiry">Exp: {card.exp_month}/{card.exp_year}</span>
+                              {card.is_default && <span className="default-badge">Default</span>}
+                            </div>
+                            <div className="card-actions">
+                              {!card.is_default && (
+                                <button
+                                  onClick={() => handleSetDefault(card.id)}
+                                  className="btn-secondary btn-small"
+                                  disabled={loading}
+                                >
+                                  Set Default
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteCard(card.id)}
+                                className="btn-danger btn-small"
+                                disabled={deletingCardId === card.id}
+                              >
+                                {deletingCardId === card.id ? 'Removing...' : 'Remove'}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add Card Button/Form */}
+                    {!showAddCard ? (
+                      <button
+                        onClick={handleAddCard}
+                        className="btn-primary add-card-btn"
+                        disabled={loading || paymentMethods.length >= maxCards}
+                      >
+                        {loading ? 'Loading...' : paymentMethods.length >= maxCards ? `Maximum ${maxCards} cards reached` : 'Add New Card'}
+                      </button>
+                    ) : (
+                      setupClientSecret && creditPackInfo?.publishable_key && (
+                        <Elements
+                          stripe={getStripePromise(creditPackInfo.publishable_key)}
+                          options={{
+                            clientSecret: setupClientSecret,
+                            appearance: {
+                              theme: 'stripe',
+                              variables: {
+                                colorPrimary: '#4a90e2',
+                              },
+                            },
+                          }}
+                        >
+                          <AddCardForm
+                            onSuccess={handleCardAdded}
+                            onCancel={() => {
+                              setShowAddCard(false);
+                              setSetupClientSecret(null);
+                            }}
+                          />
+                        </Elements>
+                      )
+                    )}
+                  </div>
+
+                  <div className="settings-card">
+                    <h3>How it works</h3>
+                    <p className="settings-description">
+                      When you purchase credits, we'll try your default card first. If it fails, we'll automatically try your other saved cards before asking you to add a new payment method.
+                    </p>
                   </div>
                 </div>
               )}

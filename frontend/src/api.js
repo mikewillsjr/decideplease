@@ -411,6 +411,90 @@ export const api = {
     return response.json();
   },
 
+  // ============== Saved Payment Methods API ==============
+
+  /**
+   * Get list of saved payment methods (cards).
+   */
+  async getPaymentMethods() {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/payments/methods`, { headers });
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Not authenticated');
+      }
+      throw new Error('Failed to get payment methods');
+    }
+    return response.json();
+  },
+
+  /**
+   * Create a SetupIntent for adding a new payment method.
+   * Returns client_secret to use with Stripe Elements.
+   */
+  async createSetupIntent() {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/payments/methods/setup`, {
+      method: 'POST',
+      headers,
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to create setup intent');
+    }
+    return response.json();
+  },
+
+  /**
+   * Delete a saved payment method.
+   */
+  async deletePaymentMethod(paymentMethodId) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/payments/methods/${paymentMethodId}`, {
+      method: 'DELETE',
+      headers,
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to delete payment method');
+    }
+    return response.json();
+  },
+
+  /**
+   * Set a payment method as the default.
+   */
+  async setDefaultPaymentMethod(paymentMethodId) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/payments/methods/${paymentMethodId}/default`, {
+      method: 'POST',
+      headers,
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to set default payment method');
+    }
+    return response.json();
+  },
+
+  /**
+   * Charge saved cards with automatic fallback.
+   * Tries preferred card first, then falls back to other saved cards.
+   */
+  async chargeSavedCard(paymentMethodId = null) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/payments/charge-saved`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ payment_method_id: paymentMethodId }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to charge saved card');
+    }
+    return response.json();
+  },
+
   // ============== User Settings API ==============
 
   /**
