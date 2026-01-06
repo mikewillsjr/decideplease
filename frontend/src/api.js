@@ -177,9 +177,10 @@ export const api = {
    * @param {string} mode - Run mode: 'quick', 'standard', or 'extra_care'
    * @param {function} onEvent - Callback function for each event: (eventType, data) => void
    * @param {File[]} files - Optional array of File objects to attach
+   * @param {number|null} sourceMessageId - Optional message ID to respond to (for responding to specific previous decisions)
    * @returns {Promise<void>}
    */
-  async sendMessageStream(conversationId, content, mode, onEvent, files = []) {
+  async sendMessageStream(conversationId, content, mode, onEvent, files = [], sourceMessageId = null) {
     const headers = await getHeaders();
 
     // Convert files to base64 if present
@@ -194,16 +195,23 @@ export const api = {
       );
     }
 
+    const requestBody = {
+      content,
+      mode: mode || 'standard',
+      files: fileAttachments,
+    };
+
+    // Include source_message_id if responding to a specific previous decision
+    if (sourceMessageId) {
+      requestBody.source_message_id = sourceMessageId;
+    }
+
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message/stream`,
       {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          content,
-          mode: mode || 'standard',
-          files: fileAttachments,
-        }),
+        body: JSON.stringify(requestBody),
       }
     );
 

@@ -237,6 +237,7 @@ class SendMessageRequest(BaseModel):
     content: str
     mode: str = "standard"  # "quick", "standard", or "extra_care"
     files: Optional[List[FileAttachment]] = None  # Optional file attachments
+    source_message_id: Optional[int] = None  # Optional: respond to a specific previous decision
 
 
 class RerunRequest(BaseModel):
@@ -1072,7 +1073,8 @@ async def _process_council_request(
     rerun_input: Optional[str] = None,
     parent_message_id: Optional[int] = None,
     context_packet: Optional[Dict[str, Any]] = None,
-    processed_files: Optional[List[Dict[str, Any]]] = None
+    processed_files: Optional[List[Dict[str, Any]]] = None,
+    source_message_id: Optional[int] = None
 ):
     """
     Background task to process the council request.
@@ -1134,7 +1136,16 @@ async def _process_council_request(
             effective_content = build_rerun_query(content, context_packet, rerun_input)
         elif not is_first_message:
             # Follow-up case: include the previous decision for context
-            previous_decision = await storage.get_last_stage3_response(conversation_id)
+            if source_message_id:
+                # User is responding to a specific previous decision
+                previous_decision = await storage.get_stage3_by_message_id(source_message_id)
+                logger.info("followup_to_specific_decision",
+                    conversation_id=conversation_id,
+                    source_message_id=source_message_id,
+                    found_decision=bool(previous_decision))
+            else:
+                # Default: respond to the latest decision
+                previous_decision = await storage.get_last_stage3_response(conversation_id)
             if previous_decision:
                 logger.info("followup_with_previous_decision",
                     conversation_id=conversation_id,
@@ -1405,7 +1416,8 @@ async def send_message_stream(
         is_first_message,
         event_queue,
         mode=mode,
-        processed_files=processed_files
+        processed_files=processed_files,
+        source_message_id=msg_request.source_message_id
     ))
     _active_tasks[conversation_id] = task
 

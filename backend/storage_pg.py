@@ -96,6 +96,7 @@ async def get_conversation(conversation_id: str, user_id: str) -> Optional[Dict[
         for msg in messages:
             if msg["role"] == "user":
                 message_list.append({
+                    "id": msg["id"],  # Include ID for tracking
                     "role": "user",
                     "content": msg["content"]
                 })
@@ -106,6 +107,7 @@ async def get_conversation(conversation_id: str, user_id: str) -> Optional[Dict[
                     continue
 
                 message_list.append({
+                    "id": msg["id"],  # Include ID for responding to specific decisions
                     "role": "assistant",
                     "stage1": parse_json_field(msg["stage1"]),
                     "stage2": parse_json_field(msg["stage2"]),
@@ -1365,6 +1367,40 @@ async def get_last_stage3_response(conversation_id: str) -> Optional[str]:
             LIMIT 1
             """,
             UUID(conversation_id)
+        )
+
+        if row and row["stage3"]:
+            stage3_data = parse_json_field(row["stage3"])
+            # stage3 is stored as {"model": "...", "response": "..."}
+            if isinstance(stage3_data, dict):
+                return stage3_data.get("response", "")
+            return str(stage3_data)
+        return None
+
+
+async def get_stage3_by_message_id(message_id: int) -> Optional[str]:
+    """
+    Get the chairman's decision (stage3 response) from a specific message.
+
+    This is used when the user wants to respond to a specific previous decision
+    in the conversation rather than the most recent one.
+
+    Args:
+        message_id: The specific message ID to get the decision from
+
+    Returns:
+        The stage3 response text, or None if not found or not completed
+    """
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT stage3
+            FROM messages
+            WHERE id = $1
+              AND role = 'assistant'
+              AND stage3 IS NOT NULL
+            """,
+            message_id
         )
 
         if row and row["stage3"]:

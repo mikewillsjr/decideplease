@@ -21,6 +21,7 @@ function CouncilPage() {
   const [creditPackInfo, setCreditPackInfo] = useState(null);
   const [error, setError] = useState(null);
   const [loadError, setLoadError] = useState(false);
+  const [respondingToMessageId, setRespondingToMessageId] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userRole, setUserRole] = useState('user');
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -481,6 +482,9 @@ function CouncilPage() {
   };
 
   const handleSendMessage = async (content, mode = 'standard', files = []) => {
+    // Capture the source message ID before clearing it
+    const sourceMessageId = respondingToMessageId;
+
     // Auto-create conversation if none exists
     let conversationId = currentConversationId;
     if (!conversationId) {
@@ -509,6 +513,7 @@ function CouncilPage() {
 
     setIsLoading(true);
     setError(null);
+    setRespondingToMessageId(null); // Clear the responding state
 
     try {
       // Optimistically add user message to UI
@@ -539,11 +544,11 @@ function CouncilPage() {
         messages: [...prev.messages, assistantMessage],
       }));
 
-      // Send message with streaming (include files)
+      // Send message with streaming (include files and optional source message ID)
       // Use local conversationId variable, not state (which may not have updated yet)
       await api.sendMessageStream(conversationId, content, mode, (eventType, event) => {
         handleStreamEvent(eventType, event);
-      }, files);
+      }, files, sourceMessageId);
     } catch (error) {
       console.error('Failed to send message:', error);
       if (error.message === 'Insufficient credits') {
@@ -601,6 +606,9 @@ function CouncilPage() {
           loadError={loadError}
           onDeleteConversation={handleDeleteFailedConversation}
           onRetryLoad={handleRetryLoad}
+          respondingToMessageId={respondingToMessageId}
+          onRespondToMessage={setRespondingToMessageId}
+          onClearRespondingTo={() => setRespondingToMessageId(null)}
         />
       </div>
       <UnifiedFooter />

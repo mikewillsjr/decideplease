@@ -1,0 +1,62 @@
+/* Collapsible Stage - Wrapper for stages 1, 1.5, 2 */
+
+.collapsible-stage {
+  margin: 12px 0;
+}
+
+.collapsible-stage:first-child {
+  margin-top: 0;
+}
+
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.collapsible-header:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--primary);
+}
+
+.chevron {
+  font-size: 10px;
+  color: var(--text-muted);
+  width: 12px;
+  text-align: center;
+  transition: transform 0.2s;
+}
+
+.collapsible-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.collapsible-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.collapsible-content {
+  margin-top: 12px;
+}
+
+/* When expanded, remove margin from inner stage component */
+.collapsible-stage.expanded .stage {
+  margin: 0;
+}
+
+/* Style adjustments for nested stage components */
+.collapsible-stage .stage {
+  border-radius: 8px;
+}

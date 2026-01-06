@@ -8,6 +8,8 @@ import Stage3 from './Stage3';
 import CouncilDebate from './CouncilDebate';
 import SpeedSelector, { SPEED_OPTIONS } from './SpeedSelector';
 import FileUpload from './FileUpload';
+import DecisionCard from './DecisionCard';
+import CollapsibleStage from './CollapsibleStage';
 import './ChatInterface.css';
 
 export default function ChatInterface({
@@ -19,6 +21,9 @@ export default function ChatInterface({
   loadError,
   onDeleteConversation,
   onRetryLoad,
+  respondingToMessageId,
+  onRespondToMessage,
+  onClearRespondingTo,
 }) {
   const [input, setInput] = useState('');
   const [selectedMode, setSelectedMode] = useState('standard');
@@ -196,87 +201,122 @@ export default function ChatInterface({
             </div>
           </div>
         ) : (
-          messages.map((msg, index) => (
-            <div key={index} className="message-group">
-              {msg.role === 'user' ? (
-                <div className="user-message">
-                  <div className="message-label">You</div>
-                  <div className="message-content">
-                    <div className="markdown-content">
-                      <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{msg.content}</ReactMarkdown>
-                    </div>
+          messages.map((msg, index) => {
+            // Skip user messages - they'll be included in the DecisionCard
+            if (msg.role === 'user') {
+              return null;
+            }
+
+            // Find the preceding user message for this assistant response
+            const precedingUserMsg = messages
+              .slice(0, index)
+              .reverse()
+              .find(m => m.role === 'user');
+            const question = precedingUserMsg?.content || '';
+
+            const isCardLoading = msg.loading?.stage1 || msg.loading?.stage1_5 ||
+                                  msg.loading?.stage2 || msg.loading?.stage3 ||
+                                  msg.loading?.preparing;
+
+            return (
+              <DecisionCard
+                key={index}
+                question={question}
+                isLoading={isCardLoading}
+              >
+                {/* Welcome back / still processing indicator */}
+                {msg.processingResumed && (msg.loading?.stage1 || msg.loading?.stage2 || msg.loading?.stage3) && (
+                  <div className="resumed-processing">
+                    <div className="resumed-icon">&#8634;</div>
+                    <span>Welcome back! We're still working on your answer...</span>
                   </div>
-                </div>
-              ) : (
-                <div className="assistant-message">
-                  <div className="message-label">DecidePlease</div>
+                )}
 
-                  {/* Welcome back / still processing indicator */}
-                  {msg.processingResumed && (msg.loading?.stage1 || msg.loading?.stage2 || msg.loading?.stage3) && (
-                    <div className="resumed-processing">
-                      <div className="resumed-icon">&#8634;</div>
-                      <span>Welcome back! We're still working on your answer...</span>
-                    </div>
-                  )}
+                {/* Incomplete response indicator (only shown when NOT loading) */}
+                {!msg.loading && !msg.processingResumed && msg.stage1 && !msg.stage3 && (
+                  <div className="incomplete-response">
+                    <div className="incomplete-icon">!</div>
+                    <span>This response was interrupted. Showing completed stages.</span>
+                  </div>
+                )}
 
-                  {/* Incomplete response indicator (only shown when NOT loading) */}
-                  {!msg.loading && !msg.processingResumed && msg.stage1 && !msg.stage3 && (
-                    <div className="incomplete-response">
-                      <div className="incomplete-icon">!</div>
-                      <span>This response was interrupted. Showing completed stages.</span>
-                    </div>
-                  )}
+                {/* Council Debate Visualization (shown during loading and transitions) */}
+                {isCardLoading && (
+                  <CouncilDebate
+                    loading={msg.loading}
+                    stage1Data={msg.stage1}
+                    stage1_5Data={msg.stage1_5}
+                    stage2Data={msg.stage2}
+                    stage3Data={msg.stage3}
+                  />
+                )}
 
-                  {/* Council Debate Visualization (shown during loading and transitions) */}
-                  {(msg.loading?.stage1 || msg.loading?.stage1_5 || msg.loading?.stage2 || msg.loading?.stage3 || msg.loading?.preparing) && (
-                    <CouncilDebate
-                      loading={msg.loading}
-                      stage1Data={msg.stage1}
-                      stage1_5Data={msg.stage1_5}
-                      stage2Data={msg.stage2}
-                      stage3Data={msg.stage3}
-                    />
-                  )}
+                {/* Stage 1 - Individual Responses (Collapsible) */}
+                {msg.stage1 && !msg.loading?.stage1 && (
+                  <CollapsibleStage
+                    title="Individual Responses"
+                    count={msg.stage1.length}
+                    countLabel="models"
+                  >
+                    <Stage1 responses={msg.stage1} />
+                  </CollapsibleStage>
+                )}
 
-                  {/* Stage 1 - Individual Responses */}
-                  {msg.stage1 && !msg.loading?.stage1 && <Stage1 responses={msg.stage1} />}
-
-                  {/* Stage 1.5 - Cross-Review (Extra Care mode only) */}
-                  {msg.stage1_5 && msg.stage1_5.length > 0 && !msg.loading?.stage1_5 && (
+                {/* Stage 1.5 - Cross-Review (Collapsible, Extra Care mode only) */}
+                {msg.stage1_5 && msg.stage1_5.length > 0 && !msg.loading?.stage1_5 && (
+                  <CollapsibleStage
+                    title="Cross-Review Refinements"
+                    count={msg.stage1_5.length}
+                    countLabel="refinements"
+                  >
                     <Stage1_5 responses={msg.stage1_5} originalResponses={msg.stage1} />
-                  )}
+                  </CollapsibleStage>
+                )}
 
-                  {/* Stage 2 - Peer Rankings */}
-                  {msg.stage2Skipped && (
-                    <div className="stage-skipped">
-                      <span className="skipped-icon">&#x21BB;</span>
-                      <span>Peer review skipped for Quick Answer mode</span>
-                    </div>
-                  )}
-                  {msg.stage2 && msg.stage2.length > 0 && !msg.loading?.stage2 && (
+                {/* Stage 2 - Peer Rankings (Collapsible) */}
+                {msg.stage2Skipped && (
+                  <div className="stage-skipped">
+                    <span className="skipped-icon">&#x21BB;</span>
+                    <span>Peer review skipped for Quick Answer mode</span>
+                  </div>
+                )}
+                {msg.stage2 && msg.stage2.length > 0 && !msg.loading?.stage2 && (
+                  <CollapsibleStage
+                    title="Peer Rankings"
+                    count={msg.stage2.length}
+                    countLabel="reviews"
+                  >
                     <Stage2
                       rankings={msg.stage2}
                       labelToModel={msg.metadata?.label_to_model}
                       aggregateRankings={msg.metadata?.aggregate_rankings}
                     />
-                  )}
+                  </CollapsibleStage>
+                )}
 
-                  {/* Stage 3 - Final Synthesis */}
-                  {msg.stage3 && !msg.loading?.stage3 && <Stage3 finalResponse={msg.stage3} />}
+                {/* Stage 3 - Final Synthesis (Always visible, NOT collapsible) */}
+                {msg.stage3 && !msg.loading?.stage3 && (
+                  <Stage3
+                    finalResponse={msg.stage3}
+                    originalQuestion={question}
+                    messageId={msg.id}
+                    onRespond={onRespondToMessage}
+                    isLoading={isLoading}
+                  />
+                )}
 
-                  {/* Mode badge (shown after Stage 3 completes) */}
-                  {msg.stage3 && msg.metadata?.mode && (
-                    <div className="mode-badge-section">
-                      <span className="run-mode-badge">
-                        {msg.metadata.mode === 'quick' ? 'Quick' :
-                         msg.metadata.mode === 'extra_care' ? 'Extra Care' : 'Standard'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))
+                {/* Mode badge (shown after Stage 3 completes) */}
+                {msg.stage3 && msg.metadata?.mode && (
+                  <div className="mode-badge-section">
+                    <span className="run-mode-badge">
+                      {msg.metadata.mode === 'quick' ? 'Quick' :
+                       msg.metadata.mode === 'extra_care' ? 'Extra Care' : 'Standard'}
+                    </span>
+                  </div>
+                )}
+              </DecisionCard>
+            );
+          })
         )}
 
         <div ref={messagesEndRef} />
@@ -289,6 +329,19 @@ export default function ChatInterface({
         </div>
       )}
 
+      {respondingToMessageId && (
+        <div className="responding-to-banner">
+          <span>Responding to a previous decision</span>
+          <button
+            className="clear-responding-btn"
+            onClick={onClearRespondingTo}
+            title="Clear and respond to latest decision instead"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <form className="input-form" onSubmit={handleSubmit}>
         <FileUpload
           files={attachedFiles}
@@ -298,7 +351,9 @@ export default function ChatInterface({
         <div className="input-wrapper">
           <textarea
             className="message-input"
-            placeholder="Add new details or constraints, or ask a follow-up question..."
+            placeholder={respondingToMessageId
+              ? "Add new information or ask a question about this decision..."
+              : "Add new details or constraints, or ask a follow-up question..."}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
