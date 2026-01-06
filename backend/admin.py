@@ -631,6 +631,170 @@ async def list_recent_queries(
         ]
 
 
+@router.get("/decisions")
+@limiter.limit("30/minute")
+async def list_recent_decisions(
+    request: Request,
+    limit: int = 50,
+    offset: int = 0,
+    search: Optional[str] = None,
+    admin: dict = Depends(require_view_queries)
+):
+    """
+    List recent decisions with full question and chairman response.
+    Shows what users are asking and the council's final answers.
+    """
+    async with get_connection() as conn:
+        if search:
+            # Search in both user questions and responses
+            rows = await conn.fetch(
+                """
+                SELECT
+                    user_msg.id as user_msg_id,
+                    user_msg.content as question,
+                    user_msg.created_at as asked_at,
+                    asst_msg.id as response_id,
+                    asst_msg.stage3_response as chairman_response,
+                    asst_msg.mode,
+                    asst_msg.created_at as answered_at,
+                    u.email as user_email,
+                    c.id as conversation_id,
+                    c.title as conversation_title
+                FROM messages user_msg
+                JOIN conversations c ON c.id = user_msg.conversation_id
+                JOIN users u ON u.id = c.user_id
+                LEFT JOIN messages asst_msg ON asst_msg.conversation_id = user_msg.conversation_id
+                    AND asst_msg.role = 'assistant'
+                    AND asst_msg.created_at > user_msg.created_at
+                    AND NOT EXISTS (
+                        SELECT 1 FROM messages m2
+                        WHERE m2.conversation_id = user_msg.conversation_id
+                        AND m2.role = 'assistant'
+                        AND m2.created_at > user_msg.created_at
+                        AND m2.created_at < asst_msg.created_at
+                    )
+                WHERE user_msg.role = 'user'
+                AND (
+                    LOWER(user_msg.content) LIKE LOWER($1)
+                    OR LOWER(asst_msg.stage3_response) LIKE LOWER($1)
+                    OR LOWER(u.email) LIKE LOWER($1)
+                )
+                ORDER BY user_msg.created_at DESC
+                LIMIT $2 OFFSET $3
+                """,
+                f"%{search}%",
+                limit,
+                offset
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    user_msg.id as user_msg_id,
+                    user_msg.content as question,
+                    user_msg.created_at as asked_at,
+                    asst_msg.id as response_id,
+                    asst_msg.stage3_response as chairman_response,
+                    asst_msg.mode,
+                    asst_msg.created_at as answered_at,
+                    u.email as user_email,
+                    c.id as conversation_id,
+                    c.title as conversation_title
+                FROM messages user_msg
+                JOIN conversations c ON c.id = user_msg.conversation_id
+                JOIN users u ON u.id = c.user_id
+                LEFT JOIN messages asst_msg ON asst_msg.conversation_id = user_msg.conversation_id
+                    AND asst_msg.role = 'assistant'
+                    AND asst_msg.created_at > user_msg.created_at
+                    AND NOT EXISTS (
+                        SELECT 1 FROM messages m2
+                        WHERE m2.conversation_id = user_msg.conversation_id
+                        AND m2.role = 'assistant'
+                        AND m2.created_at > user_msg.created_at
+                        AND m2.created_at < asst_msg.created_at
+                    )
+                WHERE user_msg.role = 'user'
+                ORDER BY user_msg.created_at DESC
+                LIMIT $1 OFFSET $2
+                """,
+                limit,
+                offset
+            )
+
+        return [
+            {
+                "id": row["user_msg_id"],
+                "user_email": row["user_email"],
+                "conversation_id": str(row["conversation_id"]),
+                "conversation_title": row["conversation_title"],
+                "question": row["question"],
+                "chairman_response": row["chairman_response"],
+                "mode": row["mode"] or "standard",
+                "asked_at": row["asked_at"].isoformat(),
+                "answered_at": row["answered_at"].isoformat() if row["answered_at"] else None,
+            }
+            for row in rows
+        ]
+
+
+@router.get("/decisions/{message_id}")
+@limiter.limit("30/minute")
+async def get_decision_detail(
+    request: Request,
+    message_id: str,
+    admin: dict = Depends(require_view_queries)
+):
+    """
+    Get full details of a specific decision including all stages.
+    """
+    async with get_connection() as conn:
+        # Get the user message
+        user_msg = await conn.fetchrow(
+            """
+            SELECT m.id, m.content, m.created_at, c.id as conversation_id, u.email
+            FROM messages m
+            JOIN conversations c ON c.id = m.conversation_id
+            JOIN users u ON u.id = c.user_id
+            WHERE m.id = $1 AND m.role = 'user'
+            """,
+            message_id
+        )
+
+        if not user_msg:
+            raise HTTPException(status_code=404, detail="Decision not found")
+
+        # Get the corresponding assistant message
+        asst_msg = await conn.fetchrow(
+            """
+            SELECT id, stage1, stage1_5, stage2, stage3_response, mode, created_at
+            FROM messages
+            WHERE conversation_id = $1 AND role = 'assistant' AND created_at > $2
+            ORDER BY created_at ASC
+            LIMIT 1
+            """,
+            user_msg["conversation_id"],
+            user_msg["created_at"]
+        )
+
+        return {
+            "question": {
+                "id": user_msg["id"],
+                "content": user_msg["content"],
+                "user_email": user_msg["email"],
+                "created_at": user_msg["created_at"].isoformat()
+            },
+            "response": {
+                "id": asst_msg["id"] if asst_msg else None,
+                "stage1": asst_msg["stage1"] if asst_msg else None,
+                "stage1_5": asst_msg["stage1_5"] if asst_msg else None,
+                "stage2": asst_msg["stage2"] if asst_msg else None,
+                "chairman_response": asst_msg["stage3_response"] if asst_msg else None,
+                "mode": asst_msg["mode"] if asst_msg else None,
+                "created_at": asst_msg["created_at"].isoformat() if asst_msg else None
+            } if asst_msg else None
+        }
+
+
 @router.get("/metrics/daily")
 @limiter.limit("30/minute")
 async def get_daily_metrics(

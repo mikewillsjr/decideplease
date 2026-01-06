@@ -647,6 +647,32 @@ export const api = {
   },
 
   /**
+   * List recent decisions with full question and chairman response (admin).
+   */
+  async getAdminDecisions(limit = 50, offset = 0, search = '') {
+    const headers = await getHeaders();
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (search) params.append('search', search);
+    const response = await fetch(`${API_BASE}/api/admin/decisions?${params}`, { headers });
+    if (!response.ok) {
+      throw new Error('Failed to get decisions');
+    }
+    return response.json();
+  },
+
+  /**
+   * Get full details of a specific decision (admin).
+   */
+  async getAdminDecisionDetail(messageId) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/decisions/${messageId}`, { headers });
+    if (!response.ok) {
+      throw new Error('Failed to get decision detail');
+    }
+    return response.json();
+  },
+
+  /**
    * Get daily metrics (admin).
    */
   async getAdminMetrics(days = 30) {

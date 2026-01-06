@@ -15,6 +15,9 @@ function AdminPage() {
   const [users, setUsers] = useState([]);
   const [payments, setPayments] = useState([]);
   const [queries, setQueries] = useState([]);
+  const [decisions, setDecisions] = useState([]);
+  const [selectedDecision, setSelectedDecision] = useState(null);
+  const [decisionSearch, setDecisionSearch] = useState('');
   const [auditLog, setAuditLog] = useState([]);
   const [staffUsers, setStaffUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -147,6 +150,26 @@ function AdminPage() {
     setLoading(false);
   };
 
+  const loadDecisions = async (search = '') => {
+    setLoading(true);
+    try {
+      const decisionsData = await api.getAdminDecisions(50, 0, search);
+      setDecisions(decisionsData);
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  const loadDecisionDetail = async (messageId) => {
+    try {
+      const detail = await api.getAdminDecisionDetail(messageId);
+      setSelectedDecision(detail);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const loadAuditLog = async () => {
     setLoading(true);
     try {
@@ -172,12 +195,14 @@ function AdminPage() {
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     setSelectedUser(null);
+    setSelectedDecision(null);
     setSuccessMessage(null);
     setError(null);
     if (tab === 'dashboard') loadDashboard();
     else if (tab === 'users') loadUsers();
     else if (tab === 'payments') loadPayments();
     else if (tab === 'queries') loadQueries();
+    else if (tab === 'decisions') loadDecisions(decisionSearch);
     else if (tab === 'audit') loadAuditLog();
     else if (tab === 'staff') loadStaffUsers();
   };
@@ -391,6 +416,12 @@ function AdminPage() {
             onClick={() => handleTabChange('queries')}
           >
             Queries
+          </button>
+          <button
+            className={activeTab === 'decisions' ? 'active' : ''}
+            onClick={() => handleTabChange('decisions')}
+          >
+            Decisions
           </button>
           {hasPermission('view_audit_log') && (
             <button
@@ -677,6 +708,127 @@ function AdminPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Decisions Tab */}
+          {activeTab === 'decisions' && !loading && (
+            <div className="decisions-section">
+              <form className="search-form" onSubmit={(e) => { e.preventDefault(); loadDecisions(decisionSearch); }}>
+                <input
+                  type="text"
+                  placeholder="Search questions, responses, or emails..."
+                  value={decisionSearch}
+                  onChange={(e) => setDecisionSearch(e.target.value)}
+                />
+                <button type="submit">Search</button>
+                {decisionSearch && (
+                  <button type="button" onClick={() => { setDecisionSearch(''); loadDecisions(''); }}>
+                    Clear
+                  </button>
+                )}
+              </form>
+
+              <div className="decisions-layout">
+                <div className="decisions-list">
+                  {decisions.length === 0 ? (
+                    <div className="empty-state">No decisions found</div>
+                  ) : (
+                    decisions.map((decision) => (
+                      <div
+                        key={decision.id}
+                        className={`decision-card ${selectedDecision?.question?.id === decision.id ? 'selected' : ''}`}
+                        onClick={() => loadDecisionDetail(decision.id)}
+                      >
+                        <div className="decision-header">
+                          <span className="decision-user">{decision.user_email}</span>
+                          <span className={`decision-mode mode-${decision.mode}`}>{decision.mode}</span>
+                          <span className="decision-date">{formatDate(decision.asked_at)}</span>
+                        </div>
+                        <div className="decision-question">
+                          {decision.question.length > 150
+                            ? decision.question.slice(0, 150) + '...'
+                            : decision.question}
+                        </div>
+                        {decision.chairman_response && (
+                          <div className="decision-response-preview">
+                            {decision.chairman_response.length > 200
+                              ? decision.chairman_response.slice(0, 200) + '...'
+                              : decision.chairman_response}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {selectedDecision && (
+                  <div className="decision-detail">
+                    <div className="detail-header">
+                      <h3>Decision Detail</h3>
+                      <button onClick={() => setSelectedDecision(null)} className="close-detail">×</button>
+                    </div>
+                    <div className="detail-meta">
+                      <span><strong>User:</strong> {selectedDecision.question?.user_email}</span>
+                      <span><strong>Mode:</strong> {selectedDecision.response?.mode || 'standard'}</span>
+                      <span><strong>Asked:</strong> {formatDate(selectedDecision.question?.created_at)}</span>
+                    </div>
+                    <div className="detail-section">
+                      <h4>Question</h4>
+                      <div className="detail-content question-content">
+                        {selectedDecision.question?.content}
+                      </div>
+                    </div>
+                    {selectedDecision.response?.chairman_response && (
+                      <div className="detail-section">
+                        <h4>Chairman Response</h4>
+                        <div className="detail-content response-content">
+                          {selectedDecision.response.chairman_response}
+                        </div>
+                      </div>
+                    )}
+                    {selectedDecision.response?.stage1 && (
+                      <details className="stage-details">
+                        <summary>Stage 1: Individual Responses ({selectedDecision.response.stage1.length})</summary>
+                        <div className="stage-content">
+                          {selectedDecision.response.stage1.map((resp, i) => (
+                            <div key={i} className="stage-item">
+                              <strong>{resp.model}</strong>
+                              <pre>{resp.response?.slice(0, 500)}{resp.response?.length > 500 ? '...' : ''}</pre>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                    {selectedDecision.response?.stage1_5 && (
+                      <details className="stage-details">
+                        <summary>Stage 1.5: Refined Responses ({selectedDecision.response.stage1_5.length})</summary>
+                        <div className="stage-content">
+                          {selectedDecision.response.stage1_5.map((resp, i) => (
+                            <div key={i} className="stage-item">
+                              <strong>{resp.model}</strong>
+                              <pre>{resp.response?.slice(0, 500)}{resp.response?.length > 500 ? '...' : ''}</pre>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                    {selectedDecision.response?.stage2 && (
+                      <details className="stage-details">
+                        <summary>Stage 2: Peer Rankings ({selectedDecision.response.stage2.length})</summary>
+                        <div className="stage-content">
+                          {selectedDecision.response.stage2.map((rank, i) => (
+                            <div key={i} className="stage-item">
+                              <strong>{rank.model}</strong>
+                              <pre>{rank.ranking?.slice(0, 500)}{rank.ranking?.length > 500 ? '...' : ''}</pre>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

@@ -662,13 +662,256 @@ tbody tr.selected {
   font-size: 13px;
 }
 
+/* Decisions Section */
+.decisions-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.decisions-layout {
+  display: grid;
+  grid-template-columns: 1fr 450px;
+  gap: 24px;
+}
+
+.decisions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.decision-card {
+  background: #f8f8f8;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.decision-card:hover {
+  background: #f0f4ff;
+  border-color: #4a90e2;
+}
+
+.decision-card.selected {
+  background: #e8f0fe;
+  border-color: #4a90e2;
+  box-shadow: 0 2px 8px rgba(74, 144, 226, 0.2);
+}
+
+.decision-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.decision-user {
+  font-weight: 600;
+  color: #333;
+}
+
+.decision-mode {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.decision-mode.mode-quick {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.decision-mode.mode-standard {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.decision-mode.mode-extra_care {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.decision-date {
+  color: #999;
+  margin-left: auto;
+}
+
+.decision-question {
+  font-size: 14px;
+  color: #333;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.decision-response-preview {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.4;
+  padding-top: 8px;
+  border-top: 1px solid #e0e0e0;
+}
+
+/* Decision Detail Panel */
+.decision-detail {
+  background: #f8f8f8;
+  border-radius: 12px;
+  padding: 24px;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.detail-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.close-detail {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #999;
+  line-height: 1;
+  padding: 0;
+}
+
+.close-detail:hover {
+  color: #333;
+}
+
+.detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e0e0e0;
+  font-size: 13px;
+}
+
+.detail-meta span {
+  color: #666;
+}
+
+.detail-section {
+  margin-bottom: 20px;
+}
+
+.detail-section h4 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.detail-content {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.question-content {
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.response-content {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.stage-details {
+  margin-bottom: 12px;
+}
+
+.stage-details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  background: #e8e8e8;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #555;
+}
+
+.stage-details summary:hover {
+  background: #ddd;
+}
+
+.stage-details[open] summary {
+  border-radius: 6px 6px 0 0;
+}
+
+.stage-content {
+  border: 1px solid #e0e0e0;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  padding: 12px;
+  background: white;
+}
+
+.stage-item {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.stage-item:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.stage-item strong {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 6px;
+}
+
+.stage-item pre {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: #333;
+  background: #f8f8f8;
+  padding: 10px;
+  border-radius: 4px;
+}
+
 /* Responsive */
 @media (max-width: 1000px) {
-  .users-layout {
+  .users-layout,
+  .decisions-layout {
     grid-template-columns: 1fr;
   }
 
-  .user-detail {
+  .user-detail,
+  .decision-detail {
     order: -1;
   }
 }
