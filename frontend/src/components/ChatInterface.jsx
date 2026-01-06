@@ -10,6 +10,7 @@ import SpeedSelector, { SPEED_OPTIONS } from './SpeedSelector';
 import FileUpload from './FileUpload';
 import DecisionCard from './DecisionCard';
 import CollapsibleStage from './CollapsibleStage';
+import VerificationBanner from './VerificationBanner';
 import './ChatInterface.css';
 
 export default function ChatInterface({
@@ -24,7 +25,10 @@ export default function ChatInterface({
   respondingToMessageId,
   onRespondToMessage,
   onClearRespondingTo,
+  user,
 }) {
+  // Check if user needs to verify email (has password but not verified)
+  const needsVerification = user && !user.email_verified && user.credits === 0;
   const [input, setInput] = useState('');
   const [selectedMode, setSelectedMode] = useState('standard');
   const [attachedFiles, setAttachedFiles] = useState([]);
@@ -161,6 +165,9 @@ export default function ChatInterface({
 
   return (
     <div className="chat-interface">
+      {/* Verification banner for unverified users */}
+      {needsVerification && <VerificationBanner userEmail={user?.email} />}
+
       <div className="messages-container" onScroll={handleScroll}>
         {messages.length === 0 ? (
           <div className="empty-state">
@@ -353,30 +360,32 @@ export default function ChatInterface({
         <FileUpload
           files={attachedFiles}
           onFilesChange={setAttachedFiles}
-          disabled={isLoading}
+          disabled={isLoading || needsVerification}
         />
         <div className="input-wrapper">
           <textarea
             className="message-input"
-            placeholder={respondingToMessageId
-              ? "Add new information or ask a question about this decision..."
-              : "Add new details or constraints, or ask a follow-up question..."}
+            placeholder={needsVerification
+              ? "Verify your email to unlock 5 free credits..."
+              : respondingToMessageId
+                ? "Add new information or ask a question about this decision..."
+                : "Add new details or constraints, or ask a follow-up question..."}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={isLoading}
+            disabled={isLoading || needsVerification}
             rows={2}
           />
           <div className="input-footer">
             <SpeedSelector
               selectedMode={selectedMode}
               onModeChange={setSelectedMode}
-              disabled={isLoading}
+              disabled={isLoading || needsVerification}
             />
             <button
               type="submit"
               className="send-button"
-              disabled={!input.trim() || isLoading}
+              disabled={!input.trim() || isLoading || needsVerification}
             >
               Ask Follow-up ({getSelectedCredits()} cr)
             </button>

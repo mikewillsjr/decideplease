@@ -1,0 +1,117 @@
+.verification-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(93, 93, 255, 0.15), rgba(139, 92, 246, 0.1));
+  border: 1px solid rgba(93, 93, 255, 0.3);
+  border-radius: 8px;
+  margin: 16px;
+  flex-wrap: wrap;
+}
+
+.verification-banner-icon {
+  color: #a78bfa;
+  flex-shrink: 0;
+}
+
+.verification-banner-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.verification-banner-title {
+  color: #e0e0e0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.verification-banner-email {
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.verification-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.verification-banner-resend {
+  background: rgba(93, 93, 255, 0.2);
+  border: 1px solid rgba(93, 93, 255, 0.4);
+  color: #a78bfa;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.verification-banner-resend:hover:not(:disabled) {
+  background: rgba(93, 93, 255, 0.3);
+  border-color: rgba(93, 93, 255, 0.6);
+}
+
+.verification-banner-resend:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.verification-banner-sent {
+  color: #34d399;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.verification-banner-error {
+  color: #f87171;
+  font-size: 13px;
+}
+
+/* Light mode */
+:root[data-theme="light"] .verification-banner {
+  background: linear-gradient(135deg, rgba(93, 93, 255, 0.08), rgba(139, 92, 246, 0.05));
+  border-color: rgba(93, 93, 255, 0.25);
+}
+
+:root[data-theme="light"] .verification-banner-title {
+  color: #374151;
+}
+
+:root[data-theme="light"] .verification-banner-email {
+  color: #6b7280;
+}
+
+:root[data-theme="light"] .verification-banner-resend {
+  background: rgba(93, 93, 255, 0.1);
+  border-color: rgba(93, 93, 255, 0.3);
+  color: #5d5dff;
+}
+
+:root[data-theme="light"] .verification-banner-resend:hover:not(:disabled) {
+  background: rgba(93, 93, 255, 0.15);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 600px) {
+  .verification-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .verification-banner-actions {
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .verification-banner-resend {
+    width: 100%;
+    text-align: center;
+  }
+}

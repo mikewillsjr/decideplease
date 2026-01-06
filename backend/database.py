@@ -222,6 +222,32 @@ async def init_database():
             ON revoked_tokens(expires_at)
         """)
 
+        # Create magic link tokens table for passwordless authentication
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS magic_link_tokens (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                token TEXT UNIQUE NOT NULL,
+                email TEXT NOT NULL,
+                user_id TEXT,
+                token_type TEXT NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                used_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_token
+            ON magic_link_tokens(token)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_email
+            ON magic_link_tokens(email)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_expires_at
+            ON magic_link_tokens(expires_at)
+        """)
+
         # Seed superadmin account if it doesn't exist
         await seed_superadmin(conn)
 

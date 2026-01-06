@@ -12,6 +12,7 @@ import TermsPage from './components/TermsPage'
 import ResetPasswordPage from './components/ResetPasswordPage'
 import SettingsPage from './components/SettingsPage'
 import GoogleCallbackPage from './pages/GoogleCallbackPage'
+import MagicLinkPage from './pages/MagicLinkPage'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -26,6 +27,7 @@ createRoot(document.getElementById('root')).render(
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
+            <Route path="/auth/magic" element={<MagicLinkPage />} />
             <Route path="/*" element={<App />} />
           </Routes>
         </AuthProvider>

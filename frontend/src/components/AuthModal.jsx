@@ -5,7 +5,7 @@ import './AuthModal.css';
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export default function AuthModal({ isOpen, onClose, initialMode = 'login', initialEmail = '' }) {
-  const [mode, setMode] = useState(initialMode); // 'login', 'register', or 'forgot'
+  const [mode, setMode] = useState(initialMode); // 'login', 'register', 'forgot', or 'email_sent'
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -14,8 +14,24 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login', init
   const [isLoading, setIsLoading] = useState(false);
   const [oauthProviders, setOauthProviders] = useState([]);
   const [oauthLoading, setOauthLoading] = useState(false);
+  const [emailSentType, setEmailSentType] = useState(null); // 'magic_link' or 'verification'
+  const [requiresVerification, setRequiresVerification] = useState(false);
 
-  const { login, register } = useAuth();
+  const { login, requestMagicLink } = useAuth();
+
+  // Sync mode with initialMode when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setMode(initialMode);
+      setEmail(initialEmail);
+      setPassword('');
+      setConfirmPassword('');
+      setError('');
+      setSuccess('');
+      setEmailSentType(null);
+      setRequiresVerification(false);
+    }
+  }, [isOpen, initialMode, initialEmail]);
 
   // Fetch OAuth providers on mount
   useEffect(() => {
@@ -61,7 +77,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login', init
 
     try {
       if (mode === 'forgot') {
-        // Send forgot password request
+        // Send forgot password request (also uses magic link)
         const response = await fetch(`${API_BASE}/api/auth/forgot-password`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -75,26 +91,69 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login', init
         setIsLoading(false);
         return;
       } else if (mode === 'register') {
-        // Validate password match
-        if (password !== confirmPassword) {
-          setError('Passwords do not match');
-          setIsLoading(false);
-          return;
+        // Registration flow - use magic link API
+
+        // If password provided, validate it
+        if (password) {
+          if (password !== confirmPassword) {
+            setError('Passwords do not match');
+            setIsLoading(false);
+            return;
+          }
+          if (password.length < 8) {
+            setError('Password must be at least 8 characters');
+            setIsLoading(false);
+            return;
+          }
         }
-        // Validate password strength
-        if (password.length < 8) {
-          setError('Password must be at least 8 characters');
-          setIsLoading(false);
-          return;
+
+        // Request magic link (with optional password)
+        const result = await requestMagicLink(email, password || null);
+
+        if (result.loggedIn) {
+          // Password flow - logged in immediately but needs verification
+          if (result.requiresVerification) {
+            setEmailSentType('verification');
+            setRequiresVerification(true);
+            setMode('email_sent');
+          } else {
+            // Fully verified (shouldn't happen with password signup, but handle it)
+            onClose();
+          }
+        } else {
+          // Magic link flow - email sent
+          setEmailSentType('magic_link');
+          setMode('email_sent');
         }
-        await register(email, password);
       } else {
+        // Login flow
         await login(email, password);
+        // Success - close modal
+        onClose();
       }
-      // Success - close modal
-      onClose();
     } catch (err) {
       setError(err.message || 'Authentication failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle magic link login request
+  const handleMagicLinkLogin = async () => {
+    if (!email) {
+      setError('Please enter your email first');
+      return;
+    }
+
+    setError('');
+    setIsLoading(true);
+
+    try {
+      const result = await requestMagicLink(email, null);
+      setEmailSentType('magic_link');
+      setMode('email_sent');
+    } catch (err) {
+      setError(err.message || 'Failed to send magic link');
     } finally {
       setIsLoading(false);
     }
@@ -106,6 +165,82 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login', init
     setSuccess('');
     setPassword('');
     setConfirmPassword('');
+    setEmailSentType(null);
+    setRequiresVerification(false);
+  };
+
+  // Email sent confirmation screen
+  if (mode === 'email_sent') {
+    return (
+      <div className="auth-modal-overlay" onClick={onClose}>
+        <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
+          <button className="auth-modal-close" onClick={onClose}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+
+          <div className="auth-email-sent">
+            <div className="auth-email-sent-icon">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h2>Check your email</h2>
+            <p className="auth-email-sent-email">{email}</p>
+
+            {emailSentType === 'magic_link' ? (
+              <p className="auth-email-sent-message">
+                We&apos;ve sent you a magic link. Click the link in the email to{' '}
+                {requiresVerification ? 'verify your email and get your 5 free credits' : 'sign in'}.
+              </p>
+            ) : (
+              <p className="auth-email-sent-message">
+                Your account is ready! We&apos;ve sent a verification link to unlock your 5 free credits.
+                You can start exploring while you wait.
+              </p>
+            )}
+
+            <div className="auth-email-sent-note">
+              <span>Didn&apos;t receive it?</span> Check your spam folder or{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('register');
+                  setEmailSentType(null);
+                }}
+              >
+                try again
+              </button>
+            </div>
+
+            {requiresVerification && (
+              <button
+                type="button"
+                className="auth-submit auth-continue-btn"
+                onClick={onClose}
+              >
+                Continue to app
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Determine button text based on mode and password
+  const getSubmitButtonText = () => {
+    if (isLoading) {
+      if (mode === 'login') return 'Signing in...';
+      if (mode === 'register') return password ? 'Creating account...' : 'Sending link...';
+      return 'Sending...';
+    }
+
+    if (mode === 'login') return 'Sign in';
+    if (mode === 'register') return password ? 'Create account' : 'Get started';
+    return 'Send reset link';
   };
 
   return (
@@ -177,20 +312,30 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login', init
 
           {mode !== 'forgot' && (
             <div className="auth-field">
-              <label htmlFor="password">Password</label>
+              <label htmlFor="password">
+                Password
+                {mode === 'register' && <span className="auth-field-optional">(Optional)</span>}
+              </label>
               <input
                 type="password"
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === 'register' ? 'At least 8 characters' : 'Your password'}
-                required
+                placeholder={mode === 'register'
+                  ? 'Set a password or skip for magic link'
+                  : 'Your password'}
+                required={mode === 'login'}
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               />
+              {mode === 'register' && !password && (
+                <p className="auth-field-hint">
+                  Leave blank to sign in via email link
+                </p>
+              )}
             </div>
           )}
 
-          {mode === 'register' && (
+          {mode === 'register' && password && (
             <div className="auth-field">
               <label htmlFor="confirmPassword">Confirm Password</label>
               <input
@@ -206,9 +351,17 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login', init
           )}
 
           {mode === 'login' && (
-            <div className="auth-forgot-link">
-              <button type="button" onClick={() => switchMode('forgot')}>
-                Forgot your password?
+            <div className="auth-login-options">
+              <button type="button" className="auth-forgot-link" onClick={() => switchMode('forgot')}>
+                Forgot password?
+              </button>
+              <button
+                type="button"
+                className="auth-magic-link-btn"
+                onClick={handleMagicLinkLogin}
+                disabled={isLoading}
+              >
+                Email me a login link
               </button>
             </div>
           )}
@@ -223,14 +376,10 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login', init
                 <svg className="auth-spinner" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none" strokeDasharray="32" strokeLinecap="round" />
                 </svg>
-                {mode === 'login' ? 'Signing in...' :
-                 mode === 'register' ? 'Creating account...' :
-                 'Sending...'}
+                {getSubmitButtonText()}
               </span>
             ) : (
-              mode === 'login' ? 'Sign in' :
-              mode === 'register' ? 'Create account' :
-              'Send reset link'
+              getSubmitButtonText()
             )}
           </button>
         </form>

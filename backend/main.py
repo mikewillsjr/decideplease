@@ -50,6 +50,8 @@ from .auth_custom import (
     RegisterRequest,
     LoginRequest,
     RefreshRequest,
+    MagicLinkRequest,
+    VerifyMagicLinkRequest,
     AuthResponse,
     OAUTH_ENABLED,
     JWT_SECRET,
@@ -421,6 +423,160 @@ async def login(request: Request, login_request: LoginRequest):
     response = JSONResponse(content=response_data)
     set_auth_cookies(response, access_token, refresh_token)
     return response
+
+
+@app.post("/api/auth/magic-link")
+@limiter.limit("5/minute")
+async def request_magic_link(request: Request, ml_request: MagicLinkRequest):
+    """
+    Request magic link for passwordless authentication.
+
+    Two flows:
+    1. Email only: Sends magic link, user clicks to create account/login
+    2. Email + password: Creates account immediately with 0 credits until verified
+    """
+    from .email import send_magic_link_email, send_welcome_email
+
+    email = ml_request.email.lower().strip()
+
+    # Check if user exists
+    existing_user = await storage.get_user_by_email(email)
+
+    if ml_request.password:
+        # Password provided - create account immediately with 0 credits
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+
+        # Validate password
+        if len(ml_request.password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+        # Create user with 0 credits (will get 5 after verification)
+        password_hash = hash_password(ml_request.password)
+        try:
+            user = await storage.create_user_with_password(email, password_hash, initial_credits=0)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        # Create verification token and send email
+        token = await storage.create_magic_link_token(email, 'verify', user['id'])
+        asyncio.create_task(send_magic_link_email(email, token, is_signup=True))
+
+        # Generate tokens - user can log in but has 0 credits
+        access_token = create_access_token(user["id"], email, "user")
+        refresh_token = create_refresh_token(user["id"])
+
+        response_data = {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user["id"],
+                "email": user["email"],
+                "credits": 0,
+                "email_verified": False,
+                "role": "user"
+            },
+            "requires_verification": True,
+            "message": "Account created. Please verify your email to unlock 5 free credits."
+        }
+
+        response = JSONResponse(content=response_data)
+        set_auth_cookies(response, access_token, refresh_token)
+        return response
+    else:
+        # No password - magic link flow
+        token_type = 'login' if existing_user else 'signup'
+        user_id = existing_user['id'] if existing_user else None
+
+        # Create magic link token
+        token = await storage.create_magic_link_token(email, token_type, user_id)
+
+        # Send magic link email
+        asyncio.create_task(send_magic_link_email(email, token, is_signup=(token_type == 'signup')))
+
+        return {"message": "Magic link sent to your email", "email": email}
+
+
+@app.post("/api/auth/verify-magic-link")
+async def verify_magic_link(request: Request, verify_request: VerifyMagicLinkRequest):
+    """
+    Verify magic link and complete authentication.
+    Creates account if signup, logs in if login, verifies if verification.
+    """
+    from .email import send_welcome_email
+
+    token_data = await storage.verify_magic_link_token(verify_request.token)
+
+    if not token_data:
+        raise HTTPException(status_code=400, detail="Invalid or expired magic link")
+
+    email = token_data['email']
+    token_type = token_data['token_type']
+    user_id = token_data['user_id']
+
+    if token_type == 'signup':
+        # Create new passwordless user
+        user = await storage.create_passwordless_user(email)
+        asyncio.create_task(send_welcome_email(email, user['credits']))
+    elif token_type == 'login':
+        # Get existing user
+        user = await storage.get_user_by_email(email)
+        if not user:
+            raise HTTPException(status_code=400, detail="User not found")
+    elif token_type == 'verify':
+        # Verify email and grant credits
+        await storage.mark_email_verified(user_id, grant_credits=True)
+        user = await storage.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=400, detail="User not found")
+        # Send welcome email now that they're verified
+        asyncio.create_task(send_welcome_email(email, 5))
+    else:
+        raise HTTPException(status_code=400, detail="Invalid token type")
+
+    # Generate tokens
+    access_token = create_access_token(user["id"], user["email"], user.get("role", "user"))
+    refresh_token = create_refresh_token(user["id"])
+
+    response_data = {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "credits": user["credits"],
+            "email_verified": user.get("email_verified", True),
+            "role": user.get("role", "user")
+        }
+    }
+
+    response = JSONResponse(content=response_data)
+    set_auth_cookies(response, access_token, refresh_token)
+    return response
+
+
+@app.post("/api/auth/resend-verification")
+@limiter.limit("3/minute")
+async def resend_verification(request: Request, user_data: dict = Depends(get_current_user)):
+    """Resend verification email for the current user."""
+    from .email import send_magic_link_email
+
+    if user_data.get("email_verified"):
+        return {"message": "Email already verified"}
+
+    # Create new verification token
+    token = await storage.create_magic_link_token(
+        user_data["email"],
+        'verify',
+        user_data["id"]
+    )
+
+    # Send verification email
+    asyncio.create_task(send_magic_link_email(user_data["email"], token, is_signup=True))
+
+    return {"message": "Verification email sent"}
 
 
 @app.post("/api/auth/refresh")

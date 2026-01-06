@@ -219,6 +219,89 @@ export function AuthProvider({ children }) {
     storeUser(userData);
   }, [storeTokens, storeUser]);
 
+  // Request magic link (for signup or login)
+  const requestMagicLink = useCallback(async (email, password = null) => {
+    const body = { email };
+    if (password) {
+      body.password = password;
+    }
+
+    const response = await fetch(`${API_URL}/api/auth/magic-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to send magic link');
+    }
+
+    // If password was provided, user is logged in immediately (but unverified)
+    if (data.access_token) {
+      storeTokens(data.access_token, data.refresh_token);
+      storeUser(data.user);
+      return {
+        loggedIn: true,
+        requiresVerification: data.requires_verification,
+        message: data.message,
+        user: data.user
+      };
+    }
+
+    // Otherwise magic link was sent
+    return {
+      loggedIn: false,
+      magicLinkSent: true,
+      email: data.email,
+      message: data.message
+    };
+  }, [storeTokens, storeUser]);
+
+  // Verify magic link token
+  const verifyMagicLink = useCallback(async (token) => {
+    const response = await fetch(`${API_URL}/api/auth/verify-magic-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.detail || 'Invalid or expired magic link');
+    }
+
+    storeTokens(data.access_token, data.refresh_token);
+    storeUser(data.user);
+    return data.user;
+  }, [storeTokens, storeUser]);
+
+  // Resend verification email
+  const resendVerification = useCallback(async () => {
+    const token = getAccessToken();
+    if (!token) {
+      throw new Error('Not logged in');
+    }
+
+    const response = await fetch(`${API_URL}/api/auth/resend-verification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to resend verification');
+    }
+
+    return data;
+  }, [getAccessToken]);
+
   const value = {
     user,
     isLoading,
@@ -230,6 +313,9 @@ export function AuthProvider({ children }) {
     getAccessToken,
     refreshUser,
     setAuthData,
+    requestMagicLink,
+    verifyMagicLink,
+    resendVerification,
   };
 
   return (

@@ -88,6 +88,7 @@ export const ROUTES = {
   terms: '/terms',
   settings: '/settings',
   resetPassword: '/reset-password',
+  magicLink: '/auth/magic',
 };
 
 /**
@@ -109,6 +110,9 @@ export const API_ENDPOINTS = {
   updateEmail: '/api/auth/update-email',
   changePassword: '/api/auth/change-password',
   deleteAccount: '/api/auth/delete-account',
+  magicLink: '/api/auth/magic-link',
+  verifyMagicLink: '/api/auth/verify-magic-link',
+  resendVerification: '/api/auth/resend-verification',
 
   // Conversations
   conversations: '/api/conversations',
@@ -159,13 +163,41 @@ export const UI = {
     submitButton: '.auth-submit',
     errorMessage: '.auth-error',
     successMessage: '.auth-success',
-    forgotPasswordLink: 'button:has-text("Forgot your password?")',
+    forgotPasswordLink: 'button:has-text("Forgot password?")',
+    magicLinkLoginButton: 'button:has-text("Email me a login link")',
     switchToSignUp: 'button:has-text("Sign up")',
     switchToSignIn: 'button:has-text("Sign in")',
+    // Email sent confirmation screen
+    emailSentScreen: '.auth-email-sent',
+    emailSentTitle: '.auth-email-sent h2',
+    emailSentEmail: '.auth-email-sent-email',
+    emailSentTryAgain: '.auth-email-sent-note button',
+    continueToAppButton: '.auth-continue-btn',
+    // Optional password label
+    optionalLabel: '.auth-field-optional',
     // Button text by mode
     loginButtonText: 'Sign in',
     registerButtonText: 'Create account',
+    registerNoPasswordText: 'Get started',
     forgotButtonText: 'Send reset link',
+  },
+
+  // Verification banner
+  verification: {
+    banner: '.verification-banner',
+    title: '.verification-banner-title',
+    email: '.verification-banner-email',
+    resendButton: '.verification-banner-resend',
+    sentMessage: '.verification-banner-sent',
+    errorMessage: '.verification-banner-error',
+  },
+
+  // Magic link page
+  magicLink: {
+    page: '/auth/magic',
+    verifyingState: 'text="Verifying your magic link..."',
+    successState: 'text="Email verified!"',
+    errorState: 'text="Link expired or invalid"',
   },
 
   // Main App (Authenticated)

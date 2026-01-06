@@ -390,13 +390,18 @@ async def get_or_create_user(user_id: str, email: str) -> Dict[str, Any]:
         }
 
 
-async def create_user_with_password(email: str, password_hash: str) -> Dict[str, Any]:
+async def create_user_with_password(
+    email: str,
+    password_hash: str,
+    initial_credits: int = 5
+) -> Dict[str, Any]:
     """
     Create a new user with email/password authentication.
 
     Args:
         email: User's email address
         password_hash: Bcrypt hashed password
+        initial_credits: Starting credits (default 5, use 0 for unverified accounts)
 
     Returns:
         User dict with id, email, credits
@@ -419,17 +424,18 @@ async def create_user_with_password(email: str, password_hash: str) -> Dict[str,
         await conn.execute(
             """
             INSERT INTO users (id, email, password_hash, auth_provider, credits, created_at)
-            VALUES ($1, $2, $3, 'email', 5, NOW())
+            VALUES ($1, $2, $3, 'email', $4, NOW())
             """,
             user_id,
             email.lower(),
-            password_hash
+            password_hash,
+            initial_credits
         )
 
         return {
             "id": user_id,
             "email": email.lower(),
-            "credits": 5,
+            "credits": initial_credits,
             "email_verified": False,
             "role": "user"  # New users always start as regular users
         }
@@ -1433,3 +1439,215 @@ async def get_conversation_message_count(conversation_id: str) -> int:
             UUID(conversation_id)
         )
         return row["count"] if row else 0
+
+
+# ============== Magic Link Token Functions ==============
+
+async def create_magic_link_token(
+    email: str,
+    token_type: str,
+    user_id: Optional[str] = None,
+    expires_minutes: int = 20
+) -> str:
+    """
+    Create a magic link token for passwordless authentication.
+
+    Args:
+        email: User's email address
+        token_type: Type of token ('signup', 'login', or 'verify')
+        user_id: Optional user ID (for existing users)
+        expires_minutes: Token expiration time in minutes
+
+    Returns:
+        The generated token string
+    """
+    import secrets
+    from datetime import datetime, timedelta
+
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(minutes=expires_minutes)
+
+    async with get_connection() as conn:
+        await conn.execute(
+            """
+            INSERT INTO magic_link_tokens (token, email, user_id, token_type, expires_at)
+            VALUES ($1, $2, $3, $4, $5)
+            """,
+            token, email.lower().strip(), user_id, token_type, expires_at
+        )
+
+    return token
+
+
+async def verify_magic_link_token(token: str) -> Optional[Dict[str, Any]]:
+    """
+    Verify and consume a magic link token.
+
+    Args:
+        token: The token string to verify
+
+    Returns:
+        Token data dict if valid, None if expired/used/not found
+    """
+    from datetime import datetime
+
+    async with get_connection() as conn:
+        # Find the token
+        row = await conn.fetchrow(
+            """
+            SELECT id, email, user_id, token_type, expires_at, used_at
+            FROM magic_link_tokens
+            WHERE token = $1
+            """,
+            token
+        )
+
+        if not row:
+            return None
+
+        # Check if already used
+        if row["used_at"] is not None:
+            return None
+
+        # Check if expired
+        if row["expires_at"] < datetime.utcnow():
+            return None
+
+        # Mark as used
+        await conn.execute(
+            """
+            UPDATE magic_link_tokens
+            SET used_at = NOW()
+            WHERE id = $1
+            """,
+            row["id"]
+        )
+
+        return {
+            "email": row["email"],
+            "user_id": row["user_id"],
+            "token_type": row["token_type"]
+        }
+
+
+async def create_passwordless_user(email: str) -> Dict[str, Any]:
+    """
+    Create a user without password (magic link user).
+    Email is verified since they clicked the magic link.
+
+    Args:
+        email: User's email address
+
+    Returns:
+        User dict with id, email, credits, etc.
+    """
+    import uuid
+
+    user_id = str(uuid.uuid4())
+    email = email.lower().strip()
+
+    async with get_connection() as conn:
+        await conn.execute(
+            """
+            INSERT INTO users (id, email, password_hash, auth_provider, email_verified, credits, role)
+            VALUES ($1, $2, NULL, 'magic_link', TRUE, 5, 'user')
+            """,
+            user_id, email
+        )
+
+    return {
+        "id": user_id,
+        "email": email,
+        "credits": 5,
+        "email_verified": True,
+        "role": "user"
+    }
+
+
+async def mark_email_verified(user_id: str, grant_credits: bool = True) -> bool:
+    """
+    Mark a user's email as verified and optionally grant starter credits.
+
+    Args:
+        user_id: User ID
+        grant_credits: Whether to grant 5 starter credits
+
+    Returns:
+        True if successful
+    """
+    async with get_connection() as conn:
+        if grant_credits:
+            await conn.execute(
+                """
+                UPDATE users
+                SET email_verified = TRUE, credits = credits + 5
+                WHERE id = $1 AND email_verified = FALSE
+                """,
+                user_id
+            )
+        else:
+            await conn.execute(
+                """
+                UPDATE users
+                SET email_verified = TRUE
+                WHERE id = $1
+                """,
+                user_id
+            )
+    return True
+
+
+async def cleanup_expired_magic_links() -> int:
+    """
+    Delete expired and used magic link tokens.
+    Should be called periodically for housekeeping.
+
+    Returns:
+        Number of tokens deleted
+    """
+    async with get_connection() as conn:
+        result = await conn.execute(
+            """
+            DELETE FROM magic_link_tokens
+            WHERE expires_at < NOW() OR used_at IS NOT NULL
+            """
+        )
+        # Extract count from "DELETE X" result
+        count = int(result.split()[-1]) if result else 0
+        return count
+
+
+async def get_pending_magic_link(email: str) -> Optional[Dict[str, Any]]:
+    """
+    Check if there's a valid pending magic link for this email.
+    Used for rate limiting and preventing spam.
+
+    Args:
+        email: Email address to check
+
+    Returns:
+        Token data if a valid pending link exists, None otherwise
+    """
+    from datetime import datetime
+
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, token_type, expires_at, created_at
+            FROM magic_link_tokens
+            WHERE email = $1
+              AND used_at IS NULL
+              AND expires_at > NOW()
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            email.lower().strip()
+        )
+
+        if row:
+            return {
+                "token_type": row["token_type"],
+                "expires_at": row["expires_at"],
+                "created_at": row["created_at"]
+            }
+        return None

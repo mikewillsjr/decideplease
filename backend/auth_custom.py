@@ -399,6 +399,17 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class MagicLinkRequest(BaseModel):
+    """Magic link request for passwordless auth."""
+    email: EmailStr
+    password: Optional[str] = None  # Optional - if provided, creates account immediately
+
+
+class VerifyMagicLinkRequest(BaseModel):
+    """Verify magic link token."""
+    token: str
+
+
 class AuthResponse(BaseModel):
     """Authentication response with tokens."""
     access_token: str

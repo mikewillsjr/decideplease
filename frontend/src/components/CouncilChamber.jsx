@@ -5,6 +5,7 @@ import VerdictDossier from './VerdictDossier';
 import ChairpersonRemarks from './ChairpersonRemarks';
 import CaseFileTabs from './CaseFileTabs';
 import WaitingGame from './WaitingGame';
+import VerificationBanner from './VerificationBanner';
 import { DEFAULT_MODELS } from '../utils/confidenceCalculator';
 import './CouncilChamber.css';
 
@@ -18,7 +19,10 @@ export default function CouncilChamber({
   isLoading,
   error,
   onDismissError,
+  user,
 }) {
+  // Check if user needs to verify email (has password but not verified)
+  const needsVerification = user && !user.email_verified && user.credits === 0;
   // UI state machine: 'assembly' | 'loading' | 'dossier'
   const [uiState, setUiState] = useState('assembly');
 
@@ -44,7 +48,12 @@ export default function CouncilChamber({
   // Determine UI state based on conversation data
   useEffect(() => {
     if (!conversation || !conversation.messages || conversation.messages.length === 0) {
-      setUiState('assembly');
+      // Check isLoading first - stay in loading state even with no conversation yet
+      if (isLoading) {
+        setUiState('loading');
+      } else {
+        setUiState('assembly');
+      }
       setRounds([]);
       setCurrentRoundIndex(0);
       return;
@@ -76,7 +85,10 @@ export default function CouncilChamber({
     setRounds(newRounds);
 
     // Determine UI state
-    if (newRounds.length === 0) {
+    // Check isLoading first - if we're loading, stay in loading state even with no rounds
+    if (isLoading && newRounds.length === 0) {
+      setUiState('loading');
+    } else if (newRounds.length === 0) {
       setUiState('assembly');
     } else {
       const lastRound = newRounds[newRounds.length - 1];
@@ -162,6 +174,9 @@ export default function CouncilChamber({
 
   return (
     <div className={`council-chamber state-${uiState}`}>
+      {/* Verification banner for unverified users */}
+      {needsVerification && <VerificationBanner userEmail={user?.email} />}
+
       {/* Error banner */}
       {error && (
         <div className="chamber-error">
@@ -179,7 +194,8 @@ export default function CouncilChamber({
             modelStatuses={modelStatuses}
             onSubmit={handleSubmit}
             isLoading={isLoading}
-            disabled={false}
+            disabled={needsVerification}
+            needsVerification={needsVerification}
           />
         )}
 
@@ -238,7 +254,8 @@ export default function CouncilChamber({
                 <ChairpersonRemarks
                   onSubmit={handleFollowUp}
                   isLoading={isLoading}
-                  disabled={false}
+                  disabled={needsVerification}
+                  needsVerification={needsVerification}
                 />
               )}
             </VerdictDossier>

@@ -616,3 +616,99 @@ Visit {APP_URL} to continue.
         html=html,
         text=text
     )
+
+
+# ============== Magic Link Email ==============
+
+async def send_magic_link_email(to: str, magic_token: str, is_signup: bool = True) -> bool:
+    """
+    Send magic link for passwordless authentication.
+
+    Args:
+        to: Recipient email address
+        magic_token: The magic link token
+        is_signup: True if this is a new signup, False if logging in existing user
+    """
+    magic_url = f"{APP_URL}/auth/magic?token={magic_token}"
+
+    if is_signup:
+        subject = "Complete Your DecidePlease Signup"
+        preheader = "Click to create your account and get 5 free credits"
+        heading = "Complete Your Signup"
+        intro_text = "You're one click away from making better decisions with AI. Click the button below to create your account and get <strong>5 free credits</strong>."
+        button_text = "Create My Account"
+        button_color = "#22c55e"
+        expiry_note = "This link expires in 20 minutes. After clicking, your account will be created and you'll be logged in automatically."
+    else:
+        subject = "Sign In to DecidePlease"
+        preheader = "Click to sign in to your account"
+        heading = "Sign In to Your Account"
+        intro_text = "Click the button below to sign in to your DecidePlease account. No password needed!"
+        button_text = "Sign In Now"
+        button_color = "#5d5dff"
+        expiry_note = "This link expires in 20 minutes. If you didn't request this login link, you can safely ignore this email."
+
+    content = f"""
+    <h2 style="margin: 0 0 16px; font-size: 24px; font-weight: 600; color: #18181b;">{heading}</h2>
+    <p style="margin: 0 0 24px; color: #3f3f46; font-size: 16px;">
+        {intro_text}
+    </p>
+
+    <p style="margin: 0 0 32px; text-align: center;">
+        {get_button(button_text, magic_url, button_color)}
+    </p>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 0 0 24px; background-color: #f4f4f5; border-radius: 8px;">
+        <tr>
+            <td style="padding: 16px;">
+                <p style="margin: 0; color: #71717a; font-size: 14px;">
+                    ⏰ {expiry_note}
+                </p>
+            </td>
+        </tr>
+    </table>
+
+    <p style="margin: 0; color: #a1a1aa; font-size: 13px;">
+        If the button doesn't work, copy and paste this link into your browser:<br>
+        <a href="{magic_url}" style="color: #5d5dff; word-break: break-all; font-size: 12px;">{magic_url}</a>
+    </p>
+    """
+
+    html = get_base_template(content, preheader)
+
+    # Plain text version
+    if is_signup:
+        text = f"""
+Complete Your DecidePlease Signup
+
+You're one click away from making better decisions with AI. Visit this link to create your account and get 5 free credits:
+
+{magic_url}
+
+⏰ This link expires in 20 minutes. After clicking, your account will be created and you'll be logged in automatically.
+
+- The DecidePlease Team
+
+Questions? Contact us at {SUPPORT_EMAIL}
+"""
+    else:
+        text = f"""
+Sign In to DecidePlease
+
+Click this link to sign in to your account (no password needed):
+
+{magic_url}
+
+⏰ This link expires in 20 minutes. If you didn't request this login link, you can safely ignore this email.
+
+- The DecidePlease Team
+
+Questions? Contact us at {SUPPORT_EMAIL}
+"""
+
+    return await send_email(
+        to=to,
+        subject=subject,
+        html=html,
+        text=text
+    )

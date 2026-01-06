@@ -616,6 +616,7 @@ function CouncilPage() {
             isLoading={isLoading}
             error={error}
             onDismissError={() => setError(null)}
+            user={user}
           />
         ) : (
           <ChatInterface
@@ -630,6 +631,7 @@ function CouncilPage() {
             respondingToMessageId={respondingToMessageId}
             onRespondToMessage={setRespondingToMessageId}
             onClearRespondingTo={() => setRespondingToMessageId(null)}
+            user={user}
           />
         )}
       </div>
