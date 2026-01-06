@@ -31,7 +31,8 @@
   color: var(--text-secondary);
   line-height: 1.6;
   overflow-x: hidden;
-  min-height: 100vh;
+  overflow-y: auto;
+  height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
 
