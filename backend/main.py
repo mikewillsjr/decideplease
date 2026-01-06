@@ -1042,6 +1042,26 @@ _active_tasks: Dict[str, asyncio.Task] = {}
 _active_status: Dict[str, str] = {}
 
 
+async def _heartbeat_task(queue: asyncio.Queue, operation: str, interval: int = 5):
+    """
+    Send periodic heartbeat events during long-running operations.
+    This keeps the UI responsive and shows users the system is still working.
+    """
+    import time
+    start = time.time()
+    try:
+        while True:
+            await asyncio.sleep(interval)
+            elapsed = int(time.time() - start)
+            await queue.put({
+                'type': 'heartbeat',
+                'operation': operation,
+                'elapsed_seconds': elapsed
+            })
+    except asyncio.CancelledError:
+        pass
+
+
 async def _process_council_request(
     conversation_id: str,
     content: str,
@@ -1123,12 +1143,19 @@ async def _process_council_request(
         # Stage 1: Collect responses (with or without files)
         _active_status[conversation_id] = "stage1"
         await event_queue.put({'type': 'stage1_start'})
-        if processed_files:
-            stage1_results = await stage1_collect_responses_with_files(
-                effective_content, processed_files, council_models
-            )
-        else:
-            stage1_results = await stage1_collect_responses(effective_content, council_models)
+
+        # Start heartbeat for long-running Stage 1
+        heartbeat = asyncio.create_task(_heartbeat_task(event_queue, "Collecting opinions"))
+        try:
+            if processed_files:
+                stage1_results = await stage1_collect_responses_with_files(
+                    effective_content, processed_files, council_models
+                )
+            else:
+                stage1_results = await stage1_collect_responses(effective_content, council_models)
+        finally:
+            heartbeat.cancel()
+
         await storage.update_assistant_message_stage(message_id, 'stage1', stage1_results)
         await event_queue.put({'type': 'stage1_complete', 'data': stage1_results})
 
@@ -1137,11 +1164,24 @@ async def _process_council_request(
         responses_for_ranking = stage1_results  # Default to Stage 1 responses
 
         if enable_cross_review and stage1_results:
+            # Send preparing event before Stage 1.5
+            await event_queue.put({
+                'type': 'stage_preparing',
+                'next_stage': 'stage1_5',
+                'status': 'Starting cross-review refinement...'
+            })
             _active_status[conversation_id] = "stage1_5"
             await event_queue.put({'type': 'stage1_5_start'})
-            stage1_5_results = await stage1_5_cross_review(
-                effective_content, stage1_results, council_models
-            )
+
+            # Start heartbeat for long-running cross-review
+            heartbeat = asyncio.create_task(_heartbeat_task(event_queue, "Cross-review refinement"))
+            try:
+                stage1_5_results = await stage1_5_cross_review(
+                    effective_content, stage1_results, council_models
+                )
+            finally:
+                heartbeat.cancel()
+
             if stage1_5_results:
                 # Use refined responses for subsequent stages
                 responses_for_ranking = stage1_5_results
@@ -1158,11 +1198,24 @@ async def _process_council_request(
         aggregate_rankings = []
 
         if enable_peer_review:
+            # Send preparing event before Stage 2
+            await event_queue.put({
+                'type': 'stage_preparing',
+                'next_stage': 'stage2',
+                'status': 'Preparing peer review...'
+            })
             _active_status[conversation_id] = "stage2"
             await event_queue.put({'type': 'stage2_start'})
-            stage2_results, label_to_model = await stage2_collect_rankings(
-                effective_content, responses_for_ranking, council_models
-            )
+
+            # Start heartbeat for long-running peer review
+            heartbeat = asyncio.create_task(_heartbeat_task(event_queue, "Peer review"))
+            try:
+                stage2_results, label_to_model = await stage2_collect_rankings(
+                    effective_content, responses_for_ranking, council_models
+                )
+            finally:
+                heartbeat.cancel()
+
             aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
             await storage.update_assistant_message_stage(message_id, 'stage2', stage2_results)
             await event_queue.put({
@@ -1176,11 +1229,23 @@ async def _process_council_request(
             await storage.update_assistant_message_stage(message_id, 'stage2', [])
 
         # Stage 3: Synthesize final answer (use refined responses if available)
+        # Send preparing event before Stage 3
+        await event_queue.put({
+            'type': 'stage_preparing',
+            'next_stage': 'stage3',
+            'status': 'Chairman preparing final synthesis...'
+        })
         _active_status[conversation_id] = "stage3"
         await event_queue.put({'type': 'stage3_start'})
-        stage3_result = await stage3_synthesize_final(
-            effective_content, responses_for_ranking, stage2_results, chairman_model
-        )
+
+        # Start heartbeat for chairman synthesis
+        heartbeat = asyncio.create_task(_heartbeat_task(event_queue, "Final synthesis"))
+        try:
+            stage3_result = await stage3_synthesize_final(
+                effective_content, responses_for_ranking, stage2_results, chairman_model
+            )
+        finally:
+            heartbeat.cancel()
         await storage.update_assistant_message_stage(message_id, 'stage3', stage3_result)
         await event_queue.put({
             'type': 'stage3_complete',
@@ -1547,6 +1612,135 @@ async def create_credits_payment_intent(user: dict = Depends(get_current_user)):
         user_id=user["user_id"],
         user_email=user["email"],
     )
+    return result
+
+
+# ============== Saved Payment Methods Endpoints ==============
+
+from .payments import (
+    get_or_create_customer,
+    list_payment_methods,
+    create_setup_intent,
+    detach_payment_method,
+    set_default_payment_method,
+    charge_with_saved_cards,
+    MAX_SAVED_CARDS,
+)
+
+
+@app.get("/api/payments/methods")
+async def get_payment_methods(user: dict = Depends(get_current_user)):
+    """
+    Get list of saved payment methods (cards) for the current user.
+    Maximum of 3 cards allowed.
+    """
+    # Get user's Stripe customer ID
+    db_user = await storage.get_user_by_id(user["user_id"])
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    customer_id = db_user.get("stripe_customer_id")
+    if not customer_id:
+        return {"methods": [], "max_cards": MAX_SAVED_CARDS}
+
+    methods = await list_payment_methods(customer_id)
+    return {"methods": methods, "max_cards": MAX_SAVED_CARDS}
+
+
+@app.post("/api/payments/methods/setup")
+async def setup_new_payment_method(user: dict = Depends(get_current_user)):
+    """
+    Create a SetupIntent for adding a new payment method.
+    Returns client_secret to use with Stripe Elements.
+    """
+    db_user = await storage.get_user_by_id(user["user_id"])
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Get or create Stripe customer
+    customer_id = await get_or_create_customer(
+        user_id=user["user_id"],
+        user_email=user["email"],
+        existing_customer_id=db_user.get("stripe_customer_id")
+    )
+
+    # Save customer ID if new
+    if customer_id != db_user.get("stripe_customer_id"):
+        await storage.update_user_stripe_customer(user["user_id"], customer_id)
+
+    # Create setup intent
+    result = await create_setup_intent(customer_id)
+    result["customer_id"] = customer_id
+    return result
+
+
+@app.delete("/api/payments/methods/{payment_method_id}")
+async def delete_payment_method(
+    payment_method_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Delete a saved payment method."""
+    db_user = await storage.get_user_by_id(user["user_id"])
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    customer_id = db_user.get("stripe_customer_id")
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="No payment methods saved")
+
+    await detach_payment_method(payment_method_id, customer_id)
+    return {"success": True, "message": "Payment method removed"}
+
+
+@app.post("/api/payments/methods/{payment_method_id}/default")
+async def set_default_method(
+    payment_method_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Set a payment method as the default."""
+    db_user = await storage.get_user_by_id(user["user_id"])
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    customer_id = db_user.get("stripe_customer_id")
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="No payment methods saved")
+
+    await set_default_payment_method(payment_method_id, customer_id)
+    return {"success": True, "message": "Default payment method updated"}
+
+
+class ChargeSavedRequest(BaseModel):
+    payment_method_id: Optional[str] = None  # Preferred card to try first
+
+
+@app.post("/api/payments/charge-saved")
+async def charge_saved_cards(
+    request: ChargeSavedRequest,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Purchase credits using saved payment methods.
+
+    Attempts to charge the preferred card first, then falls back to other
+    saved cards if it fails. If all cards fail, returns an error prompting
+    the user to add a new card.
+    """
+    db_user = await storage.get_user_by_id(user["user_id"])
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    customer_id = db_user.get("stripe_customer_id")
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="No saved payment methods. Please add a card first.")
+
+    result = await charge_with_saved_cards(
+        user_id=user["user_id"],
+        user_email=user["email"],
+        customer_id=customer_id,
+        preferred_method_id=request.payment_method_id
+    )
+
     return result
 
 

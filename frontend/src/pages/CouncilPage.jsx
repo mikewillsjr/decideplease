@@ -334,11 +334,39 @@ function CouncilPage() {
         });
         break;
 
+      case 'stage_preparing':
+        // Transition state between stages - keeps CouncilDebate visible
+        setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
+          const messages = [...prev.messages];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
+          lastMsg.loading.preparing = true;
+          lastMsg.loading.nextStage = event.next_stage;
+          lastMsg.loading.preparingStatus = event.status;
+          return { ...prev, messages };
+        });
+        break;
+
+      case 'heartbeat':
+        // Update heartbeat info for elapsed time display
+        setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
+          const messages = [...prev.messages];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
+          lastMsg.loading.heartbeat = {
+            operation: event.operation,
+            elapsed: event.elapsed_seconds
+          };
+          return { ...prev, messages };
+        });
+        break;
+
       case 'stage1_5_start':
         setCurrentConversation((prev) => {
           if (!prev || !prev.messages) return prev;
           const messages = [...prev.messages];
           const lastMsg = getOrCreateLastAssistantMessage(messages);
+          lastMsg.loading.preparing = false;
           lastMsg.loading.stage1_5 = true;
           return { ...prev, messages };
         });
@@ -373,6 +401,7 @@ function CouncilPage() {
           if (!prev || !prev.messages) return prev;
           const messages = [...prev.messages];
           const lastMsg = getOrCreateLastAssistantMessage(messages);
+          lastMsg.loading.preparing = false;
           lastMsg.loading.stage2 = true;
           return { ...prev, messages };
         });
@@ -408,6 +437,7 @@ function CouncilPage() {
           if (!prev || !prev.messages) return prev;
           const messages = [...prev.messages];
           const lastMsg = getOrCreateLastAssistantMessage(messages);
+          lastMsg.loading.preparing = false;
           lastMsg.loading.stage3 = true;
           return { ...prev, messages };
         });

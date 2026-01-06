@@ -51,3 +51,19 @@
 .speed-option.selected .speed-credits {
   color: rgba(255, 255, 255, 0.85);
 }
+
+.speed-note {
+  font-size: 9px;
+  color: var(--text-muted, #6b7280);
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.speed-option.selected .speed-note {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Make Extra Care option slightly wider to fit note */
+.speed-option.has-note {
+  min-width: 90px;
+}

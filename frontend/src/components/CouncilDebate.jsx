@@ -112,14 +112,17 @@ export default function CouncilDebate({
     'deepseek/deepseek-v3.2'
   ];
 
-  // Calculate overall progress percentage
+  // Calculate overall progress percentage (including preparing/transition states)
   const getProgress = () => {
     if (stage3Data && !loading?.stage3) return 100;
     if (loading?.stage3) return 85;
+    if (loading?.preparing && loading?.nextStage === 'stage3') return 75;
     if (stage2Data?.length > 0 && !loading?.stage2) return 70;
     if (loading?.stage2) return 55;
+    if (loading?.preparing && loading?.nextStage === 'stage2') return 40;
     if (stage1_5Data?.length > 0 && !loading?.stage1_5) return 45;
     if (loading?.stage1_5) return 35;
+    if (loading?.preparing && loading?.nextStage === 'stage1_5') return 30;
     if (stage1Data?.length > 0 && !loading?.stage1) return 25;
     if (loading?.stage1) return 10;
     return 5;
@@ -128,6 +131,7 @@ export default function CouncilDebate({
   // Determine status for each model
   const getModelStatus = (modelId, index) => {
     if (loading?.stage3) return 'waiting';
+    if (loading?.preparing) return 'waiting'; // Models wait during transitions
     if (loading?.stage2) {
       // Check if this model has submitted ranking
       const hasRanked = stage2Data?.some(r => r.model === modelId);
@@ -191,10 +195,16 @@ export default function CouncilDebate({
             })}
           </div>
           <div className="bar-status">
-            {loading?.stage1 && 'Stage 1: Gathering opinions...'}
-            {loading?.stage1_5 && 'Stage 1.5: Cross-review...'}
-            {loading?.stage2 && 'Stage 2: Peer review...'}
-            {loading?.stage3 && 'Stage 3: Final synthesis...'}
+            {loading?.preparing && (loading?.preparingStatus || 'Preparing next stage...')}
+            {loading?.preparing && loading?.heartbeat?.elapsed && ` (${loading.heartbeat.elapsed}s)`}
+            {!loading?.preparing && loading?.stage1 && 'Stage 1: Gathering opinions...'}
+            {!loading?.preparing && loading?.stage1 && loading?.heartbeat?.elapsed && ` (${loading.heartbeat.elapsed}s)`}
+            {!loading?.preparing && loading?.stage1_5 && 'Stage 1.5: Cross-review...'}
+            {!loading?.preparing && loading?.stage1_5 && loading?.heartbeat?.elapsed && ` (${loading.heartbeat.elapsed}s)`}
+            {!loading?.preparing && loading?.stage2 && 'Stage 2: Peer review...'}
+            {!loading?.preparing && loading?.stage2 && loading?.heartbeat?.elapsed && ` (${loading.heartbeat.elapsed}s)`}
+            {!loading?.preparing && loading?.stage3 && 'Stage 3: Final synthesis...'}
+            {!loading?.preparing && loading?.stage3 && loading?.heartbeat?.elapsed && ` (${loading.heartbeat.elapsed}s)`}
           </div>
           <button
             className="expand-btn"
@@ -216,10 +226,16 @@ export default function CouncilDebate({
     <div className="council-debate full">
       <div className="debate-header">
         <span className="debate-title">
-          {loading?.stage1 && 'Stage 1: Models are forming opinions...'}
-          {loading?.stage1_5 && 'Stage 1.5: Cross-reviewing all responses...'}
-          {loading?.stage2 && 'Stage 2: Anonymous peer review...'}
-          {loading?.stage3 && 'Stage 3: Chairman synthesizing verdict...'}
+          {loading?.preparing && (loading?.preparingStatus || 'Preparing next stage...')}
+          {loading?.preparing && loading?.heartbeat?.elapsed && ` (${loading.heartbeat.elapsed}s)`}
+          {!loading?.preparing && loading?.stage1 && 'Stage 1: Models are forming opinions...'}
+          {!loading?.preparing && loading?.stage1 && loading?.heartbeat?.elapsed && ` (${loading.heartbeat.elapsed}s)`}
+          {!loading?.preparing && loading?.stage1_5 && 'Stage 1.5: Cross-reviewing all responses...'}
+          {!loading?.preparing && loading?.stage1_5 && loading?.heartbeat?.elapsed && ` (${loading.heartbeat.elapsed}s)`}
+          {!loading?.preparing && loading?.stage2 && 'Stage 2: Anonymous peer review...'}
+          {!loading?.preparing && loading?.stage2 && loading?.heartbeat?.elapsed && ` (${loading.heartbeat.elapsed}s)`}
+          {!loading?.preparing && loading?.stage3 && 'Stage 3: Chairman synthesizing verdict...'}
+          {!loading?.preparing && loading?.stage3 && loading?.heartbeat?.elapsed && ` (${loading.heartbeat.elapsed}s)`}
         </span>
         <div className="debate-controls">
           <button

@@ -243,8 +243,8 @@ export default function ChatInterface({
                     </div>
                   )}
 
-                  {/* Council Debate Visualization (shown during loading) */}
-                  {(msg.loading?.stage1 || msg.loading?.stage1_5 || msg.loading?.stage2 || msg.loading?.stage3) && (
+                  {/* Council Debate Visualization (shown during loading and transitions) */}
+                  {(msg.loading?.stage1 || msg.loading?.stage1_5 || msg.loading?.stage2 || msg.loading?.stage3 || msg.loading?.preparing) && (
                     <CouncilDebate
                       loading={msg.loading}
                       stage1Data={msg.stage1}
