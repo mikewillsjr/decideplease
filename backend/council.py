@@ -318,6 +318,12 @@ async def stage3_synthesize_final(
         Dict with 'model' and 'response' keys
     """
     chairman = chairman_model or CHAIRMAN_MODEL
+
+    # Log input sizes for debugging
+    print(f"[STAGE3] Chairman model: {chairman}")
+    print(f"[STAGE3] Query length: {len(user_query)} chars")
+    print(f"[STAGE3] Stage 1 responses: {len(stage1_results)}")
+    print(f"[STAGE3] Stage 2 rankings: {len(stage2_results)}")
     # Build comprehensive context for chairman
     stage1_text = "\n\n".join([
         f"Model: {result['model']}\nResponse: {result['response']}"
@@ -370,14 +376,50 @@ Provide a clear, well-reasoned final answer that represents the council's collec
 
     if response is None:
         # Fallback if chairman fails
+        print(f"[STAGE3] ERROR: Chairman model returned None")
         return {
             "model": chairman,
             "response": "Error: Unable to generate final synthesis."
         }
 
+    content = response.get('content', '')
+    print(f"[STAGE3] Response length: {len(content)} chars")
+
+    # Validate that the response is a synthesis, not an echo of the question
+    # Check if the response starts with a significant portion of the user query
+    if len(user_query) > 100:
+        query_start = user_query[:200].strip()
+        response_start = content[:300].strip()
+
+        # If response starts with the question, it's likely an echo (model confusion)
+        if query_start in response_start or response_start.startswith(query_start[:100]):
+            print(f"[STAGE3] WARNING: Response appears to echo the question!")
+            print(f"[STAGE3] Query start: {query_start[:100]}...")
+            print(f"[STAGE3] Response start: {response_start[:100]}...")
+
+            # Try to extract any synthesis that might come after the echo
+            # Some models repeat context before answering
+            synthesis_markers = [
+                "Based on the council's analysis",
+                "The council recommends",
+                "After reviewing",
+                "In conclusion",
+                "The consensus is",
+                "My synthesis",
+                "Final recommendation",
+            ]
+            for marker in synthesis_markers:
+                if marker.lower() in content.lower():
+                    marker_pos = content.lower().find(marker.lower())
+                    if marker_pos > len(query_start):
+                        print(f"[STAGE3] Found synthesis after echo at position {marker_pos}")
+                        # Keep the synthesis part
+                        content = content[marker_pos:]
+                        break
+
     return {
         "model": chairman,
-        "response": response.get('content', '')
+        "response": content
     }
 
 
