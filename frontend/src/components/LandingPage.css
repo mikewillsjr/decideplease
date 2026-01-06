@@ -711,6 +711,24 @@
   box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
 }
 
+/* Model Symbols - matching CouncilDebate */
+.model-symbol {
+  font-size: 20px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.model-symbol.gpt { color: #10a37f; }
+.model-symbol.claude { color: #d97706; }
+.model-symbol.gemini { color: #4285f4; }
+.model-symbol.grok { color: #ffffff; }
+.model-symbol.deepseek { color: #6366f1; }
+
+/* In model avatars, make symbols slightly larger */
+.model-avatar .model-symbol {
+  font-size: 18px;
+}
+
 /* Consensus Center */
 .consensus-center {
   position: relative;
@@ -1267,6 +1285,16 @@
 .model-avatar.gemini.dissent {
   background: rgba(239, 68, 68, 0.2);
   color: var(--accent-red);
+}
+
+.model-avatar.grok {
+  background: rgba(161, 161, 170, 0.1);
+  color: #a1a1aa;
+}
+
+.model-avatar.deepseek {
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--accent-indigo);
 }
 
 .model-details {

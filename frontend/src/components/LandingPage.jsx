@@ -29,11 +29,12 @@ const GavelIcon = () => (
   </svg>
 );
 
-const BotIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="bot-icon">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
-  </svg>
-);
+// Model icons matching the actual product (CouncilDebate.jsx)
+const GPTIcon = () => <span className="model-symbol gpt">◯</span>;
+const ClaudeIcon = () => <span className="model-symbol claude">◐</span>;
+const GeminiIcon = () => <span className="model-symbol gemini">◇</span>;
+const GrokIcon = () => <span className="model-symbol grok">✕</span>;
+const DeepSeekIcon = () => <span className="model-symbol deepseek">◈</span>;
 
 const LockIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="lock-icon">
@@ -211,23 +212,23 @@ export default function LandingPage() {
                       <div className="agent-orbit">
                         {/* Agent 1: ChatGPT */}
                         <div className="agent-node pos-1 chatgpt">
-                          <BotIcon />
+                          <GPTIcon />
                         </div>
                         {/* Agent 2: Claude */}
                         <div className="agent-node pos-2 claude">
-                          <BotIcon />
+                          <ClaudeIcon />
                         </div>
                         {/* Agent 3: Gemini */}
                         <div className="agent-node pos-3 gemini">
-                          <BotIcon />
+                          <GeminiIcon />
                         </div>
                         {/* Agent 4: Grok */}
                         <div className="agent-node pos-4 grok">
-                          <BotIcon />
+                          <GrokIcon />
                         </div>
                         {/* Agent 5: DeepSeek */}
                         <div className="agent-node pos-5 deepseek">
-                          <BotIcon />
+                          <DeepSeekIcon />
                         </div>
                       </div>
 
@@ -250,7 +251,7 @@ export default function LandingPage() {
                     <div className="query-section">
                       <h3 className="panel-label">Your Query</h3>
                       <div className="query-box">
-                        "Should we migrate our startup's backend from Python/Django to Go? We have 3 Django devs, getting traction, but performance is becoming a concern."
+                        "I have a good job but got an offer from a startup with 40% more salary and equity. Should I take the risk and leave?"
                       </div>
                     </div>
 
@@ -260,28 +261,28 @@ export default function LandingPage() {
                           <span className="indicator-dot"></span>
                           <h3 className="verdict-label">Consensus Verdict</h3>
                         </div>
-                        <span className="confidence-badge">Confidence: 92%</span>
+                        <span className="confidence-badge">4/5 Agree</span>
                       </div>
 
-                      <p className="verdict-title">Stick with Django (for now).</p>
+                      <p className="verdict-title">Stay at your current job (for now).</p>
                       <p className="verdict-text">
-                        The council unanimously agrees that rewriting in Go is premature optimization. Your bottleneck is likely database queries, not language speed. Rewriting now risks stalling product momentum for 3+ months with a small team.
+                        The council agrees that a 40% salary bump doesn't offset the risk of joining an unproven startup. Your current role offers stability and growth potential. The equity could be worthless if the startup fails.
                       </p>
 
                       <div className="insight-boxes">
                         <div className="insight-box risk">
                           <div className="insight-header">
                             <AlertTriangleIcon />
-                            <span>Primary Risk</span>
+                            <span>Key Risk</span>
                           </div>
-                          <p>Loss of feature velocity during migration window could kill startup momentum.</p>
+                          <p>Startup equity is highly speculative. 90% of startups fail within 3 years.</p>
                         </div>
                         <div className="insight-box action">
                           <div className="insight-header">
                             <ArrowCircleIcon />
-                            <span>Action Plan</span>
+                            <span>Next Steps</span>
                           </div>
-                          <p>Optimize DB indexes first. If Go is needed later, migrate microservices only.</p>
+                          <p>Negotiate a raise at your current job first. If they counter, reassess the startup offer.</p>
                         </div>
                       </div>
                     </div>
@@ -373,40 +374,66 @@ export default function LandingPage() {
                     <div className="model-row">
                       <div className="model-info">
                         <div className="model-avatar chatgpt">
-                          <BotIcon />
+                          <GPTIcon />
                         </div>
                         <div className="model-details">
                           <span className="model-name">ChatGPT</span>
-                          <span className="model-focus">Focus: Efficiency</span>
+                          <span className="model-focus">Focus: Practicality</span>
                         </div>
                       </div>
-                      <span className="vote-badge yes">Vote: YES</span>
+                      <span className="vote-badge yes">Vote: STAY</span>
                     </div>
 
                     <div className="model-row">
                       <div className="model-info">
                         <div className="model-avatar claude">
-                          <BotIcon />
+                          <ClaudeIcon />
                         </div>
                         <div className="model-details">
                           <span className="model-name">Claude</span>
-                          <span className="model-focus">Focus: Safety</span>
+                          <span className="model-focus">Focus: Risk Analysis</span>
                         </div>
                       </div>
-                      <span className="vote-badge yes">Vote: YES</span>
+                      <span className="vote-badge yes">Vote: STAY</span>
                     </div>
 
                     <div className="model-row dissent">
                       <div className="model-info">
                         <div className="model-avatar gemini dissent">
-                          <BotIcon />
+                          <GeminiIcon />
                         </div>
                         <div className="model-details">
                           <span className="model-name">Gemini</span>
-                          <span className="model-focus dissent">Flags Risk</span>
+                          <span className="model-focus dissent">Sees Opportunity</span>
                         </div>
                       </div>
-                      <span className="vote-badge no">Vote: NO</span>
+                      <span className="vote-badge no">Vote: LEAVE</span>
+                    </div>
+
+                    <div className="model-row">
+                      <div className="model-info">
+                        <div className="model-avatar grok">
+                          <GrokIcon />
+                        </div>
+                        <div className="model-details">
+                          <span className="model-name">Grok</span>
+                          <span className="model-focus">Focus: Market Reality</span>
+                        </div>
+                      </div>
+                      <span className="vote-badge yes">Vote: STAY</span>
+                    </div>
+
+                    <div className="model-row">
+                      <div className="model-info">
+                        <div className="model-avatar deepseek">
+                          <DeepSeekIcon />
+                        </div>
+                        <div className="model-details">
+                          <span className="model-name">DeepSeek</span>
+                          <span className="model-focus">Focus: Long-term</span>
+                        </div>
+                      </div>
+                      <span className="vote-badge yes">Vote: STAY</span>
                     </div>
                   </div>
 
@@ -416,7 +443,7 @@ export default function LandingPage() {
                     </div>
                     <div className="dissent-content">
                       <span className="dissent-title">Dissent Detected</span>
-                      <p>Gemini identified a critical security flaw in the proposed approach that other models missed. The final verdict has been adjusted to address this risk.</p>
+                      <p>Gemini flagged that the startup's growth trajectory could mean this offer won't be available later. The final verdict weighs this but prioritizes stability.</p>
                     </div>
                   </div>
                 </div>
