@@ -384,19 +384,41 @@ Provide a clear, well-reasoned final answer that represents the council's collec
 
     content = response.get('content', '')
     print(f"[STAGE3] Response length: {len(content)} chars")
+    print(f"[STAGE3] Query length: {len(user_query)} chars")
+    print(f"[STAGE3] Response preview: {content[:150]}...")
 
     # Validate that the response is a synthesis, not an echo of the question
-    # Check if the response starts with a significant portion of the user query
+    # Multiple detection methods for robustness
     echo_detected = False
     synthesis_found = False
 
     if len(user_query) > 100:
         query_start = user_query[:200].strip()
-        response_start = content[:300].strip()
+        response_start = content[:500].strip()  # Check more of the response
 
-        # If response starts with the question, it's likely an echo (model confusion)
+        # Method 1: Direct prefix match
         if query_start in response_start or response_start.startswith(query_start[:100]):
             echo_detected = True
+            print(f"[STAGE3] Echo detected: Method 1 (prefix match)")
+
+        # Method 2: Check if distinctive phrases from query appear in response
+        # Extract first few "words" that are likely unique to this query
+        query_words = user_query[:500].split()
+        if len(query_words) > 10:
+            # Check if a sequence of 5+ consecutive words from query appears in response
+            for i in range(0, min(len(query_words) - 5, 20)):
+                phrase = ' '.join(query_words[i:i+5])
+                if phrase in content[:1000]:
+                    echo_detected = True
+                    print(f"[STAGE3] Echo detected: Method 2 (phrase match: '{phrase[:50]}...')")
+                    break
+
+        # Method 3: Length similarity - if response is similar length to query and query is long
+        if len(user_query) > 500 and abs(len(content) - len(user_query)) < 200:
+            echo_detected = True
+            print(f"[STAGE3] Echo detected: Method 3 (suspicious length similarity)")
+
+        if echo_detected:
             print(f"[STAGE3] WARNING: Response appears to echo the question!")
             print(f"[STAGE3] Query start: {query_start[:100]}...")
             print(f"[STAGE3] Response start: {response_start[:100]}...")
