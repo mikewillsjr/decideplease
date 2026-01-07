@@ -24,6 +24,33 @@ def parse_json_field(value):
     return value
 
 
+async def cleanup_incomplete_messages() -> int:
+    """
+    Delete any assistant messages that are incomplete (missing stage3).
+
+    This is a safety cleanup that runs on startup to remove any partial messages
+    that might exist from interrupted processing. With atomic saves, this should
+    rarely find anything, but it's a safety net.
+
+    Returns:
+        Number of incomplete messages deleted
+    """
+    async with get_connection() as conn:
+        # Find and delete incomplete assistant messages (have stage1 but no stage3)
+        result = await conn.execute(
+            """
+            DELETE FROM messages
+            WHERE role = 'assistant'
+            AND stage3 IS NULL
+            """
+        )
+        # Parse the result to get count (format: "DELETE N")
+        count = int(result.split()[-1]) if result else 0
+        if count > 0:
+            logger.warning("cleanup_incomplete_messages", deleted_count=count)
+        return count
+
+
 async def create_conversation(conversation_id: str, user_id: str) -> Dict[str, Any]:
     """
     Create a new conversation.
@@ -904,6 +931,75 @@ async def add_assistant_message_with_mode(
             """,
             UUID(conversation_id),
             json.dumps(stage1),
+            json.dumps(stage2),
+            json.dumps(stage3),
+            mode,
+            is_rerun,
+            rerun_input,
+            revision_number,
+            parent_message_id
+        )
+        return row["id"]
+
+
+async def add_assistant_message_complete(
+    conversation_id: str,
+    stage1: List[Dict[str, Any]],
+    stage2: List[Dict[str, Any]],
+    stage3: Dict[str, Any],
+    stage1_5: Optional[List[Dict[str, Any]]] = None,
+    mode: str = "standard",
+    is_rerun: bool = False,
+    rerun_input: Optional[str] = None,
+    parent_message_id: Optional[int] = None
+) -> int:
+    """
+    Add a complete assistant message with ALL stages in a single atomic transaction.
+
+    This function is critical for data integrity - it ensures we never have partial
+    messages in the database. If the server is interrupted mid-processing, nothing
+    is saved and the user can simply re-ask their question.
+
+    Args:
+        conversation_id: Conversation identifier
+        stage1: List of individual model responses
+        stage2: List of model rankings (empty list for quick mode)
+        stage3: Final synthesized response
+        stage1_5: Cross-review refinements (optional, for extra_care mode)
+        mode: Run mode used ("quick", "standard", "extra_care")
+        is_rerun: Whether this is a rerun of a previous decision
+        rerun_input: New input provided for rerun (if any)
+        parent_message_id: ID of the original message this is a rerun of
+
+    Returns:
+        The ID of the created message
+    """
+    async with get_connection() as conn:
+        # Calculate revision number for reruns
+        revision_number = 0
+        if is_rerun and parent_message_id:
+            row = await conn.fetchrow(
+                """
+                SELECT COALESCE(MAX(revision_number), 0) + 1 as next_revision
+                FROM messages
+                WHERE parent_message_id = $1 OR id = $1
+                """,
+                parent_message_id
+            )
+            revision_number = row["next_revision"] if row else 1
+
+        row = await conn.fetchrow(
+            """
+            INSERT INTO messages (
+                conversation_id, role, stage1, stage1_5, stage2, stage3,
+                mode, is_rerun, rerun_input, revision_number, parent_message_id, created_at
+            )
+            VALUES ($1, 'assistant', $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+            RETURNING id
+            """,
+            UUID(conversation_id),
+            json.dumps(stage1),
+            json.dumps(stage1_5) if stage1_5 else None,
             json.dumps(stage2),
             json.dumps(stage3),
             mode,

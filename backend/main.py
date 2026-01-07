@@ -37,7 +37,7 @@ from .logging_config import get_logger
 logger = get_logger(__name__)
 
 from . import storage_pg as storage
-from .storage_pg import InsufficientCreditsError
+from .storage_pg import InsufficientCreditsError, cleanup_incomplete_messages
 from .database import init_database, close_pool, get_connection
 from .auth_custom import (
     get_current_user,
@@ -86,6 +86,7 @@ from .admin import router as admin_router, ADMIN_EMAILS
 from .permissions import has_permission
 from .file_processing import validate_files, process_files, FileValidationError
 from .council import stage1_collect_responses_with_files
+from .openrouter import close_http_client
 
 
 # Required environment variables for production
@@ -162,12 +163,18 @@ async def lifespan(app: FastAPI):
         await init_database()
         logger.info("database_initialized")
 
+        # Clean up any incomplete messages from interrupted processing
+        deleted_count = await cleanup_incomplete_messages()
+        if deleted_count > 0:
+            logger.warning("incomplete_messages_cleaned", count=deleted_count)
+
     logger.info("application_ready")
     yield
 
-    # Shutdown: Close database pool
+    # Shutdown: Close resources
     logger.info("application_shutting_down")
-    await close_pool()
+    await close_http_client()  # Close HTTP client connection pool
+    await close_pool()  # Close database connection pool
     logger.info("application_stopped")
 
 
@@ -1262,14 +1269,9 @@ async def _process_council_request(
         if not is_rerun:
             await storage.add_user_message(conversation_id, content)
 
-        # Create pending assistant message with mode info
-        message_id = await storage.create_pending_assistant_message_with_mode(
-            conversation_id,
-            mode=mode,
-            is_rerun=is_rerun,
-            rerun_input=rerun_input,
-            parent_message_id=parent_message_id
-        )
+        # NOTE: We no longer create a pending message here.
+        # Instead, we collect all stage data in memory and save atomically at the end.
+        # This prevents partial/incomplete messages if the process is interrupted mid-way.
 
         # Send initial event with mode info and remaining credits
         remaining_credits = await storage.get_user_credits(user_id)
@@ -1347,7 +1349,7 @@ Respond to the new input above. If it's new information that affects the decisio
         finally:
             heartbeat.cancel()
 
-        await storage.update_assistant_message_stage(message_id, 'stage1', stage1_results)
+        # Stage 1 data will be saved atomically at the end
         await event_queue.put({'type': 'stage1_complete', 'data': stage1_results})
 
         # Stage 1.5: Cross-Review (Extra Care mode only)
@@ -1376,7 +1378,7 @@ Respond to the new input above. If it's new information that affects the decisio
             if stage1_5_results:
                 # Use refined responses for subsequent stages
                 responses_for_ranking = stage1_5_results
-                await storage.update_assistant_message_stage(message_id, 'stage1_5', stage1_5_results)
+                # Stage 1.5 data will be saved atomically at the end
             await event_queue.put({'type': 'stage1_5_complete', 'data': stage1_5_results})
         else:
             # Emit skipped event if not using cross-review
@@ -1408,7 +1410,7 @@ Respond to the new input above. If it's new information that affects the decisio
                 heartbeat.cancel()
 
             aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
-            await storage.update_assistant_message_stage(message_id, 'stage2', stage2_results)
+            # Stage 2 data will be saved atomically at the end
             await event_queue.put({
                 'type': 'stage2_complete',
                 'data': stage2_results,
@@ -1417,7 +1419,6 @@ Respond to the new input above. If it's new information that affects the decisio
         else:
             # Emit skipped event for Quick mode
             await event_queue.put({'type': 'stage2_skipped', 'reason': 'Quick mode - peer review disabled'})
-            await storage.update_assistant_message_stage(message_id, 'stage2', [])
 
         # Stage 3: Synthesize final answer (use refined responses if available)
         # Send preparing event before Stage 3
@@ -1437,7 +1438,21 @@ Respond to the new input above. If it's new information that affects the decisio
             )
         finally:
             heartbeat.cancel()
-        await storage.update_assistant_message_stage(message_id, 'stage3', stage3_result)
+
+        # ATOMIC SAVE: Save ALL stages in a single database transaction
+        # This ensures we never have partial/incomplete messages if interrupted
+        message_id = await storage.add_assistant_message_complete(
+            conversation_id=conversation_id,
+            stage1=stage1_results,
+            stage1_5=stage1_5_results if stage1_5_results else None,
+            stage2=stage2_results,
+            stage3=stage3_result,
+            mode=mode,
+            is_rerun=is_rerun,
+            rerun_input=rerun_input,
+            parent_message_id=parent_message_id
+        )
+
         await event_queue.put({
             'type': 'stage3_complete',
             'data': stage3_result,
@@ -1987,7 +2002,7 @@ async def stripe_webhook(
 
         # Skip if no user_id - this payment is from another app on the shared account
         if not user_id:
-            print(f"[WEBHOOK] Ignoring checkout.session.completed - no user_id metadata (other app)")
+            logger.debug("webhook_ignored", event_type="checkout.session.completed", reason="no_user_id_metadata")
             return {"status": "success"}
 
         credits_str = session.get("metadata", {}).get("credits", str(CREDITS_PER_PURCHASE))
@@ -2004,7 +2019,7 @@ async def stripe_webhook(
         )
 
         await storage.add_credits(user_id, credits_to_add)
-        print(f"[WEBHOOK] Added {credits_to_add} credits to user {user_id}")
+        logger.info("credits_added", user_id=user_id, credits=credits_to_add, source="checkout")
 
         # Send custom purchase confirmation email (when implemented)
         customer_email = session.get("customer_email")
@@ -2021,7 +2036,7 @@ async def stripe_webhook(
 
         # Skip if no user_id - this payment is from another app on the shared account
         if not user_id:
-            print(f"[WEBHOOK] Ignoring payment_intent.succeeded - no user_id metadata (other app)")
+            logger.debug("webhook_ignored", event_type="payment_intent.succeeded", reason="no_user_id_metadata")
             return {"status": "success"}
 
         credits_str = intent.get("metadata", {}).get("credits", str(CREDITS_PER_PURCHASE))
@@ -2038,7 +2053,7 @@ async def stripe_webhook(
         )
 
         await storage.add_credits(user_id, credits_to_add)
-        print(f"[WEBHOOK] Added {credits_to_add} credits to user {user_id} (Payment Element)")
+        logger.info("credits_added", user_id=user_id, credits=credits_to_add, source="payment_element")
 
         # Send custom purchase confirmation email
         customer_email = intent.get("receipt_email")
