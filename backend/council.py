@@ -387,12 +387,16 @@ Provide a clear, well-reasoned final answer that represents the council's collec
 
     # Validate that the response is a synthesis, not an echo of the question
     # Check if the response starts with a significant portion of the user query
+    echo_detected = False
+    synthesis_found = False
+
     if len(user_query) > 100:
         query_start = user_query[:200].strip()
         response_start = content[:300].strip()
 
         # If response starts with the question, it's likely an echo (model confusion)
         if query_start in response_start or response_start.startswith(query_start[:100]):
+            echo_detected = True
             print(f"[STAGE3] WARNING: Response appears to echo the question!")
             print(f"[STAGE3] Query start: {query_start[:100]}...")
             print(f"[STAGE3] Response start: {response_start[:100]}...")
@@ -407,6 +411,9 @@ Provide a clear, well-reasoned final answer that represents the council's collec
                 "The consensus is",
                 "My synthesis",
                 "Final recommendation",
+                "Synthesis:",
+                "My recommendation",
+                "The verdict",
             ]
             for marker in synthesis_markers:
                 if marker.lower() in content.lower():
@@ -415,7 +422,46 @@ Provide a clear, well-reasoned final answer that represents the council's collec
                         print(f"[STAGE3] Found synthesis after echo at position {marker_pos}")
                         # Keep the synthesis part
                         content = content[marker_pos:]
+                        synthesis_found = True
                         break
+
+    # If echo detected but no synthesis found, retry with a clearer prompt
+    if echo_detected and not synthesis_found:
+        print(f"[STAGE3] Echo detected without synthesis - retrying with explicit prompt")
+
+        retry_prompt = f"""IMPORTANT: Do NOT repeat the question. Provide ONLY your synthesis.
+
+The council has reviewed this question:
+"{user_query[:500]}{'...' if len(user_query) > 500 else ''}"
+
+Based on {len(stage1_results)} council member responses, provide your SYNTHESIS and RECOMMENDATION.
+Start directly with your answer. Do not repeat or rephrase the question.
+
+Your synthesis:"""
+
+        retry_response = await query_model(chairman, [{"role": "user", "content": retry_prompt}])
+
+        if retry_response and retry_response.get('content'):
+            retry_content = retry_response['content'].strip()
+            # Verify retry didn't also echo
+            if not (len(user_query) > 100 and user_query[:100] in retry_content[:200]):
+                print(f"[STAGE3] Retry successful - got clean response of {len(retry_content)} chars")
+                content = retry_content
+            else:
+                print(f"[STAGE3] Retry also echoed - falling back to error message")
+                content = """**Unable to generate synthesis** - The chairman model encountered an issue processing this query.
+
+**Workaround:** Please try:
+1. Shortening your question
+2. Splitting into multiple smaller questions
+3. Using "Quick Answer" mode
+
+The individual council responses above may still be helpful."""
+        else:
+            print(f"[STAGE3] Retry failed - model returned None")
+            content = """**Unable to generate synthesis** - The chairman model failed to respond.
+
+Please try again or review the individual council member responses above."""
 
     return {
         "model": chairman,
