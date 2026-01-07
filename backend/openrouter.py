@@ -10,6 +10,29 @@ MAX_RETRIES = 1  # One retry attempt (total 2 attempts)
 RETRY_DELAY = 1.0  # Initial delay in seconds
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
+# Module-level HTTP client for connection pooling
+# This reuses TCP connections across requests, reducing latency
+_http_client: Optional[httpx.AsyncClient] = None
+
+
+async def get_http_client() -> httpx.AsyncClient:
+    """Get or create the shared HTTP client with connection pooling."""
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(120.0, connect=10.0),
+            limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
+        )
+    return _http_client
+
+
+async def close_http_client():
+    """Close the HTTP client. Call on application shutdown."""
+    global _http_client
+    if _http_client is not None and not _http_client.is_closed:
+        await _http_client.aclose()
+        _http_client = None
+
 
 async def query_model(
     model: str,
@@ -39,23 +62,25 @@ async def query_model(
         "messages": messages,
     }
 
+    client = await get_http_client()
+
     for attempt in range(MAX_RETRIES + 1):
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(
-                    OPENROUTER_API_URL,
-                    headers=headers,
-                    json=payload
-                )
-                response.raise_for_status()
+            response = await client.post(
+                OPENROUTER_API_URL,
+                headers=headers,
+                json=payload,
+                timeout=timeout
+            )
+            response.raise_for_status()
 
-                data = response.json()
-                message = data['choices'][0]['message']
+            data = response.json()
+            message = data['choices'][0]['message']
 
-                return {
-                    'content': message.get('content'),
-                    'reasoning_details': message.get('reasoning_details')
-                }
+            return {
+                'content': message.get('content'),
+                'reasoning_details': message.get('reasoning_details')
+            }
 
         except httpx.HTTPStatusError as e:
             # Retry on specific status codes (rate limit, server errors)
