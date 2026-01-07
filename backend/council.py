@@ -429,15 +429,24 @@ Provide a clear, well-reasoned final answer that represents the council's collec
     if echo_detected and not synthesis_found:
         print(f"[STAGE3] Echo detected without synthesis - retrying with explicit prompt")
 
-        retry_prompt = f"""IMPORTANT: Do NOT repeat the question. Provide ONLY your synthesis.
+        # Build a summary of council responses for the retry
+        council_summary = "\n".join([
+            f"- {r['model'].split('/')[-1]}: {r['response'][:300]}{'...' if len(r['response']) > 300 else ''}"
+            for r in stage1_results[:3]  # Include top 3 responses
+        ])
 
-The council has reviewed this question:
-"{user_query[:500]}{'...' if len(user_query) > 500 else ''}"
+        retry_prompt = f"""IMPORTANT: Do NOT repeat or echo the question. Start DIRECTLY with your synthesis.
 
-Based on {len(stage1_results)} council member responses, provide your SYNTHESIS and RECOMMENDATION.
-Start directly with your answer. Do not repeat or rephrase the question.
+QUESTION (for context only - do not repeat):
+{user_query[:300]}{'...' if len(user_query) > 300 else ''}
 
-Your synthesis:"""
+COUNCIL RESPONSES TO SYNTHESIZE:
+{council_summary}
+
+YOUR TASK: Synthesize the above responses into a clear recommendation.
+Start with "Based on the council's analysis..." or similar. Do NOT repeat the question.
+
+SYNTHESIS:"""
 
         retry_response = await query_model(chairman, [{"role": "user", "content": retry_prompt}])
 
