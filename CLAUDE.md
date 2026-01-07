@@ -2,6 +2,17 @@
 
 This file contains technical details, architectural decisions, and important implementation notes for future development sessions.
 
+## API Keys & Credentials
+
+**Render API Key:** `rnd_FBZ7HcVTe9eg38SeJfww7ForGyiS`
+- Used for: Pulling logs, checking deploy status, managing services
+- API docs: https://api-docs.render.com/
+
+**Production Database (Render Postgres):**
+```bash
+PGPASSWORD=oQXDrJLAnkAJcHDCxzAcMz72hDoOvG40 psql -h dpg-d5bj7ckhg0os73dlb49g-a.oregon-postgres.render.com -p 5432 -U decideplease decideplease
+```
+
 ## Project Overview
 
 DecidePlease is a 3-stage deliberation system where multiple LLMs collaboratively answer user questions. The key innovation is anonymized peer review in Stage 2, preventing models from playing favorites.
