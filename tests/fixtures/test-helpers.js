@@ -82,7 +82,8 @@ export const ROLES = {
  */
 export const ROUTES = {
   home: '/',
-  council: '/council',
+  decision: '/decision',
+  council: '/council', // Legacy alias (redirects to /decision)
   admin: '/admin',
   privacy: '/privacy',
   terms: '/terms',
@@ -724,12 +725,20 @@ export async function navigateToAdmin(page) {
 }
 
 /**
- * Navigate to council page (main app)
+ * Navigate to decision page (main app)
  * @param {import('@playwright/test').Page} page
  */
-export async function navigateToCouncil(page) {
-  await page.goto(ROUTES.council);
+export async function navigateToDecision(page) {
+  await page.goto(ROUTES.decision);
   await page.waitForLoadState('networkidle');
+}
+
+/**
+ * Legacy alias for navigateToDecision
+ * @deprecated Use navigateToDecision instead
+ */
+export async function navigateToCouncil(page) {
+  await navigateToDecision(page);
 }
 
 /**

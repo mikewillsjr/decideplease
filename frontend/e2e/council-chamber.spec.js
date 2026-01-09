@@ -33,7 +33,7 @@ test.describe('Interface Preference Toggle', () => {
       console.log('Preferences section visible:', hasPreferences);
 
       if (hasPreferences) {
-        await page.screenshot({ path: 'e2e/screenshots/council-01-settings-nav.png' });
+        await page.screenshot({ path: 'e2e/screenshots/decision-01-settings-nav.png' });
 
         // Click Preferences
         await preferencesBtn.click();
@@ -49,7 +49,7 @@ test.describe('Interface Preference Toggle', () => {
         console.log('Chamber option visible:', hasChamberOption);
         console.log('Classic option visible:', hasClassicOption);
 
-        await page.screenshot({ path: 'e2e/screenshots/council-02-preferences.png' });
+        await page.screenshot({ path: 'e2e/screenshots/decision-02-preferences.png' });
 
         expect(hasChamberOption || hasClassicOption).toBeTruthy();
       }
@@ -64,12 +64,12 @@ test.describe('Council Chamber UI', () => {
 
   test('Council page renders correctly', async ({ page }) => {
     // Navigate to council page (requires auth)
-    await page.goto(`${BASE_URL}/council`);
+    await page.goto(`${BASE_URL}/decision`);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
 
     // Take screenshot of whatever renders
-    await page.screenshot({ path: 'e2e/screenshots/council-03-council-page.png', fullPage: true });
+    await page.screenshot({ path: 'e2e/screenshots/decision-03-council-page.png', fullPage: true });
 
     // Check for either Council Chamber or ChatInterface elements
     const councilArc = page.locator('.council-arc');
@@ -89,7 +89,7 @@ test.describe('Council Chamber UI', () => {
 
     // If not authenticated, should redirect to landing
     if (!hasInterface) {
-      const onLanding = page.url().includes(BASE_URL) && !page.url().includes('/council');
+      const onLanding = page.url().includes(BASE_URL) && !page.url().includes('/decision');
       console.log('Redirected to landing (not authenticated):', onLanding);
     }
   });
@@ -102,7 +102,7 @@ test.describe('Council Chamber UI', () => {
     });
 
     // Navigate to council
-    await page.goto(`${BASE_URL}/council`);
+    await page.goto(`${BASE_URL}/decision`);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
 
@@ -113,7 +113,7 @@ test.describe('Council Chamber UI', () => {
     console.log('Model seats found:', seatCount);
 
     if (seatCount > 0) {
-      await page.screenshot({ path: 'e2e/screenshots/council-04-model-seats.png' });
+      await page.screenshot({ path: 'e2e/screenshots/decision-04-model-seats.png' });
       expect(seatCount).toBeGreaterThanOrEqual(1);
     }
   });
@@ -161,11 +161,11 @@ test.describe('Council Chamber Responsive Design', () => {
       localStorage.setItem('decideplease_interface', 'chamber');
     });
 
-    await page.goto(`${BASE_URL}/council`);
+    await page.goto(`${BASE_URL}/decision`);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
 
-    await page.screenshot({ path: 'e2e/screenshots/council-05-mobile.png', fullPage: true });
+    await page.screenshot({ path: 'e2e/screenshots/decision-05-mobile.png', fullPage: true });
 
     // Check that page renders without errors
     const errors = [];
@@ -185,11 +185,11 @@ test.describe('Council Chamber Responsive Design', () => {
       localStorage.setItem('decideplease_interface', 'chamber');
     });
 
-    await page.goto(`${BASE_URL}/council`);
+    await page.goto(`${BASE_URL}/decision`);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
 
-    await page.screenshot({ path: 'e2e/screenshots/council-06-tablet.png', fullPage: true });
+    await page.screenshot({ path: 'e2e/screenshots/decision-06-tablet.png', fullPage: true });
 
     // Check that page renders without errors
     const errors = [];

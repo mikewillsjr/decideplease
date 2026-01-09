@@ -552,12 +552,12 @@ test.describe.serial('Council Process - API Integration', () => {
   });
 });
 
-test.describe('Council Process - UI Integration', () => {
-  test('council page shows input and mode selector', async ({ page, request }) => {
-    console.log('Testing: Council page UI elements');
+test.describe('Decision Process - UI Integration', () => {
+  test('decision page shows input and mode selector', async ({ page, request }) => {
+    console.log('Testing: Decision page UI elements');
 
     await setupAuthenticatedUser(page, request);
-    await page.goto('/council');
+    await page.goto('/decision');
 
     // Check for message input
     const messageInput = page.locator('textarea, input[type="text"]').first();
@@ -574,7 +574,7 @@ test.describe('Council Process - UI Integration', () => {
     console.log('Testing: Credits display in UI');
 
     await setupAuthenticatedUser(page, request);
-    await page.goto('/council');
+    await page.goto('/decision');
 
     // Look for credits display
     const creditsVisible = await page.locator('text=/\\d+\\s*credit/i').isVisible({ timeout: 5000 }).catch(() => false);

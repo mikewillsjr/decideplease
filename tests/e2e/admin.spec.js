@@ -4,7 +4,7 @@
  *
  * NOTE: Many tests use setupStaffUser() which only sets role in localStorage (client-side).
  * The backend verifies roles from the database, so tests that require actual backend
- * access (like navigating to /admin) will be redirected to /council.
+ * access (like navigating to /admin) will be redirected to /decision.
  *
  * Tests that verify client-side UI behavior (like admin link visibility) work with
  * localStorage role manipulation. Tests that require server-side access are skipped
@@ -21,7 +21,7 @@ import {
   setupStaffUser,
   isAdminLinkVisible,
   navigateToAdmin,
-  navigateToCouncil,
+  navigateToDecision,
   getUserRole,
   isStaffUser,
 } from '../fixtures/test-helpers.js';
@@ -44,8 +44,8 @@ test.describe('Admin Route Access', () => {
     await page.goto(ROUTES.admin);
     await page.waitForLoadState('networkidle');
 
-    // Should redirect to /council (backend rejects non-staff users)
-    await page.waitForURL(/\/council/, { timeout: 10000 });
+    // Should redirect to /decision (backend rejects non-staff users)
+    await page.waitForURL(/\/decision/, { timeout: 10000 });
   });
 
   // NOTE: The following tests are skipped because setupStaffUser() only modifies
@@ -125,7 +125,7 @@ test.describe('Admin Link Visibility', () => {
 test.describe('Role-Based Permissions UI', () => {
   // NOTE: All tests in this section are skipped because they require navigating to /admin,
   // which requires actual backend role verification. The setupStaffUser() only modifies
-  // localStorage, so the backend will reject the request and redirect to /council.
+  // localStorage, so the backend will reject the request and redirect to /decision.
   // To run these tests, you need pre-seeded staff accounts in the test database.
 
   test.skip('employee cannot see impersonate button', async ({ page, request }) => {

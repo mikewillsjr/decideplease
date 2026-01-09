@@ -292,8 +292,8 @@ test.describe('Authentication - Logout Flow', () => {
 });
 
 test.describe('Authentication - Redirect Behavior', () => {
-  test('authenticated user is redirected from / to /council', async ({ page, request }) => {
-    console.log('Testing: Authenticated redirect to /council');
+  test('authenticated user is redirected from / to /decision', async ({ page, request }) => {
+    console.log('Testing: Authenticated redirect to /decision');
 
     await setupAuthenticatedUser(page, request);
 
@@ -302,8 +302,8 @@ test.describe('Authentication - Redirect Behavior', () => {
     await page.waitForLoadState('networkidle');
 
     // Wait for React's useEffect redirect to trigger
-    await page.waitForURL(/\/council/, { timeout: 10000 });
-    console.log('  Authenticated user redirected to /council');
+    await page.waitForURL(/\/decision/, { timeout: 10000 });
+    console.log('  Authenticated user redirected to /decision');
   });
 
   test('unauthenticated user stays on landing page', async ({ page }) => {
@@ -317,7 +317,7 @@ test.describe('Authentication - Redirect Behavior', () => {
     console.log('  Unauthenticated user stays on landing');
   });
 
-  test('after login, user is on /council', async ({ page, request }) => {
+  test('after login, user is on /decision', async ({ page, request }) => {
     console.log('Testing: Post-login redirect');
 
     const testEmail = generateTestEmail();
@@ -333,10 +333,10 @@ test.describe('Authentication - Redirect Behavior', () => {
     await page.fill(UI.auth.passwordInput, testPassword);
     await page.click(UI.auth.submitButton);
 
-    // Should be on /council after login
+    // Should be on /decision after login
     await expect(page.locator(UI.app.sidebar)).toBeVisible({ timeout: 10000 });
-    await expect(page).toHaveURL(/\/council/);
-    console.log('  User on /council after login');
+    await expect(page).toHaveURL(/\/decision/);
+    console.log('  User on /decision after login');
   });
 });
 

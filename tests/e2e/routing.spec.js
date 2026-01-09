@@ -1,6 +1,6 @@
 /**
  * Routing Tests
- * Tests for all frontend routes including /council, /admin, and navigation
+ * Tests for all frontend routes including /decision, /admin, and navigation
  */
 import { test, expect } from '@playwright/test';
 import {
@@ -9,7 +9,7 @@ import {
   ROLES,
   setupAuthenticatedUser,
   setupStaffUser,
-  navigateToCouncil,
+  navigateToDecision,
   navigateToAdmin,
 } from '../fixtures/test-helpers.js';
 
@@ -44,50 +44,50 @@ test.describe('Public Routes', () => {
   });
 });
 
-test.describe('Council Route', () => {
-  test('unauthenticated users cannot access /council', async ({ page }) => {
-    await page.goto(ROUTES.council);
+test.describe('Decision Route', () => {
+  test('unauthenticated users cannot access /decision', async ({ page }) => {
+    await page.goto(ROUTES.decision);
     await page.waitForLoadState('networkidle');
 
     // Should redirect to home or show auth
     const url = page.url();
-    // Either redirected away from /council or shows auth modal
-    const councilContent = page.locator(UI.app.sidebar);
-    const visible = await councilContent.isVisible({ timeout: 3000 }).catch(() => false);
+    // Either redirected away from /decision or shows auth modal
+    const decisionContent = page.locator(UI.app.sidebar);
+    const visible = await decisionContent.isVisible({ timeout: 3000 }).catch(() => false);
     expect(visible).toBe(false);
   });
 
-  test('authenticated users can access /council', async ({ page, request }) => {
+  test('authenticated users can access /decision', async ({ page, request }) => {
     await setupAuthenticatedUser(page, request);
 
-    await page.goto(ROUTES.council);
+    await page.goto(ROUTES.decision);
     await page.waitForLoadState('networkidle');
 
     // Should show the main app with sidebar
     await expect(page.locator(UI.app.sidebar)).toBeVisible({ timeout: 10000 });
   });
 
-  test('authenticated users are redirected from / to /council', async ({ page, request }) => {
+  test('authenticated users are redirected from / to /decision', async ({ page, request }) => {
     await setupAuthenticatedUser(page, request);
 
     await page.goto(ROUTES.home);
     await page.waitForLoadState('networkidle');
 
     // Wait for React's useEffect redirect to trigger
-    await page.waitForURL(/\/council/, { timeout: 10000 });
+    await page.waitForURL(/\/decision/, { timeout: 10000 });
   });
 
-  test('council page shows chat interface', async ({ page, request }) => {
+  test('decision page shows chat interface', async ({ page, request }) => {
     await setupAuthenticatedUser(page, request);
-    await navigateToCouncil(page);
+    await navigateToDecision(page);
 
     const chatInterface = page.locator(UI.chat.container);
     await expect(chatInterface).toBeVisible({ timeout: 10000 });
   });
 
-  test('council page shows new decision button', async ({ page, request }) => {
+  test('decision page shows new decision button', async ({ page, request }) => {
     await setupAuthenticatedUser(page, request);
-    await navigateToCouncil(page);
+    await navigateToDecision(page);
 
     const newBtn = page.locator(UI.app.newDecisionButton);
     await expect(newBtn).toBeVisible({ timeout: 10000 });
@@ -143,8 +143,8 @@ test.describe('Admin Route', () => {
     await page.goto(ROUTES.admin);
     await page.waitForLoadState('networkidle');
 
-    // Should redirect to /council (backend rejects non-staff users)
-    await page.waitForURL(/\/council/, { timeout: 10000 });
+    // Should redirect to /decision (backend rejects non-staff users)
+    await page.waitForURL(/\/decision/, { timeout: 10000 });
   });
 
   // NOTE: This test is skipped because setupStaffUser() only modifies localStorage,
@@ -160,7 +160,7 @@ test.describe('Admin Route', () => {
 test.describe('Navigation', () => {
   test('logo links to home', async ({ page, request }) => {
     await setupAuthenticatedUser(page, request);
-    await navigateToCouncil(page);
+    await navigateToDecision(page);
 
     // Look for the logo link - it's an anchor with the logo image and brand name
     const logo = page.locator('.header-logo, a[href="/"]').first();
@@ -168,24 +168,24 @@ test.describe('Navigation', () => {
     console.log('  Logo is visible in header');
   });
 
-  test('can navigate between council and settings', async ({ page, request }) => {
+  test('can navigate between decision and settings', async ({ page, request }) => {
     await setupAuthenticatedUser(page, request);
-    await navigateToCouncil(page);
+    await navigateToDecision(page);
 
     // Navigate to settings (via URL for now)
     await page.goto(ROUTES.settings);
     await expect(page).toHaveURL(/\/settings/);
 
-    // Navigate back to council
-    await page.goto(ROUTES.council);
-    await expect(page).toHaveURL(/\/council/);
+    // Navigate back to decision
+    await page.goto(ROUTES.decision);
+    await expect(page).toHaveURL(/\/decision/);
   });
 
   // NOTE: This test is skipped because setupStaffUser() only modifies localStorage,
   // not the database. The backend verifies roles from the database.
   test.skip('staff can navigate to admin', async ({ page, request }) => {
     await setupStaffUser(page, request, ROLES.admin);
-    await navigateToCouncil(page);
+    await navigateToDecision(page);
 
     const adminLink = page.locator(UI.header.adminLink);
     if (await adminLink.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -206,15 +206,15 @@ test.describe('404 Handling', () => {
 });
 
 test.describe('Deep Linking', () => {
-  test('can deep link to /council after auth', async ({ page, request }) => {
+  test('can deep link to /decision after auth', async ({ page, request }) => {
     // First authenticate
     await setupAuthenticatedUser(page, request);
 
     // Clear page and navigate directly
-    await page.goto(ROUTES.council);
+    await page.goto(ROUTES.decision);
     await page.waitForLoadState('networkidle');
 
-    await expect(page).toHaveURL(/\/council/);
+    await expect(page).toHaveURL(/\/decision/);
     await expect(page.locator(UI.app.sidebar)).toBeVisible();
   });
 

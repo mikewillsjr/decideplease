@@ -217,10 +217,10 @@ test.describe('Link Tests - Internal Navigation', () => {
       await setupStaffUser(page, request, ROLES.admin);
       await navigateToAdmin(page);
 
-      // Will be redirected to /council since backend doesn't recognize the staff role
+      // Will be redirected to /decision since backend doesn't recognize the staff role
       const url = page.url();
-      const isOnAdminOrCouncil = url.includes('admin') || url.includes('council');
-      expect(isOnAdminOrCouncil).toBe(true);
+      const isOnAdminOrDecision = url.includes('admin') || url.includes('decision');
+      expect(isOnAdminOrDecision).toBe(true);
       console.log(`  After navigating to admin, URL: ${url}`);
     });
 

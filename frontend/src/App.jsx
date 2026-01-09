@@ -7,16 +7,16 @@ import './App.css';
 /**
  * App component handles the root route (/).
  * - Shows landing page for unauthenticated users
- * - Redirects authenticated users to /council
+ * - Redirects authenticated users to /decision
  */
 function App() {
   const navigate = useNavigate();
   const { isLoading: authLoading, isAuthenticated } = useAuth();
 
-  // Redirect authenticated users to /council
+  // Redirect authenticated users to /decision
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      navigate('/council');
+      navigate('/decision');
     }
   }, [authLoading, isAuthenticated, navigate]);
 
@@ -26,7 +26,7 @@ function App() {
   }
 
   // Show landing page when not authenticated
-  // (authenticated users are redirected to /council by useEffect)
+  // (authenticated users are redirected to /decision by useEffect)
   return <LandingPage />;
 }
 

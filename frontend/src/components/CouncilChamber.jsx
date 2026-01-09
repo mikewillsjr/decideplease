@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import AssemblyState from './AssemblyState';
 import CouncilArc from './CouncilArc';
+import DecisionOrbit from './DecisionOrbit';
+import StageStatusBar from './StageStatusBar';
 import VerdictDossier from './VerdictDossier';
 import ChairpersonRemarks from './ChairpersonRemarks';
 import CaseFileTabs from './CaseFileTabs';
@@ -288,21 +290,36 @@ export default function CouncilChamber({
             isLoading={isLoading}
             disabled={needsVerification}
             needsVerification={needsVerification}
+            loading={currentRound?.loading}
+            mode={currentRound?.metadata?.mode || 'decide_please'}
           />
         )}
 
         {/* Initial Loading State - shown while waiting for first stage1 results */}
         {showInitialLoading && (
           <div className="initial-loading-container">
-            <CouncilArc
+            <DecisionOrbit
               models={models}
-              modelStatuses={Object.fromEntries(models.map(m => [m, 'thinking']))}
-              isLoading={true}
+              modelStatuses={modelStatuses}
+              loading={currentRound?.loading}
               isActive={true}
+              isLoading={true}
+              mode={currentRound?.metadata?.mode || 'decide_please'}
+              currentStage={
+                currentRound?.loading?.stage1 ? 'stage1' :
+                currentRound?.loading?.stage1_5 ? 'stage1_5' :
+                currentRound?.loading?.stage2 ? 'stage2' :
+                currentRound?.loading?.stage3 ? 'stage3' : null
+              }
             />
+
+            <StageStatusBar
+              mode={currentRound?.metadata?.mode || 'decide_please'}
+              loading={currentRound?.loading}
+              isVisible={true}
+            />
+
             <div className="initial-loading-message">
-              <div className="loading-spinner"></div>
-              <span className="loading-title">Council Convening</span>
               <span className="loading-subtitle">
                 {currentRound?.question ? `"${currentRound.question.substring(0, 60)}${currentRound.question.length > 60 ? '...' : ''}"` : 'Gathering the council...'}
               </span>

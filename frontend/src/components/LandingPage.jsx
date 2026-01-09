@@ -198,7 +198,7 @@ export default function LandingPage() {
                   </div>
                   <div className="browser-url">
                     <LockIcon />
-                    <span>decideplease.com/council/live-session</span>
+                    <span>decideplease.com/decision/live-session</span>
                   </div>
                 </div>
 

@@ -30,9 +30,9 @@ export default function MagicLinkPage() {
 
         setSuccess(true);
 
-        // Show success briefly then redirect to council
+        // Show success briefly then redirect to decision
         setTimeout(() => {
-          navigate('/council');
+          navigate('/decision');
         }, 1500);
       } catch (err) {
         console.error('Magic link verification error:', err);

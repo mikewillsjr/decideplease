@@ -1,0 +1,424 @@
+/* DecisionOrbit - Orbiting LLM animation with progress indicators */
+
+.decision-orbit {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+  transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Orbit Container */
+.decision-orbit .orbit-container {
+  position: relative;
+  width: 240px;
+  height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The rotating ring */
+.decision-orbit .agent-orbit {
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  animation: orbitSpin 20s linear infinite;
+  animation-play-state: paused; /* Paused by default */
+}
+
+[data-theme="light"] .decision-orbit .agent-orbit {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Animation keyframes */
+@keyframes orbitSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes reverseOrbitSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
+@keyframes progressSpinner {
+  from { transform: rotate(-90deg); }
+  to { transform: rotate(270deg); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 15px rgba(99, 102, 241, 0.2); }
+  50% { box-shadow: 0 0 30px rgba(99, 102, 241, 0.5); }
+}
+
+@keyframes centerPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* Agent Node positioning */
+.decision-orbit .agent-node {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 64px;
+  height: 64px;
+  margin-top: -32px;
+  margin-left: -32px;
+}
+
+/* 5 positions, 72 degrees apart */
+.decision-orbit .agent-node.pos-1 { transform: rotate(0deg) translate(95px) rotate(0deg); }
+.decision-orbit .agent-node.pos-2 { transform: rotate(72deg) translate(95px) rotate(-72deg); }
+.decision-orbit .agent-node.pos-3 { transform: rotate(144deg) translate(95px) rotate(-144deg); }
+.decision-orbit .agent-node.pos-4 { transform: rotate(216deg) translate(95px) rotate(-216deg); }
+.decision-orbit .agent-node.pos-5 { transform: rotate(288deg) translate(95px) rotate(-288deg); }
+
+/* Inner wrapper for counter-rotation */
+.decision-orbit .agent-inner-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  animation: reverseOrbitSpin 20s linear infinite;
+  animation-play-state: paused; /* Paused by default */
+}
+
+/* Progress ring positioning */
+.decision-orbit .progress-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.decision-orbit .progress-ring.spinning .progress-ring-spinner {
+  animation: progressSpinner 1.2s linear infinite;
+}
+
+/* Agent inner circle */
+.decision-orbit .agent-inner {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--bg-panel, #1e1e24);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+[data-theme="light"] .decision-orbit .agent-inner {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.decision-orbit .agent-icon {
+  font-size: 20px;
+  color: var(--model-color, #888);
+  transition: transform 0.3s ease;
+}
+
+.decision-orbit .agent-label {
+  position: absolute;
+  bottom: -20px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted, #9ca3af);
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+/* Complete badge */
+.decision-orbit .complete-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-emerald, #10b981);
+  color: white;
+  font-size: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: popIn 0.3s ease-out;
+}
+
+@keyframes popIn {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* Thinking state */
+.decision-orbit .agent-inner.thinking {
+  border-color: var(--model-color);
+  box-shadow: 0 0 15px color-mix(in srgb, var(--model-color) 30%, transparent);
+}
+
+/* Complete state */
+.decision-orbit .agent-inner.complete {
+  border-color: var(--model-color);
+  background: color-mix(in srgb, var(--model-color) 10%, var(--bg-panel, #1e1e24));
+}
+
+/* Center Hub */
+.decision-orbit .consensus-center {
+  position: relative;
+  z-index: 10;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: var(--bg-panel, #1e1e24);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  transition: all 0.4s ease;
+}
+
+[data-theme="light"] .decision-orbit .consensus-center {
+  background: #ffffff;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.decision-orbit .consensus-center::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.1);
+  filter: blur(15px);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.decision-orbit .consensus-center.active::before {
+  opacity: 1;
+}
+
+.decision-orbit .consensus-center.active {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+.decision-orbit .consensus-center svg {
+  width: 28px;
+  height: 28px;
+  color: var(--accent-indigo, #6366f1);
+  margin-bottom: 4px;
+}
+
+.decision-orbit .center-text {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #9ca3af);
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* Decorative orbit rings */
+.decision-orbit .orbit-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  pointer-events: none;
+}
+
+.decision-orbit .orbit-ring.ring-1 {
+  width: 220px;
+  height: 220px;
+}
+
+.decision-orbit .orbit-ring.ring-2 {
+  width: 160px;
+  height: 160px;
+  opacity: 0.5;
+}
+
+/* ========================================
+   STATE: DIM (default)
+   ======================================== */
+.decision-orbit.dim .agent-inner-wrapper {
+  opacity: 0.35;
+  filter: grayscale(60%);
+}
+
+.decision-orbit.dim .consensus-center {
+  opacity: 0.5;
+}
+
+.decision-orbit.dim .orbit-ring {
+  opacity: 0.3;
+}
+
+/* ========================================
+   STATE: LIT (input focused)
+   ======================================== */
+.decision-orbit.lit .agent-inner-wrapper {
+  opacity: 1;
+  filter: none;
+}
+
+.decision-orbit.lit .agent-inner {
+  box-shadow: 0 0 20px color-mix(in srgb, var(--model-color) 25%, transparent);
+}
+
+.decision-orbit.lit .agent-label {
+  color: var(--text-main, #f5f5f5);
+}
+
+.decision-orbit.lit .consensus-center {
+  opacity: 1;
+  box-shadow: 0 0 25px rgba(99, 102, 241, 0.3);
+}
+
+/* ========================================
+   STATE: ORBITING (LLMs answering)
+   ======================================== */
+.decision-orbit.orbiting .agent-orbit {
+  animation-play-state: running;
+}
+
+.decision-orbit.orbiting .agent-inner-wrapper {
+  opacity: 1;
+  filter: none;
+  animation-play-state: running;
+}
+
+.decision-orbit.orbiting .agent-inner {
+  box-shadow: 0 0 25px color-mix(in srgb, var(--model-color) 35%, transparent);
+}
+
+.decision-orbit.orbiting .agent-label {
+  color: var(--text-main, #f5f5f5);
+}
+
+.decision-orbit.orbiting .consensus-center {
+  opacity: 1;
+  animation: centerPulse 2s ease-in-out infinite, pulseGlow 2s ease-in-out infinite;
+}
+
+.decision-orbit.orbiting .orbit-ring {
+  opacity: 0.8;
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+@media (max-width: 768px) {
+  .decision-orbit .orbit-container {
+    width: 200px;
+    height: 200px;
+  }
+
+  .decision-orbit .agent-orbit {
+    width: 180px;
+    height: 180px;
+  }
+
+  .decision-orbit .agent-node {
+    width: 52px;
+    height: 52px;
+    margin-top: -26px;
+    margin-left: -26px;
+  }
+
+  .decision-orbit .agent-node.pos-1 { transform: rotate(0deg) translate(75px) rotate(0deg); }
+  .decision-orbit .agent-node.pos-2 { transform: rotate(72deg) translate(75px) rotate(-72deg); }
+  .decision-orbit .agent-node.pos-3 { transform: rotate(144deg) translate(75px) rotate(-144deg); }
+  .decision-orbit .agent-node.pos-4 { transform: rotate(216deg) translate(75px) rotate(-216deg); }
+  .decision-orbit .agent-node.pos-5 { transform: rotate(288deg) translate(75px) rotate(-288deg); }
+
+  .decision-orbit .agent-inner {
+    width: 42px;
+    height: 42px;
+  }
+
+  .decision-orbit .progress-ring {
+    width: 52px !important;
+    height: 52px !important;
+  }
+
+  .decision-orbit .agent-icon {
+    font-size: 16px;
+  }
+
+  .decision-orbit .agent-label {
+    font-size: 8px;
+    bottom: -16px;
+  }
+
+  .decision-orbit .consensus-center {
+    width: 80px;
+    height: 80px;
+  }
+
+  .decision-orbit .consensus-center svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .decision-orbit .center-text {
+    font-size: 8px;
+  }
+
+  .decision-orbit .orbit-ring.ring-1 {
+    width: 180px;
+    height: 180px;
+  }
+
+  .decision-orbit .orbit-ring.ring-2 {
+    width: 130px;
+    height: 130px;
+  }
+}
+
+@media (max-width: 480px) {
+  .decision-orbit .orbit-container {
+    width: 180px;
+    height: 180px;
+  }
+
+  .decision-orbit .agent-orbit {
+    width: 160px;
+    height: 160px;
+  }
+
+  .decision-orbit .agent-node.pos-1 { transform: rotate(0deg) translate(65px) rotate(0deg); }
+  .decision-orbit .agent-node.pos-2 { transform: rotate(72deg) translate(65px) rotate(-72deg); }
+  .decision-orbit .agent-node.pos-3 { transform: rotate(144deg) translate(65px) rotate(-144deg); }
+  .decision-orbit .agent-node.pos-4 { transform: rotate(216deg) translate(65px) rotate(-216deg); }
+  .decision-orbit .agent-node.pos-5 { transform: rotate(288deg) translate(65px) rotate(-288deg); }
+
+  .decision-orbit .consensus-center {
+    width: 70px;
+    height: 70px;
+  }
+
+  .decision-orbit .orbit-ring.ring-1 {
+    width: 160px;
+    height: 160px;
+  }
+
+  .decision-orbit .orbit-ring.ring-2 {
+    width: 115px;
+    height: 115px;
+  }
+}

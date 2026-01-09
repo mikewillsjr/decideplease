@@ -38,21 +38,21 @@ test.describe('Smoke Tests - Critical Path Verification', () => {
       console.log('  Terms page loaded successfully');
     });
 
-    test('council page loads for authenticated users', async ({ page, request }) => {
-      console.log('Checking: Council page accessibility');
+    test('decision page loads for authenticated users', async ({ page, request }) => {
+      console.log('Checking: Decision page accessibility');
 
       await setupAuthenticatedUser(page, request);
-      const response = await page.goto(ROUTES.council);
+      const response = await page.goto(ROUTES.decision);
       expect(response.status()).toBeLessThan(400);
-      await expect(page).toHaveURL(/\/council/);
-      console.log('  Council page loaded successfully');
+      await expect(page).toHaveURL(/\/decision/);
+      console.log('  Decision page loaded successfully');
     });
 
     test('admin page is protected (redirects non-admins)', async ({ page, request }) => {
       console.log('Checking: Admin page protection');
 
       // Note: setupStaffUser only sets localStorage role, not database role
-      // So the backend correctly rejects access and redirects to /council
+      // So the backend correctly rejects access and redirects to /decision
       // This test verifies that admin routes ARE protected
       await setupStaffUser(page, request, ROLES.admin);
       const response = await page.goto(ROUTES.admin);

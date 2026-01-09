@@ -75,8 +75,8 @@ function AdminPage() {
       setPermissions(result.permissions || []);
 
       if (!result.is_staff && !result.is_admin) {
-        // Not authorized, redirect to council
-        navigate('/council');
+        // Not authorized, redirect to decision
+        navigate('/decision');
         return;
       }
 
@@ -84,7 +84,7 @@ function AdminPage() {
       loadDashboard();
     } catch (error) {
       console.error('Failed to check admin access:', error);
-      navigate('/council');
+      navigate('/decision');
     }
   };
 
@@ -306,8 +306,8 @@ function AdminPage() {
         id: result.user.id,
         impersonated_by: result.impersonated_by
       }));
-      // Redirect to council as the impersonated user
-      window.location.href = '/council';
+      // Redirect to decision as the impersonated user
+      window.location.href = '/decision';
     } catch (err) {
       setError(err.message);
     }

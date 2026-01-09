@@ -55,8 +55,8 @@ export default function GoogleCallbackPage() {
           user: data.user,
         });
 
-        // Redirect to council page
-        navigate('/council');
+        // Redirect to decision page
+        navigate('/decision');
       } catch (err) {
         console.error('Google OAuth error:', err);
         setError(err.message || 'Failed to sign in with Google');
