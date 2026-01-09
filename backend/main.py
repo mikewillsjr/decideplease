@@ -1562,6 +1562,7 @@ async def send_message_stream(
     if mode not in RUN_MODES:
         mode = "decide_please"
     mode_config = RUN_MODES[mode]
+    credit_cost = mode_config['credit_cost']
 
     # Check for file attachments and add file upload credit cost
     has_files = bool(msg_request.files and len(msg_request.files) > 0)
@@ -1877,6 +1878,7 @@ async def rerun_decision(
     if mode not in RUN_MODES:
         mode = "decide_please"
     mode_config = RUN_MODES[mode]
+    credit_cost = mode_config['credit_cost']
 
     # Check if conversation exists and belongs to user
     conversation = await storage.get_conversation(conversation_id, user["user_id"])
