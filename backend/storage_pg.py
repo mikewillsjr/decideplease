@@ -1092,6 +1092,49 @@ async def get_latest_assistant_message(conversation_id: str) -> Optional[Dict[st
         }
 
 
+async def get_orphaned_user_message(conversation_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Check if there's a user message without a corresponding assistant response.
+
+    This detects the case where processing failed silently - the user asked a question
+    but no answer was saved. This can happen if:
+    - Processing errored before saving
+    - Server restarted mid-processing
+    - Network issues prevented completion
+
+    Args:
+        conversation_id: Conversation identifier
+
+    Returns:
+        The orphaned user message if found, None otherwise
+    """
+    async with get_connection() as conn:
+        # Get the last message in the conversation
+        last_msg = await conn.fetchrow(
+            """
+            SELECT id, role, content, created_at
+            FROM messages
+            WHERE conversation_id = $1
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            UUID(conversation_id)
+        )
+
+        if last_msg is None:
+            return None
+
+        # If the last message is from the user, it's orphaned (no response yet)
+        if last_msg["role"] == "user":
+            return {
+                "id": last_msg["id"],
+                "content": last_msg["content"],
+                "created_at": last_msg["created_at"].isoformat() if last_msg["created_at"] else None
+            }
+
+        return None
+
+
 async def get_original_user_message(conversation_id: str) -> Optional[str]:
     """
     Get the first user message in a conversation (the original decision question).

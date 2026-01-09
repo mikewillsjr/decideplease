@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import './FileUpload.css';
 
 const ALLOWED_TYPES = {
@@ -35,6 +35,16 @@ export default function FileUpload({
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
+  const objectUrlsRef = useRef(new Set()); // Track Object URLs for cleanup
+
+  // Cleanup Object URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    const urls = objectUrlsRef.current;
+    return () => {
+      urls.forEach(url => URL.revokeObjectURL(url));
+      urls.clear();
+    };
+  }, []);
 
   const validateFile = useCallback((file) => {
     // Check type
@@ -120,10 +130,12 @@ export default function FileUpload({
     }
   };
 
-  // Generate preview URL for images
+  // Generate preview URL for images with tracking for cleanup
   const getPreviewUrl = useCallback((file) => {
     if (isImageType(file.type)) {
-      return URL.createObjectURL(file);
+      const url = URL.createObjectURL(file);
+      objectUrlsRef.current.add(url);
+      return url;
     }
     return null;
   }, []);
@@ -186,7 +198,10 @@ export default function FileUpload({
                     src={previewUrl}
                     alt={file.name}
                     className="file-thumbnail"
-                    onLoad={() => URL.revokeObjectURL(previewUrl)}
+                    onLoad={() => {
+                      URL.revokeObjectURL(previewUrl);
+                      objectUrlsRef.current.delete(previewUrl);
+                    }}
                   />
                 ) : (
                   <div className="file-icon">{typeInfo.icon}</div>

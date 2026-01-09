@@ -1,6 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import ReactMarkdown from 'react-markdown';
-import rehypeSanitize from 'rehype-sanitize';
 import Stage1 from './Stage1';
 import Stage1_5 from './Stage1_5';
 import Stage2 from './Stage2';
@@ -233,7 +231,7 @@ export default function ChatInterface({
 
             return (
               <DecisionCard
-                key={index}
+                key={msg.id || `pending-${index}`}
                 question={question}
                 isLoading={isCardLoading}
               >

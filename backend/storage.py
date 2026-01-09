@@ -1,11 +1,32 @@
-"""JSON-based storage for conversations."""
+"""JSON-based storage for conversations.
+
+Note: This is primarily for development. Production uses PostgreSQL (storage_pg.py).
+"""
 
 import json
 import os
+import fcntl
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pathlib import Path
+from contextlib import contextmanager
 from .config import DATA_DIR
+
+
+@contextmanager
+def file_lock(file_handle, exclusive=True):
+    """Context manager for file locking to prevent race conditions.
+
+    Args:
+        file_handle: Open file handle
+        exclusive: True for write lock (LOCK_EX), False for read lock (LOCK_SH)
+    """
+    try:
+        lock_type = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
+        fcntl.flock(file_handle.fileno(), lock_type)
+        yield
+    finally:
+        fcntl.flock(file_handle.fileno(), fcntl.LOCK_UN)
 
 
 def ensure_data_dir():
@@ -37,10 +58,11 @@ def create_conversation(conversation_id: str) -> Dict[str, Any]:
         "messages": []
     }
 
-    # Save to file
+    # Save to file with locking
     path = get_conversation_path(conversation_id)
     with open(path, 'w') as f:
-        json.dump(conversation, f, indent=2)
+        with file_lock(f, exclusive=True):
+            json.dump(conversation, f, indent=2)
 
     return conversation
 
@@ -61,7 +83,8 @@ def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
         return None
 
     with open(path, 'r') as f:
-        return json.load(f)
+        with file_lock(f, exclusive=False):
+            return json.load(f)
 
 
 def save_conversation(conversation: Dict[str, Any]):
@@ -75,7 +98,8 @@ def save_conversation(conversation: Dict[str, Any]):
 
     path = get_conversation_path(conversation['id'])
     with open(path, 'w') as f:
-        json.dump(conversation, f, indent=2)
+        with file_lock(f, exclusive=True):
+            json.dump(conversation, f, indent=2)
 
 
 def list_conversations() -> List[Dict[str, Any]]:
@@ -92,7 +116,8 @@ def list_conversations() -> List[Dict[str, Any]]:
         if filename.endswith('.json'):
             path = os.path.join(DATA_DIR, filename)
             with open(path, 'r') as f:
-                data = json.load(f)
+                with file_lock(f, exclusive=False):
+                    data = json.load(f)
                 # Return metadata only - count only user messages (queries)
                 user_message_count = sum(1 for m in data["messages"] if m.get("role") == "user")
                 conversations.append({

@@ -246,8 +246,9 @@ async def get_or_create_customer(user_id: str, user_email: str, existing_custome
         customers = stripe.Customer.list(email=user_email, limit=1)
         if customers.data:
             return customers.data[0].id
-    except stripe.error.StripeError:
-        pass
+    except stripe.error.StripeError as e:
+        # Log the error but continue to create a new customer
+        print(f"[STRIPE] Customer search failed for {user_email}: {type(e).__name__}: {e}")
 
     # Create new customer
     try:

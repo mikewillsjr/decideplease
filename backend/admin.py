@@ -654,7 +654,7 @@ async def list_recent_decisions(
                     user_msg.content as question,
                     user_msg.created_at as asked_at,
                     asst_msg.id as response_id,
-                    asst_msg.stage3_response as chairman_response,
+                    asst_msg.stage3 as chairman_response,
                     asst_msg.mode,
                     asst_msg.created_at as answered_at,
                     u.email as user_email,
@@ -676,7 +676,7 @@ async def list_recent_decisions(
                 WHERE user_msg.role = 'user'
                 AND (
                     LOWER(user_msg.content) LIKE LOWER($1)
-                    OR LOWER(asst_msg.stage3_response) LIKE LOWER($1)
+                    OR LOWER(asst_msg.stage3::text) LIKE LOWER($1)
                     OR LOWER(u.email) LIKE LOWER($1)
                 )
                 ORDER BY user_msg.created_at DESC
@@ -694,7 +694,7 @@ async def list_recent_decisions(
                     user_msg.content as question,
                     user_msg.created_at as asked_at,
                     asst_msg.id as response_id,
-                    asst_msg.stage3_response as chairman_response,
+                    asst_msg.stage3 as chairman_response,
                     asst_msg.mode,
                     asst_msg.created_at as answered_at,
                     u.email as user_email,

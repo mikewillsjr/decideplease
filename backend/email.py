@@ -4,6 +4,9 @@ import os
 from datetime import datetime
 import resend
 from typing import Optional
+from .logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # Configuration
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
@@ -40,7 +43,7 @@ async def send_email(
         True if email was sent successfully, False otherwise
     """
     if not RESEND_API_KEY:
-        print(f"[EMAIL] Resend not configured - would send to {to}: {subject}")
+        logger.warning("email_not_configured", recipient=to, subject=subject)
         return False
 
     try:
@@ -54,10 +57,10 @@ async def send_email(
             params["text"] = text
 
         resend.Emails.send(params)
-        print(f"[EMAIL] Sent to {to}: {subject}")
+        logger.info("email_sent", recipient=to, subject=subject)
         return True
     except Exception as e:
-        print(f"[EMAIL] Failed to send to {to}: {e}")
+        logger.error("email_failed", recipient=to, subject=subject, error=str(e), error_type=type(e).__name__)
         return False
 
 
