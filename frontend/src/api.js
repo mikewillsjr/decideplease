@@ -937,4 +937,69 @@ export const api = {
     }
     return response.json();
   },
+
+  // ============== Request Cancellation ==============
+
+  /**
+   * Cancel processing for a conversation (best effort).
+   * The backend may have already completed by the time this is called.
+   */
+  async cancelProcessing(conversationId) {
+    const headers = await getHeaders();
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/cancel`,
+      { method: 'POST', headers }
+    );
+    // Don't throw on error - cancellation is best-effort
+    if (!response.ok) {
+      console.warn('Cancel request failed:', response.status);
+      return { cancelled: false, reason: 'Request failed' };
+    }
+    return response.json();
+  },
+
+  /**
+   * Delete an orphaned user message (one without a corresponding AI response).
+   * Used before retrying a failed request.
+   */
+  async deleteOrphanedMessage(conversationId, messageId) {
+    const headers = await getHeaders();
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/messages/${messageId}`,
+      { method: 'DELETE', headers }
+    );
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to delete orphaned message');
+    }
+    return response.json();
+  },
+
+  /**
+   * Retry an orphaned message with the same content.
+   */
+  async retryOrphanedMessage(conversationId, messageId, mode, onEvent) {
+    const headers = await getHeaders();
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/messages/${messageId}/retry`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ mode: mode || 'standard' }),
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Not authenticated');
+      }
+      if (response.status === 402) {
+        throw new Error('Insufficient credits');
+      }
+      throw new Error('Failed to retry message');
+    }
+
+    // Process SSE stream with recovery
+    await this._processSSEStreamWithRecovery(response, onEvent, conversationId);
+  },
 };

@@ -87,10 +87,21 @@
   letter-spacing: 0.05em;
   color: var(--accent-orange, #f97316);
   margin-top: 2px;
+  animation: pendingPulse 2s ease-in-out infinite;
+}
+
+@keyframes pendingPulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
 }
 
 .case-tab.complete .tab-status {
   display: none;
+}
+
+/* Pending tab has pulsing border */
+.case-tab.pending {
+  border-left: 2px solid var(--accent-orange, #f97316);
 }
 
 /* Mobile - convert to horizontal tabs at bottom */

@@ -1580,6 +1580,88 @@ async def get_conversation_message_count(conversation_id: str) -> int:
         return row["count"] if row else 0
 
 
+async def get_message_by_id(conversation_id: str, message_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Get a specific message by ID.
+
+    Args:
+        conversation_id: Conversation identifier (for ownership verification)
+        message_id: The message ID to retrieve
+
+    Returns:
+        Message dict with role, content, etc. or None if not found
+    """
+    async with get_connection() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, role, content, stage1, stage1_5, stage2, stage3, metadata, created_at
+            FROM messages
+            WHERE id = $1 AND conversation_id = $2
+            """,
+            message_id, UUID(conversation_id)
+        )
+
+        if not row:
+            return None
+
+        return {
+            "id": row["id"],
+            "role": row["role"],
+            "content": row["content"],
+            "stage1": parse_json_field(row["stage1"]) if row["stage1"] else None,
+            "stage1_5": parse_json_field(row["stage1_5"]) if row["stage1_5"] else None,
+            "stage2": parse_json_field(row["stage2"]) if row["stage2"] else None,
+            "stage3": parse_json_field(row["stage3"]) if row["stage3"] else None,
+            "metadata": parse_json_field(row["metadata"]) if row["metadata"] else {},
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None
+        }
+
+
+async def delete_user_message(conversation_id: str, message_id: int) -> bool:
+    """
+    Delete a user message from a conversation.
+
+    Only allows deletion of user messages (not assistant messages) to prevent
+    orphaning responses. This is primarily used for cleaning up failed requests.
+
+    Args:
+        conversation_id: Conversation identifier
+        message_id: The message ID to delete
+
+    Returns:
+        True if deleted, raises ValueError if not a user message
+
+    Raises:
+        ValueError: If message is not a user message or not found
+    """
+    async with get_connection() as conn:
+        # First verify it's a user message
+        row = await conn.fetchrow(
+            """
+            SELECT id, role FROM messages
+            WHERE id = $1 AND conversation_id = $2
+            """,
+            message_id, UUID(conversation_id)
+        )
+
+        if not row:
+            raise ValueError("Message not found")
+
+        if row["role"] != "user":
+            raise ValueError("Can only delete user messages")
+
+        # Delete the message
+        await conn.execute(
+            """
+            DELETE FROM messages
+            WHERE id = $1 AND conversation_id = $2 AND role = 'user'
+            """,
+            message_id, UUID(conversation_id)
+        )
+
+        return True
+
+
 # ============== Magic Link Token Functions ==============
 
 async def create_magic_link_token(

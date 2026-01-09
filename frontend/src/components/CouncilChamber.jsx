@@ -20,6 +20,9 @@ export default function CouncilChamber({
   error,
   onDismissError,
   user,
+  onCancelRequest,
+  onRetryOrphaned,
+  orphanedMessage,
 }) {
   // Check if user needs to verify email (has password but not verified)
   const needsVerification = user && !user.email_verified && user.credits === 0;
@@ -29,6 +32,9 @@ export default function CouncilChamber({
   // Rounds for conversation stacking (each round = one Q&A)
   const [rounds, setRounds] = useState([]);
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
+
+  // Track if user manually selected a different round (to view history while loading)
+  const [userSelectedRound, setUserSelectedRound] = useState(false);
 
   // Model statuses for the arc visualization
   const [modelStatuses, setModelStatuses] = useState({});
@@ -56,6 +62,7 @@ export default function CouncilChamber({
       }
       setRounds([]);
       setCurrentRoundIndex(0);
+      setUserSelectedRound(false);
       return;
     }
 
@@ -88,25 +95,36 @@ export default function CouncilChamber({
     // Check isLoading first - if we're loading, stay in loading state even with no rounds
     if (isLoading && newRounds.length === 0) {
       setUiState('loading');
+      setUserSelectedRound(false);
     } else if (newRounds.length === 0) {
       setUiState('assembly');
+      setUserSelectedRound(false);
     } else {
       const lastRound = newRounds[newRounds.length - 1];
       const hasLoading = lastRound.loading?.stage1 || lastRound.loading?.stage2 ||
                          lastRound.loading?.stage3 || lastRound.loading?.stage1_5 ||
                          lastRound.loading?.preparing;
 
-      if (hasLoading || isLoading) {
-        setUiState('loading');
-      } else if (lastRound.stage3) {
-        setUiState('dossier');
-      } else {
-        setUiState('loading');
+      // If user manually selected a historical round, don't auto-switch to loading view
+      if (!userSelectedRound) {
+        if (hasLoading || isLoading) {
+          setUiState('loading');
+        } else if (lastRound.stage3) {
+          setUiState('dossier');
+        } else {
+          setUiState('loading');
+        }
+        setCurrentRoundIndex(newRounds.length - 1);
       }
-
-      setCurrentRoundIndex(newRounds.length - 1);
+      // If user HAS selected a round, keep their selection but update state if viewing completed round
+      else {
+        const selectedRound = newRounds[currentRoundIndex];
+        if (selectedRound?.stage3) {
+          setUiState('dossier');
+        }
+      }
     }
-  }, [conversation, isLoading]);
+  }, [conversation, isLoading, userSelectedRound, currentRoundIndex]);
 
   // Update model statuses based on current round's loading state
   useEffect(() => {
@@ -160,22 +178,96 @@ export default function CouncilChamber({
     onSendMessage(content, mode, files);
   }, [onSendMessage]);
 
-  // Handle tab click for round navigation (will be implemented in Phase 4)
+  // Handle tab click for round navigation
   const handleRoundSelect = useCallback((index) => {
     setCurrentRoundIndex(index);
-  }, []);
+    // Mark that user manually selected a round (allows viewing history while loading)
+    // If they select the last (loading) round, reset this flag
+    const lastRoundIndex = rounds.length - 1;
+    if (index < lastRoundIndex) {
+      setUserSelectedRound(true);
+    } else {
+      setUserSelectedRound(false);
+    }
+  }, [rounds.length]);
 
   const models = getModels();
   const currentRound = rounds[currentRoundIndex] || null;
+  const lastRoundIndex = rounds.length - 1;
+  const lastRound = rounds[lastRoundIndex] || null;
+
+  // Check if the last round is currently loading
+  const lastRoundIsLoading = isLoading || lastRound?.loading?.stage1 ||
+    lastRound?.loading?.stage1_5 || lastRound?.loading?.stage2 ||
+    lastRound?.loading?.stage3 || lastRound?.loading?.preparing;
+
+  // User is viewing a historical (completed) round while a new one is loading
+  const viewingHistoryWhileLoading = userSelectedRound && lastRoundIsLoading &&
+    currentRoundIndex < lastRoundIndex && currentRound?.stage3;
+
   // Only show dossier when Stage 3 is complete - don't show it prematurely
-  const showDossier = uiState === 'dossier' && currentRound?.stage3;
-  // Show loading state until Stage 3 is complete
-  const showInitialLoading = uiState === 'loading' || (currentRound && !currentRound?.stage3);
+  // BUT also show it when viewing historical round while loading
+  const showDossier = (uiState === 'dossier' && currentRound?.stage3) || viewingHistoryWhileLoading;
+
+  // Show loading state until Stage 3 is complete (but not when viewing history)
+  const showInitialLoading = !viewingHistoryWhileLoading &&
+    (uiState === 'loading' || (currentRound && !currentRound?.stage3));
+
+  // Helper to go back to watching the current loading round
+  const handleViewCurrent = useCallback(() => {
+    setCurrentRoundIndex(lastRoundIndex);
+    setUserSelectedRound(false);
+  }, [lastRoundIndex]);
 
   return (
     <div className={`council-chamber state-${uiState}`}>
       {/* Verification banner for unverified users */}
       {needsVerification && <VerificationBanner userEmail={user?.email} />}
+
+      {/* Banner when viewing historical round while new one is loading */}
+      {viewingHistoryWhileLoading && (
+        <div className="history-while-loading-banner">
+          <div className="banner-content">
+            <span className="banner-icon">⏳</span>
+            <span className="banner-text">
+              Addendum {lastRoundIndex} is processing in the background
+            </span>
+          </div>
+          <div className="banner-actions">
+            <button className="view-current-btn" onClick={handleViewCurrent}>
+              View Progress
+            </button>
+            {onCancelRequest && (
+              <button className="cancel-btn" onClick={onCancelRequest}>
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Orphaned message banner (request that never completed) */}
+      {orphanedMessage && !isLoading && (
+        <div className="orphaned-message-banner">
+          <div className="banner-content">
+            <span className="banner-icon">⚠️</span>
+            <div className="banner-text">
+              <strong>Previous request didn't complete</strong>
+              <span className="orphaned-preview">
+                "{orphanedMessage.content?.substring(0, 50)}
+                {orphanedMessage.content?.length > 50 ? '...' : ''}"
+              </span>
+            </div>
+          </div>
+          <div className="banner-actions">
+            {onRetryOrphaned && (
+              <button className="retry-btn" onClick={() => onRetryOrphaned(orphanedMessage)}>
+                Retry Request
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Error banner */}
       {error && (
@@ -214,6 +306,12 @@ export default function CouncilChamber({
               <span className="loading-subtitle">
                 {currentRound?.question ? `"${currentRound.question.substring(0, 60)}${currentRound.question.length > 60 ? '...' : ''}"` : 'Gathering the council...'}
               </span>
+              {/* Cancel button */}
+              {onCancelRequest && (
+                <button className="cancel-request-btn" onClick={onCancelRequest}>
+                  Cancel Request
+                </button>
+              )}
             </div>
 
             {/* Mini-game while waiting */}

@@ -138,6 +138,165 @@
   max-width: 400px;
 }
 
+/* Cancel button in loading state */
+.cancel-request-btn {
+  margin-top: 16px;
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-request-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+/* History while loading banner */
+.history-while-loading-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(99, 102, 241, 0.15);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.3);
+  padding: 10px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 100;
+  animation: slideDownBanner 0.3s ease-out;
+}
+
+@keyframes slideDownBanner {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.history-while-loading-banner .banner-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.history-while-loading-banner .banner-icon {
+  font-size: 16px;
+}
+
+.history-while-loading-banner .banner-text {
+  font-size: 14px;
+  color: #a5b4fc;
+}
+
+.history-while-loading-banner .banner-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.view-current-btn {
+  background: rgba(99, 102, 241, 0.3);
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  color: #c7d2fe;
+  padding: 6px 14px;
+  border-radius: 5px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-current-btn:hover {
+  background: rgba(99, 102, 241, 0.5);
+}
+
+.cancel-btn {
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  padding: 6px 14px;
+  border-radius: 5px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+/* Orphaned message banner */
+.orphaned-message-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(245, 158, 11, 0.15);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 100;
+  animation: slideDownBanner 0.3s ease-out;
+}
+
+.orphaned-message-banner .banner-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.orphaned-message-banner .banner-icon {
+  font-size: 18px;
+}
+
+.orphaned-message-banner .banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.orphaned-message-banner .banner-text strong {
+  font-size: 14px;
+  color: #fcd34d;
+}
+
+.orphaned-preview {
+  font-size: 12px;
+  color: #fbbf24;
+  opacity: 0.8;
+  font-style: italic;
+}
+
+.orphaned-message-banner .banner-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.retry-btn {
+  background: rgba(245, 158, 11, 0.3);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  color: #fcd34d;
+  padding: 8px 16px;
+  border-radius: 5px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.retry-btn:hover {
+  background: rgba(245, 158, 11, 0.5);
+}
+
 .loading-elapsed {
   font-size: 12px;
   color: var(--text-dim, #6b7280);
@@ -240,4 +399,57 @@
 
 [data-theme="light"] .dossier-placeholder {
   background: var(--surface, #ffffff);
+}
+
+[data-theme="light"] .history-while-loading-banner {
+  background: rgba(99, 102, 241, 0.1);
+  border-bottom-color: rgba(99, 102, 241, 0.2);
+}
+
+[data-theme="light"] .history-while-loading-banner .banner-text {
+  color: #4338ca;
+}
+
+[data-theme="light"] .view-current-btn {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #4338ca;
+}
+
+[data-theme="light"] .view-current-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+}
+
+[data-theme="light"] .orphaned-message-banner {
+  background: rgba(245, 158, 11, 0.1);
+  border-bottom-color: rgba(245, 158, 11, 0.2);
+}
+
+[data-theme="light"] .orphaned-message-banner .banner-text strong {
+  color: #b45309;
+}
+
+[data-theme="light"] .orphaned-preview {
+  color: #92400e;
+}
+
+[data-theme="light"] .retry-btn {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #b45309;
+}
+
+[data-theme="light"] .retry-btn:hover {
+  background: rgba(245, 158, 11, 0.25);
+}
+
+[data-theme="light"] .cancel-btn,
+[data-theme="light"] .cancel-request-btn {
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #dc2626;
+}
+
+[data-theme="light"] .cancel-btn:hover,
+[data-theme="light"] .cancel-request-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
 }

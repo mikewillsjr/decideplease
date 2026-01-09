@@ -26,9 +26,13 @@ function CouncilPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [userRole, setUserRole] = useState('user');
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [orphanedMessage, setOrphanedMessage] = useState(null);
 
   // Ref to track polling cleanup function
   const pollingCleanupRef = useRef(null);
+
+  // Ref for abort controller (to cancel in-progress requests)
+  const abortControllerRef = useRef(null);
 
   // Interface mode: 'chamber' (new) or 'classic' (old ChatInterface)
   const [interfaceMode, setInterfaceMode] = useState(() => {
@@ -207,6 +211,7 @@ function CouncilPage() {
 
   const loadConversation = useCallback(async (id) => {
     setLoadError(false);
+    setOrphanedMessage(null);
 
     // Clear any existing polling before loading new conversation
     if (pollingCleanupRef.current) {
@@ -223,13 +228,17 @@ function CouncilPage() {
       }
       setCurrentConversation(conv);
 
-      // Check if this conversation is still being processed
+      // Check if this conversation is still being processed or has orphaned messages
       try {
         const status = await api.getConversationStatus(id);
         if (status.processing) {
           console.log('[CouncilPage] Conversation still processing, stage:', status.current_stage);
           // Start polling for updates and store cleanup function
           pollingCleanupRef.current = startPollingForUpdates(id, status.current_stage);
+        } else if (status.orphaned && status.orphaned_message) {
+          // Found an orphaned message (user question without AI response)
+          console.log('[CouncilPage] Found orphaned message:', status.orphaned_message);
+          setOrphanedMessage(status.orphaned_message);
         }
       } catch (statusError) {
         console.error('Failed to check conversation status:', statusError);
@@ -615,6 +624,86 @@ function CouncilPage() {
     }
   };
 
+  // Cancel an in-progress request
+  const handleCancelRequest = useCallback(async () => {
+    console.log('[CouncilPage] Cancelling request...');
+
+    // Abort any active fetch request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    // Clear any active polling
+    if (pollingCleanupRef.current) {
+      pollingCleanupRef.current();
+      pollingCleanupRef.current = null;
+    }
+
+    // Reset loading state
+    setIsLoading(false);
+
+    // Remove the optimistic messages (user message + loading assistant message)
+    setCurrentConversation((prev) => {
+      if (!prev || !prev.messages || prev.messages.length < 2) return prev;
+
+      const messages = [...prev.messages];
+      const lastMsg = messages[messages.length - 1];
+      const secondLastMsg = messages[messages.length - 2];
+
+      // If last message is assistant with no stage3 (incomplete), remove it and its user message
+      if (lastMsg?.role === 'assistant' && !lastMsg.stage3) {
+        // Also remove the preceding user message if it exists
+        if (secondLastMsg?.role === 'user') {
+          return { ...prev, messages: messages.slice(0, -2) };
+        }
+        return { ...prev, messages: messages.slice(0, -1) };
+      }
+
+      return prev;
+    });
+
+    // Notify user
+    setError('Request cancelled');
+
+    // Try to cancel on the backend (best effort - it may have already completed)
+    if (currentConversationId) {
+      try {
+        await api.cancelProcessing?.(currentConversationId);
+      } catch (err) {
+        // Ignore - cancellation is best-effort
+        console.log('[CouncilPage] Backend cancel failed (may already be complete):', err);
+      }
+    }
+  }, [currentConversationId]);
+
+  // Retry an orphaned message (request that never completed)
+  const handleRetryOrphaned = useCallback(async (orphaned) => {
+    if (!orphaned || !currentConversationId) return;
+
+    console.log('[CouncilPage] Retrying orphaned message:', orphaned);
+    setOrphanedMessage(null);
+
+    const contentToRetry = orphaned.content;
+    const modeToRetry = orphaned.mode || 'standard';
+
+    // The orphaned message is already in the conversation - we need to delete it first
+    try {
+      await api.deleteOrphanedMessage(currentConversationId, orphaned.id);
+      // Reload conversation to remove the orphaned message from UI
+      const conv = await api.getConversation(currentConversationId);
+      if (conv && !conv.messages) {
+        conv.messages = [];
+      }
+      setCurrentConversation(conv);
+    } catch (err) {
+      console.log('[CouncilPage] Could not delete orphaned message, will proceed anyway:', err);
+    }
+
+    // Now resend the same content
+    await handleSendMessage(contentToRetry, modeToRetry, []);
+  }, [currentConversationId, handleSendMessage]);
+
   // Show nothing while auth is loading (prevents flash)
   if (authLoading) {
     return null;
@@ -655,6 +744,9 @@ function CouncilPage() {
             error={error}
             onDismissError={() => setError(null)}
             user={user}
+            onCancelRequest={handleCancelRequest}
+            onRetryOrphaned={handleRetryOrphaned}
+            orphanedMessage={orphanedMessage}
           />
         ) : (
           <ChatInterface
