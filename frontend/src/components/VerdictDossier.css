@@ -27,12 +27,14 @@
   }
 }
 
-/* Question section - fixed at top */
+/* Question section - fixed at top with max height */
 .verdict-question {
   padding: 20px 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.02);
   flex-shrink: 0;
+  max-height: 25vh;  /* Limit question height to leave room for verdict */
+  overflow-y: auto;
 }
 
 .verdict-question .question-text {
@@ -330,6 +332,7 @@
 
   .verdict-question {
     padding: 16px 20px;
+    max-height: 20vh;  /* Even smaller on mobile */
   }
 
   .verdict-response {
