@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00D4FF"/>
+      <stop offset="50%" stop-color="#7C3AED"/>
+      <stop offset="100%" stop-color="#FF4FD8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Gavel head -->
+  <rect x="4" y="8" width="28" height="14" rx="4" fill="url(#grad)" transform="rotate(-35 18 15)"/>
+
+  <!-- Handle -->
+  <rect x="20" y="16" width="7" height="24" rx="3" fill="url(#grad)" transform="rotate(-35 23.5 28)"/>
+
+  <!-- Sound block -->
+  <rect x="22" y="40" width="22" height="6" rx="2" fill="url(#grad)"/>
+</svg>

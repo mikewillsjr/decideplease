@@ -49,7 +49,7 @@ export default function UnifiedHeader({
       <div className="header-container">
         <div className="header-left">
           <a href="/" className="header-logo" aria-label="DecidePlease home">
-            <img src="/logo/Logo-icon.png" alt="" className="header-logo-icon" />
+            <img src="/logo/icon.svg" alt="" className="header-logo-icon" />
             <span className="header-brand" aria-hidden="true">DecidePlease</span>
           </a>
 

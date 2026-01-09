@@ -39,51 +39,27 @@ html[data-theme="light"] .unified-header {
 .header-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   text-decoration: none;
 }
 
 .header-logo-icon {
-  height: 48px;
-  width: auto;
+  height: 40px;
+  width: 40px;
   display: block;
-  background: #0a0a0f;
-  padding: 8px 12px;
-  border-radius: 10px;
-  box-shadow:
-    0 0 0 1px rgba(93, 93, 255, 0.15),
-    0 2px 8px rgba(0, 0, 0, 0.3);
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, filter 0.2s ease;
 }
 
-/* Logo container stays dark in both themes for neon visibility */
-html[data-theme="light"] .header-logo-icon {
-  background: #0e0e14;
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.1),
-    0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-html[data-theme="dark"] .header-logo-icon {
-  background: #0a0a0f;
-  box-shadow:
-    0 0 0 1px rgba(93, 93, 255, 0.2),
-    0 2px 8px rgba(0, 0, 0, 0.4);
-}
-
-/* Hover enhancement with glow effect */
+/* Hover enhancement */
 .header-logo:hover .header-logo-icon {
-  box-shadow:
-    0 0 0 1px rgba(93, 93, 255, 0.3),
-    0 0 20px rgba(93, 93, 255, 0.15),
-    0 4px 12px rgba(0, 0, 0, 0.4);
-  transform: translateY(-1px);
+  transform: scale(1.05);
+  filter: drop-shadow(0 0 8px rgba(124, 58, 237, 0.4));
 }
 
 .header-brand {
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: 22px;
   line-height: 1;
   background: linear-gradient(90deg, #00D4FF 0%, #7C3AED 50%, #FF4FD8 100%);
   -webkit-background-clip: text;
@@ -353,9 +329,8 @@ html[data-theme="light"] .theme-toggle:hover {
   }
 
   .header-logo-icon {
-    height: 36px;
-    padding: 6px 10px;
-    border-radius: 8px;
+    height: 32px;
+    width: 32px;
   }
 
   .header-brand {
@@ -394,9 +369,8 @@ html[data-theme="light"] .theme-toggle:hover {
 
 @media (max-width: 480px) {
   .header-logo-icon {
-    height: 32px;
-    padding: 5px 8px;
-    border-radius: 6px;
+    height: 28px;
+    width: 28px;
   }
 
   .header-nav-link {
