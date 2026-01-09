@@ -1653,17 +1653,46 @@ async def get_conversation_status(
     """
     Check if a conversation is currently being processed.
     Returns the current stage if processing, or null if complete.
+
+    IMPORTANT: This endpoint checks both in-memory status AND the database.
+    The in-memory dict can be stale if the server restarted or if there are
+    multiple instances. The database is the source of truth for completion.
     """
     # Verify ownership
     conversation = await storage.get_conversation(conversation_id, user["user_id"])
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    # First check: Is there a completed assistant message with stage3?
+    # This is the source of truth - if stage3 exists, processing is done.
+    latest_assistant = await storage.get_latest_assistant_message(conversation_id)
+    if latest_assistant and latest_assistant.get("stage3"):
+        # Processing completed - ensure we clean up any stale in-memory state
+        _active_tasks.pop(conversation_id, None)
+        _active_status.pop(conversation_id, None)
+        return {
+            "processing": False,
+            "current_stage": None
+        }
+
+    # Second check: Is there an active task in memory?
     if conversation_id in _active_tasks:
         return {
             "processing": True,
             "current_stage": _active_status.get(conversation_id, "starting")
         }
+
+    # No completed message and no active task - check for incomplete state
+    # (e.g., server restarted mid-processing)
+    if latest_assistant and (latest_assistant.get("stage1") or latest_assistant.get("stage2")):
+        # There's an incomplete assistant message - processing was interrupted
+        # Return processing=False so client can handle the incomplete state
+        return {
+            "processing": False,
+            "current_stage": None,
+            "incomplete": True
+        }
+
     return {
         "processing": False,
         "current_stage": None
