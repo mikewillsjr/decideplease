@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import './WaitingGame.css';
 
-// Decision-related words to unscramble
+// Decision-related words to unscramble (100+ words)
 const WORDS = [
+  // Core decision words
   { word: 'DECIDE', hint: 'Make a choice' },
   { word: 'WISDOM', hint: 'Knowledge applied well' },
   { word: 'CHOICE', hint: 'One of many options' },
@@ -15,13 +16,130 @@ const WORDS = [
   { word: 'BALANCE', hint: 'Equal consideration' },
   { word: 'ANSWER', hint: 'Response to a question' },
   { word: 'DEBATE', hint: 'Discuss opposing views' },
+  // Thinking & analysis
+  { word: 'ANALYZE', hint: 'Examine in detail' },
+  { word: 'PONDER', hint: 'Think deeply' },
+  { word: 'REFLECT', hint: 'Think back on' },
+  { word: 'CONSIDER', hint: 'Think carefully about' },
+  { word: 'EVALUATE', hint: 'Assess the value' },
+  { word: 'ASSESS', hint: 'Judge or estimate' },
+  { word: 'COMPARE', hint: 'Note similarities' },
+  { word: 'CONTRAST', hint: 'Note differences' },
+  { word: 'EXAMINE', hint: 'Inspect closely' },
+  { word: 'REVIEW', hint: 'Look over again' },
+  { word: 'STUDY', hint: 'Learn in depth' },
+  { word: 'RESEARCH', hint: 'Systematic inquiry' },
+  { word: 'INQUIRE', hint: 'Ask questions' },
+  { word: 'EXPLORE', hint: 'Investigate thoroughly' },
+  { word: 'PROBE', hint: 'Investigate deeply' },
+  { word: 'SCRUTINIZE', hint: 'Examine very closely' },
+  // Logic & reasoning
+  { word: 'LOGIC', hint: 'Systematic reasoning' },
+  { word: 'DEDUCE', hint: 'Reach by reasoning' },
+  { word: 'INFER', hint: 'Conclude from evidence' },
+  { word: 'CONCLUDE', hint: 'Reach a decision' },
+  { word: 'ASSUME', hint: 'Take for granted' },
+  { word: 'HYPOTHESIZE', hint: 'Form a theory' },
+  { word: 'THEOREM', hint: 'Proven statement' },
+  { word: 'PREMISE', hint: 'Starting assumption' },
+  { word: 'AXIOM', hint: 'Self-evident truth' },
+  { word: 'PROOF', hint: 'Evidence of truth' },
+  { word: 'EVIDENCE', hint: 'Supporting facts' },
+  { word: 'FACT', hint: 'Verified truth' },
+  { word: 'TRUTH', hint: 'What is real' },
+  { word: 'VALID', hint: 'Logically sound' },
+  // Judgment & outcomes
+  { word: 'JUDGE', hint: 'Form an opinion' },
+  { word: 'RULING', hint: 'Official decision' },
+  { word: 'DECREE', hint: 'Authoritative order' },
+  { word: 'RESOLVE', hint: 'Settle conclusively' },
+  { word: 'SETTLE', hint: 'Reach agreement' },
+  { word: 'OUTCOME', hint: 'Final result' },
+  { word: 'RESULT', hint: 'Consequence' },
+  { word: 'EFFECT', hint: 'Produced outcome' },
+  { word: 'IMPACT', hint: 'Strong influence' },
+  { word: 'CONSEQUENCE', hint: 'Result of action' },
+  { word: 'CONCLUSION', hint: 'Final decision' },
+  { word: 'SOLUTION', hint: 'Answer to problem' },
+  { word: 'REMEDY', hint: 'Cure or fix' },
+  // Strategy & planning
+  { word: 'STRATEGY', hint: 'Plan of action' },
+  { word: 'TACTICS', hint: 'Specific methods' },
+  { word: 'PLAN', hint: 'Intended course' },
+  { word: 'SCHEME', hint: 'Systematic plan' },
+  { word: 'APPROACH', hint: 'Way of dealing' },
+  { word: 'METHOD', hint: 'Systematic procedure' },
+  { word: 'PROCESS', hint: 'Series of steps' },
+  { word: 'PROCEDURE', hint: 'Established way' },
+  { word: 'SYSTEM', hint: 'Organized method' },
+  { word: 'FRAMEWORK', hint: 'Basic structure' },
+  { word: 'MODEL', hint: 'Representation' },
+  { word: 'BLUEPRINT', hint: 'Detailed plan' },
+  // Risk & uncertainty
+  { word: 'RISK', hint: 'Potential danger' },
+  { word: 'GAMBLE', hint: 'Take a chance' },
+  { word: 'HAZARD', hint: 'Source of danger' },
+  { word: 'PERIL', hint: 'Serious danger' },
+  { word: 'DANGER', hint: 'Possible harm' },
+  { word: 'THREAT', hint: 'Potential menace' },
+  { word: 'CHANCE', hint: 'Possibility' },
+  { word: 'ODDS', hint: 'Probability ratio' },
+  { word: 'PROBABILITY', hint: 'Likelihood' },
+  { word: 'UNCERTAIN', hint: 'Not sure' },
+  { word: 'DOUBT', hint: 'Feeling unsure' },
+  { word: 'DILEMMA', hint: 'Difficult choice' },
+  { word: 'QUANDARY', hint: 'State of perplexity' },
+  { word: 'PREDICAMENT', hint: 'Difficult situation' },
+  // Agreement & consensus
+  { word: 'CONSENSUS', hint: 'General agreement' },
+  { word: 'AGREEMENT', hint: 'Mutual understanding' },
+  { word: 'ACCORD', hint: 'Harmony of opinion' },
+  { word: 'HARMONY', hint: 'Agreement in feeling' },
+  { word: 'UNITY', hint: 'State of oneness' },
+  { word: 'ALLIANCE', hint: 'Union of parties' },
+  { word: 'COALITION', hint: 'Temporary alliance' },
+  { word: 'COMPROMISE', hint: 'Mutual concession' },
+  { word: 'NEGOTIATE', hint: 'Discuss terms' },
+  { word: 'MEDIATE', hint: 'Intervene to resolve' },
+  { word: 'ARBITRATE', hint: 'Judge a dispute' },
+  // Knowledge & understanding
+  { word: 'KNOWLEDGE', hint: 'Acquired information' },
+  { word: 'UNDERSTAND', hint: 'Grasp the meaning' },
+  { word: 'COMPREHEND', hint: 'Fully understand' },
+  { word: 'GRASP', hint: 'Seize mentally' },
+  { word: 'PERCEIVE', hint: 'Become aware of' },
+  { word: 'REALIZE', hint: 'Become fully aware' },
+  { word: 'RECOGNIZE', hint: 'Identify as known' },
+  { word: 'DISCERN', hint: 'Perceive distinctly' },
+  { word: 'DISTINGUISH', hint: 'Tell apart' },
+  { word: 'IDENTIFY', hint: 'Establish identity' },
+  // AI & technology
+  { word: 'ALGORITHM', hint: 'Step-by-step procedure' },
+  { word: 'NEURAL', hint: 'Brain-like network' },
+  { word: 'MACHINE', hint: 'Automated device' },
+  { word: 'COMPUTE', hint: 'Calculate' },
+  { word: 'PROCESS', hint: 'Handle data' },
+  { word: 'OPTIMIZE', hint: 'Make best use' },
+  { word: 'ITERATE', hint: 'Repeat process' },
+  { word: 'CALIBRATE', hint: 'Adjust precisely' },
+  { word: 'SIMULATE', hint: 'Imitate conditions' },
+  { word: 'PREDICT', hint: 'Forecast outcome' },
+  { word: 'FORECAST', hint: 'Estimate future' },
 ];
 
-// Shuffle letters in a word
+// Cryptographically secure random number generator
+function secureRandom(max) {
+  const array = new Uint32Array(1);
+  crypto.getRandomValues(array);
+  return array[0] % max;
+}
+
+// Shuffle letters in a word using secure randomness
 function scrambleWord(word) {
   const letters = word.split('');
+  // Fisher-Yates shuffle with crypto random
   for (let i = letters.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = secureRandom(i + 1);
     [letters[i], letters[j]] = [letters[j], letters[i]];
   }
   // Make sure it's actually scrambled
@@ -57,9 +175,9 @@ export default function WaitingGame({
 
   const estimate = estimates[mode] || estimates.standard;
 
-  // Pick a new word
+  // Pick a new word using secure randomness
   const newWord = useCallback(() => {
-    const word = WORDS[Math.floor(Math.random() * WORDS.length)];
+    const word = WORDS[secureRandom(WORDS.length)];
     setCurrentWord(word);
     setScrambled(scrambleWord(word.word));
     setGuess('');
