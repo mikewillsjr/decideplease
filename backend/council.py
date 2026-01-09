@@ -388,35 +388,37 @@ Provide a clear, well-reasoned final answer that represents the council's collec
     print(f"[STAGE3] Response preview: {content[:150]}...")
 
     # Validate that the response is a synthesis, not an echo of the question
-    # Multiple detection methods for robustness
+    # IMPORTANT: Echo detection must be strict to avoid false positives on long, complex prompts
+    # Only trigger if response literally starts with the query text
     echo_detected = False
     synthesis_found = False
 
     if len(user_query) > 100:
-        query_start = user_query[:200].strip()
-        response_start = content[:500].strip()  # Check more of the response
+        query_start = user_query[:150].strip()
+        response_start = content[:300].strip()
 
-        # Method 1: Direct prefix match
-        if query_start in response_start or response_start.startswith(query_start[:100]):
+        # Method 1: Direct prefix match - response literally starts with query text
+        # This is the ONLY reliable echo detection method
+        if response_start.startswith(query_start[:80]):
             echo_detected = True
-            print(f"[STAGE3] Echo detected: Method 1 (prefix match)")
+            print(f"[STAGE3] Echo detected: Response starts with query text")
 
-        # Method 2: Check if distinctive phrases from query appear in response
-        # Extract first few "words" that are likely unique to this query
-        query_words = user_query[:500].split()
-        if len(query_words) > 10:
-            # Check if a sequence of 5+ consecutive words from query appears in response
-            for i in range(0, min(len(query_words) - 5, 20)):
-                phrase = ' '.join(query_words[i:i+5])
-                if phrase in content[:1000]:
-                    echo_detected = True
-                    print(f"[STAGE3] Echo detected: Method 2 (phrase match: '{phrase[:50]}...')")
-                    break
+        # Method 2: Check if response contains synthesis indicators (anti-echo check)
+        # If these are present, it's likely NOT an echo even if some query text appears
+        synthesis_indicators = [
+            "based on", "analysis", "recommend", "council", "synthesis",
+            "conclusion", "verdict", "assessment", "evaluation", "##", "**",
+            "1.", "2.", "first", "second", "however", "therefore", "critique"
+        ]
+        has_synthesis_markers = any(ind in content[:500].lower() for ind in synthesis_indicators)
 
-        # Method 3: Length similarity - if response is similar length to query and query is long
-        if len(user_query) > 500 and abs(len(content) - len(user_query)) < 200:
-            echo_detected = True
-            print(f"[STAGE3] Echo detected: Method 3 (suspicious length similarity)")
+        # If we detected a potential echo but synthesis markers are present,
+        # give benefit of doubt - some models summarize the question before answering
+        if echo_detected and has_synthesis_markers:
+            # Check if substantial content follows the query text
+            if len(content) > len(query_start) + 500:
+                print(f"[STAGE3] Echo-like start detected but synthesis markers present - allowing")
+                echo_detected = False
 
         if echo_detected:
             print(f"[STAGE3] WARNING: Response appears to echo the question!")
@@ -452,23 +454,33 @@ Provide a clear, well-reasoned final answer that represents the council's collec
         print(f"[STAGE3] Echo detected without synthesis - retrying with explicit prompt")
 
         # Build a summary of council responses for the retry
+        # Include more context than before to handle complex questions
         council_summary = "\n".join([
-            f"- {r['model'].split('/')[-1]}: {r['response'][:300]}{'...' if len(r['response']) > 300 else ''}"
-            for r in stage1_results[:3]  # Include top 3 responses
+            f"- {r['model'].split('/')[-1]}: {r['response'][:800]}{'...' if len(r['response']) > 800 else ''}"
+            for r in stage1_results[:4]  # Include top 4 responses with more detail
         ])
 
-        retry_prompt = f"""IMPORTANT: Do NOT repeat or echo the question. Start DIRECTLY with your synthesis.
+        # For long queries, include more context (up to 1500 chars)
+        query_context_len = min(1500, len(user_query))
+        query_context = user_query[:query_context_len]
+        if len(user_query) > query_context_len:
+            query_context += "..."
 
-QUESTION (for context only - do not repeat):
-{user_query[:300]}{'...' if len(user_query) > 300 else ''}
+        retry_prompt = f"""CRITICAL: Do NOT repeat the question. Provide ONLY your synthesis/recommendation.
 
-COUNCIL RESPONSES TO SYNTHESIZE:
+QUESTION CONTEXT (reference only - DO NOT INCLUDE IN YOUR RESPONSE):
+{query_context}
+
+COUNCIL MEMBER RESPONSES:
 {council_summary}
 
-YOUR TASK: Synthesize the above responses into a clear recommendation.
-Start with "Based on the council's analysis..." or similar. Do NOT repeat the question.
+INSTRUCTIONS:
+- Start DIRECTLY with your synthesis or recommendation
+- Do NOT echo, quote, or summarize the question
+- Synthesize the council responses into actionable guidance
+- Use structured formatting (headers, bullets) for clarity
 
-SYNTHESIS:"""
+YOUR SYNTHESIS:"""
 
         retry_response = await query_model(chairman, [{"role": "user", "content": retry_prompt}])
 
