@@ -4,7 +4,7 @@ import './RerunModal.css';
 
 export default function RerunModal({ isOpen, onClose, onSubmit }) {
   const [newInput, setNewInput] = useState('');
-  const [selectedMode, setSelectedMode] = useState('standard');
+  const [selectedMode, setSelectedMode] = useState('decide_please');
 
   if (!isOpen) return null;
 
@@ -12,7 +12,7 @@ export default function RerunModal({ isOpen, onClose, onSubmit }) {
     e.preventDefault();
     onSubmit(newInput.trim() || null, selectedMode);
     setNewInput('');
-    setSelectedMode('standard');
+    setSelectedMode('decide_please');
   };
 
   const getCredits = () => {

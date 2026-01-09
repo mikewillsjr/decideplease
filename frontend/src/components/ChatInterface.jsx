@@ -28,7 +28,7 @@ export default function ChatInterface({
   // Check if user needs to verify email (has password but not verified)
   const needsVerification = user && !user.email_verified && user.credits === 0;
   const [input, setInput] = useState('');
-  const [selectedMode, setSelectedMode] = useState('standard');
+  const [selectedMode, setSelectedMode] = useState('decide_please');
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [userHasScrolled, setUserHasScrolled] = useState(false);
   const [messageCount, setMessageCount] = useState(0);
@@ -321,8 +321,8 @@ export default function ChatInterface({
                 {msg.stage3 && msg.metadata?.mode && (
                   <div className="mode-badge-section">
                     <span className="run-mode-badge">
-                      {msg.metadata.mode === 'quick' ? 'Quick' :
-                       msg.metadata.mode === 'extra_care' ? 'Extra Care' : 'Standard'}
+                      {(msg.metadata.mode === 'quick' || msg.metadata.mode === 'quick_decision') ? 'Quick Decision' :
+                       (msg.metadata.mode === 'extra_care' || msg.metadata.mode === 'decide_pretty_please') ? 'Decide Pretty Please' : 'Decide Please'}
                     </span>
                   </div>
                 )}

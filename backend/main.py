@@ -81,7 +81,7 @@ from .council import (
     extract_tldr_packet,
     build_context_summary,
 )
-from .config import RUN_MODES, FILE_UPLOAD_CREDIT_COST, MAX_FILES, MAX_FILE_SIZE
+from .config import RUN_MODES, LEGACY_MODE_MAPPING, FILE_UPLOAD_CREDIT_COST, MAX_FILES, MAX_FILE_SIZE
 from .admin import router as admin_router, ADMIN_EMAILS
 from .permissions import has_permission
 from .file_processing import validate_files, process_files, FileValidationError
@@ -253,14 +253,14 @@ class FileAttachment(BaseModel):
 class SendMessageRequest(BaseModel):
     """Request to send a message in a conversation."""
     content: str
-    mode: str = "standard"  # "quick", "standard", or "extra_care"
+    mode: str = "decide_please"  # "quick_decision", "decide_please", or "decide_pretty_please"
     files: Optional[List[FileAttachment]] = None  # Optional file attachments
     source_message_id: Optional[int] = None  # Optional: respond to a specific previous decision
 
 
 class RerunRequest(BaseModel):
     """Request to rerun a decision."""
-    mode: str = "standard"  # "quick", "standard", or "extra_care"
+    mode: str = "decide_please"  # "quick_decision", "decide_please", or "decide_pretty_please"
     new_input: Optional[str] = None  # Empty = second opinion, non-empty = refinement
 
 
@@ -1239,13 +1239,13 @@ async def _heartbeat_task(queue: asyncio.Queue, operation: str, interval: int = 
         pass
 
 
-async def _process_council_request(
+async def _process_decision_request(
     conversation_id: str,
     content: str,
     user_id: str,
     is_first_message: bool,
     event_queue: asyncio.Queue,
-    mode: str = "standard",
+    mode: str = "decide_please",
     is_rerun: bool = False,
     rerun_input: Optional[str] = None,
     parent_message_id: Optional[int] = None,
@@ -1254,18 +1254,23 @@ async def _process_council_request(
     source_message_id: Optional[int] = None
 ):
     """
-    Background task to process the council request.
+    Background task to process the Decision Makers request.
     Saves progress incrementally and pushes events to the queue.
     Continues running even if client disconnects.
 
     Args:
         processed_files: Optional list of processed file dicts for multimodal queries
     """
+    from .config import LEGACY_MODE_MAPPING
     message_id = None
+
+    # Handle legacy mode names
+    if mode in LEGACY_MODE_MAPPING:
+        mode = LEGACY_MODE_MAPPING[mode]
 
     # Validate and get mode config
     if mode not in RUN_MODES:
-        mode = "standard"
+        mode = "decide_please"
     mode_config = RUN_MODES[mode]
 
     try:
@@ -1277,14 +1282,12 @@ async def _process_council_request(
         # Instead, we collect all stage data in memory and save atomically at the end.
         # This prevents partial/incomplete messages if the process is interrupted mid-way.
 
-        # Send initial event with mode info and remaining credits
-        remaining_credits = await storage.get_user_credits(user_id)
+        # Send initial event with mode info
         await event_queue.put({
             'type': 'run_started',
             'mode': mode,
-            'credit_cost': mode_config['credit_cost'],
+            'mode_label': mode_config['label'],
             'enable_peer_review': mode_config['enable_peer_review'],
-            'updated_credits': remaining_credits,
             'is_rerun': is_rerun
         })
 
@@ -1293,11 +1296,11 @@ async def _process_council_request(
         if is_first_message and not is_rerun:
             title_task = asyncio.create_task(generate_conversation_title(content))
 
-        council_models = mode_config["council_models"]
-        chairman_model = mode_config["chairman_model"]
+        decision_makers = mode_config["decision_makers"]
+        moderator_model = mode_config["moderator_model"]
         enable_peer_review = mode_config["enable_peer_review"]
         enable_cross_review = mode_config.get("enable_cross_review", False)
-        context_mode = mode_config.get("context_mode", "standard")
+        context_mode = mode_config.get("context_mode", "decide_please")
 
         # Build effective query - check for reruns first, then follow-ups
         effective_content = content
@@ -1346,10 +1349,10 @@ Respond to the new input above. If it's new information that affects the decisio
         try:
             if processed_files:
                 stage1_results = await stage1_collect_responses_with_files(
-                    effective_content, processed_files, council_models
+                    effective_content, processed_files, decision_makers
                 )
             else:
-                stage1_results = await stage1_collect_responses(effective_content, council_models)
+                stage1_results = await stage1_collect_responses(effective_content, decision_makers)
         finally:
             heartbeat.cancel()
 
@@ -1374,7 +1377,7 @@ Respond to the new input above. If it's new information that affects the decisio
             heartbeat = asyncio.create_task(_heartbeat_task(event_queue, "Cross-review refinement"))
             try:
                 stage1_5_results = await stage1_5_cross_review(
-                    effective_content, stage1_results, council_models
+                    effective_content, stage1_results, decision_makers
                 )
             finally:
                 heartbeat.cancel()
@@ -1408,7 +1411,7 @@ Respond to the new input above. If it's new information that affects the decisio
             heartbeat = asyncio.create_task(_heartbeat_task(event_queue, "Peer review"))
             try:
                 stage2_results, label_to_model = await stage2_collect_rankings(
-                    effective_content, responses_for_ranking, council_models
+                    effective_content, responses_for_ranking, decision_makers
                 )
             finally:
                 heartbeat.cancel()
@@ -1421,24 +1424,24 @@ Respond to the new input above. If it's new information that affects the decisio
                 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings}
             })
         else:
-            # Emit skipped event for Quick mode
-            await event_queue.put({'type': 'stage2_skipped', 'reason': 'Quick mode - peer review disabled'})
+            # Emit skipped event for Quick Decision mode
+            await event_queue.put({'type': 'stage2_skipped', 'reason': 'Quick Decision mode - peer review disabled'})
 
         # Stage 3: Synthesize final answer (use refined responses if available)
         # Send preparing event before Stage 3
         await event_queue.put({
             'type': 'stage_preparing',
             'next_stage': 'stage3',
-            'status': 'Chairman preparing final synthesis...'
+            'status': 'Moderator preparing final synthesis...'
         })
         _active_status[conversation_id] = "stage3"
         await event_queue.put({'type': 'stage3_start'})
 
-        # Start heartbeat for chairman synthesis
+        # Start heartbeat for moderator synthesis
         heartbeat = asyncio.create_task(_heartbeat_task(event_queue, "Final synthesis"))
         try:
             stage3_result = await stage3_synthesize_final(
-                effective_content, responses_for_ranking, stage2_results, chairman_model
+                effective_content, responses_for_ranking, stage2_results, moderator_model
             )
         finally:
             heartbeat.cancel()
@@ -1552,10 +1555,13 @@ async def send_message_stream(
             detail=f"Query too long. Maximum length is {MAX_QUERY_LENGTH} characters."
         )
 
-    # Validate mode
-    mode = msg_request.mode if msg_request.mode in RUN_MODES else "standard"
+    # Validate mode (handle legacy mode names)
+    mode = msg_request.mode
+    if mode in LEGACY_MODE_MAPPING:
+        mode = LEGACY_MODE_MAPPING[mode]
+    if mode not in RUN_MODES:
+        mode = "decide_please"
     mode_config = RUN_MODES[mode]
-    credit_cost = mode_config["credit_cost"]
 
     # Check for file attachments and add file upload credit cost
     has_files = bool(msg_request.files and len(msg_request.files) > 0)
@@ -1607,7 +1613,7 @@ async def send_message_stream(
     event_queue: asyncio.Queue = asyncio.Queue()
 
     # Start background processing task
-    task = asyncio.create_task(_process_council_request(
+    task = asyncio.create_task(_process_decision_request(
         conversation_id,
         msg_request.content,
         user["user_id"],
@@ -1823,9 +1829,11 @@ async def retry_message(
     if message["role"] != "user":
         raise HTTPException(status_code=400, detail="Can only retry user messages")
 
-    # Parse request body for mode
+    # Parse request body for mode (handle legacy mode names)
     body = await request.json()
-    mode = body.get("mode", "standard")
+    mode = body.get("mode", "decide_please")
+    if mode in LEGACY_MODE_MAPPING:
+        mode = LEGACY_MODE_MAPPING[mode]
 
     # Redirect to the stream endpoint with the same content
     # This reuses all the existing logic for processing
@@ -1862,10 +1870,13 @@ async def rerun_decision(
     Rerun a decision with optional new input.
     Streams the response like send_message_stream.
     """
-    # Validate mode
-    mode = request.mode if request.mode in RUN_MODES else "standard"
+    # Validate mode (handle legacy mode names)
+    mode = request.mode
+    if mode in LEGACY_MODE_MAPPING:
+        mode = LEGACY_MODE_MAPPING[mode]
+    if mode not in RUN_MODES:
+        mode = "decide_please"
     mode_config = RUN_MODES[mode]
-    credit_cost = mode_config["credit_cost"]
 
     # Check if conversation exists and belongs to user
     conversation = await storage.get_conversation(conversation_id, user["user_id"])
@@ -1916,7 +1927,7 @@ async def rerun_decision(
         parent_message_id = latest_message["parent_message_id"]
 
     # Start background processing task
-    task = asyncio.create_task(_process_council_request(
+    task = asyncio.create_task(_process_decision_request(
         conversation_id,
         original_question,
         user["user_id"],
@@ -1976,7 +1987,7 @@ async def get_run_modes():
     """
     Get available run modes and their configurations.
     Exposes: label, credit_cost, enable_peer_review, enable_cross_review, context_mode
-    Note: Does NOT expose council_models or chairman_model to keep those internal
+    Note: Does NOT expose decision_makers or moderator_model to keep those internal
     """
     return {
         mode: {

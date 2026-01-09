@@ -2,23 +2,23 @@ import './SpeedSelector.css';
 
 const SPEED_OPTIONS = [
   {
-    mode: 'quick',
-    label: 'Quick',
+    mode: 'quick_decision',
+    label: 'Quick Decision',
     credits: 1,
     description: 'Fast answer, no peer review',
     note: null,
   },
   {
-    mode: 'standard',
-    label: 'Standard',
+    mode: 'decide_please',
+    label: 'Decide Please',
     credits: 2,
-    description: 'Full council with peer review',
+    description: 'Full deliberation with peer review',
     note: null,
   },
   {
-    mode: 'extra_care',
-    label: 'Extra Care',
-    credits: 3,
+    mode: 'decide_pretty_please',
+    label: 'Decide Pretty Please',
+    credits: 4,
     description: 'Premium models with cross-review refinement',
     note: 'Most thorough • Takes longer',
   },

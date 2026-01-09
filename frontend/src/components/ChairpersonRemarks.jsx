@@ -33,7 +33,7 @@ export default function ChairpersonRemarks({
   disabled = false,
 }) {
   const [input, setInput] = useState('');
-  const [mode, setMode] = useState('standard');
+  const [mode, setMode] = useState('decide_please');
   const [isExpanded, setIsExpanded] = useState(false);
   const [files, setFiles] = useState([]);
   const [fileError, setFileError] = useState(null);

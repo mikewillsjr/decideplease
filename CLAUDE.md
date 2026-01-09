@@ -22,8 +22,11 @@ DecidePlease is a 3-stage deliberation system where multiple LLMs collaborativel
 ### Backend Structure (`backend/`)
 
 **`config.py`**
-- Contains `COUNCIL_MODELS` (list of OpenRouter model identifiers)
-- Contains `CHAIRMAN_MODEL` (model that synthesizes final answer)
+- Contains `DECISION_MAKERS` (list of OpenRouter model identifiers for the deliberating models)
+- Contains `MODERATOR_MODEL` (model that synthesizes final answer)
+- Legacy aliases: `COUNCIL_MODELS` and `CHAIRMAN_MODEL` still work for backward compatibility
+- Contains `RUN_MODES` with tiers: `quick_decision`, `decide_please`, `decide_pretty_please`
+- Contains `PLAN_QUOTAS` with pricing structure and `LEGACY_MODE_MAPPING` for backward compatibility
 - Uses environment variable `OPENROUTER_API_KEY` from `.env`
 - Backend runs on **port 8001** (NOT 8000 - user had another app on 8000)
 
@@ -34,14 +37,14 @@ DecidePlease is a 3-stage deliberation system where multiple LLMs collaborativel
 - Graceful degradation: returns None on failure, continues with successful responses
 
 **`council.py`** - The Core Logic
-- `stage1_collect_responses()`: Parallel queries to all council models
+- `stage1_collect_responses()`: Parallel queries to all decision makers
 - `stage2_collect_rankings()`:
   - Anonymizes responses as "Response A, B, C, etc."
   - Creates `label_to_model` mapping for de-anonymization
   - Prompts models to evaluate and rank (with strict format requirements)
   - Returns tuple: (rankings_list, label_to_model_dict)
   - Each ranking includes both raw text and `parsed_ranking` list
-- `stage3_synthesize_final()`: Chairman synthesizes from all responses + rankings
+- `stage3_synthesize_final()`: Moderator synthesizes from all responses + rankings
 - `parse_ranking_from_text()`: Extracts "FINAL RANKING:" section, handles both numbered lists and plain format
 - `calculate_aggregate_rankings()`: Computes average rank position across all peer evaluations
 
@@ -80,7 +83,7 @@ DecidePlease is a 3-stage deliberation system where multiple LLMs collaborativel
 - Explanatory text clarifies that boldface model names are for readability only
 
 **`components/Stage3.jsx`**
-- Final synthesized answer from chairman
+- Final synthesized answer from moderator
 - Green-tinted background (#f0fff0) to highlight conclusion
 
 **Styling (`*.css`)**
@@ -134,7 +137,37 @@ All backend modules use relative imports (e.g., `from .config import ...`) not a
 All ReactMarkdown components must be wrapped in `<div className="markdown-content">` for proper spacing. This class is defined globally in `index.css`.
 
 ### Model Configuration
-Models are hardcoded in `backend/config.py`. Chairman can be same or different from council members. The current default is Gemini as chairman per user preference.
+Models are hardcoded in `backend/config.py`. Moderator can be same or different from decision makers. The current default moderator is Claude Sonnet.
+
+### Run Modes (Deliberation Tiers)
+Three deliberation intensities are available:
+
+| Mode | Label | Peer Review | Cross Review | Models |
+|------|-------|-------------|--------------|--------|
+| `quick_decision` | Quick Decision | ❌ | ❌ | Haiku tier (fast/cheap) |
+| `decide_please` | Decide Please | ✅ | ❌ | Premium tier |
+| `decide_pretty_please` | Decide Pretty Please | ✅ | ✅ | Premium tier |
+
+### Subscription Plans (PLAN_QUOTAS)
+Monthly subscription model with run quotas (not credits):
+
+| Plan | Price | Quick | Standard | Premium | Features |
+|------|-------|-------|----------|---------|----------|
+| **Starter** | $49/mo | 150 | 8 | 1 | 10MB files, 5 briefing packs, 90-day library |
+| **Professional** | $129/mo | 400 | 25 | 5 | 50MB files, 20 packs, 365-day library, white-label |
+| **Team** | $299/mo | 1000 | 75 | 20 | 100MB files, unlimited packs/library, 3 seats (+$60/seat) |
+
+**Overage Pricing** (when quota exceeded):
+- Starter: $4/standard, $10/premium (no quick overages)
+- Professional: $3/standard, $8/premium
+- Team: $2.50/standard, $6/premium
+
+**Rate Limits**: 50 quick/hour, 200 quick/day soft cap
+
+### Legacy Compatibility
+- `COUNCIL_MODELS` → alias for `DECISION_MAKERS`
+- `CHAIRMAN_MODEL` → alias for `MODERATOR_MODEL`
+- Old mode names (`quick`, `standard`, `extra_care`) mapped via `LEGACY_MODE_MAPPING`
 
 ## Common Gotchas
 
@@ -145,7 +178,7 @@ Models are hardcoded in `backend/config.py`. Chairman can be same or different f
 
 ## Future Enhancement Ideas
 
-- Configurable council/chairman via UI instead of config file
+- Configurable decision makers/moderator via UI instead of config file
 - Streaming responses instead of batch loading
 - Export conversations to markdown/PDF
 - Model performance analytics over time
@@ -167,7 +200,7 @@ Stage 2: Anonymize → Parallel ranking queries → [evaluations + parsed rankin
     ↓
 Aggregate Rankings Calculation → [sorted by avg position]
     ↓
-Stage 3: Chairman synthesis with full context
+Stage 3: Moderator synthesis with full context
     ↓
 Return: {stage1, stage2, stage3, metadata}
     ↓

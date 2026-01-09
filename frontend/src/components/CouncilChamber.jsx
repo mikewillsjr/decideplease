@@ -316,7 +316,7 @@ export default function CouncilChamber({
 
             {/* Mini-game while waiting */}
             <WaitingGame
-              mode={currentRound?.metadata?.mode || 'standard'}
+              mode={currentRound?.metadata?.mode || 'decide_please'}
               elapsed={currentRound?.loading?.heartbeat?.elapsed || 0}
             />
           </div>

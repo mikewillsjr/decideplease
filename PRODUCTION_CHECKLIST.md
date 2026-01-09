@@ -46,15 +46,34 @@ Since account-level email branding would show shared branding:
 - [ ] **Turn OFF** "Refunds" notifications
 - DecidePlease sends its own branded emails via Resend
 
-### 1.4 Create Product & Price
-- [ ] Go to **Products → Add product**
-  - Name: `DecidePlease - 20 Credits` (prefix helps identify in shared account)
-  - Description: `20 AI Council deliberation credits for DecidePlease`
-  - Image: Upload a branded image
-  - **Add Price**:
-    - Price: `$5.00` (or your chosen price)
-    - Type: One-time
-    - Copy the `price_xxxxx` ID → You'll need this for `STRIPE_PRICE_ID`
+### 1.4 Create Subscription Products & Prices
+- [ ] Go to **Products → Add product** (create 3 products)
+
+**Starter Plan:**
+  - Name: `DecidePlease - Starter`
+  - Description: `150 Quick, 8 Standard, 1 Premium deliberation per month`
+  - **Add Price**: $49.00/month (recurring)
+  - Copy `price_xxxxx` → `STRIPE_STARTER_PRICE_ID`
+
+**Professional Plan:**
+  - Name: `DecidePlease - Professional`
+  - Description: `400 Quick, 25 Standard, 5 Premium deliberations per month`
+  - **Add Price**: $129.00/month (recurring)
+  - Copy `price_xxxxx` → `STRIPE_PROFESSIONAL_PRICE_ID`
+
+**Team Plan:**
+  - Name: `DecidePlease - Team`
+  - Description: `1000 Quick, 75 Standard, 20 Premium deliberations per month (3 seats)`
+  - **Add Price**: $299.00/month (recurring)
+  - Copy `price_xxxxx` → `STRIPE_TEAM_PRICE_ID`
+
+**Additional Team Seat (add-on):**
+  - Name: `DecidePlease - Additional Team Seat`
+  - **Add Price**: $60.00/month (recurring)
+  - Copy `price_xxxxx` → `STRIPE_TEAM_SEAT_PRICE_ID`
+
+**Overage Products** (metered billing):
+  - Create metered prices for standard/premium overages per plan tier
 
 ### 1.5 Enable Apple Pay
 - [ ] Go to **Settings → Payments → Payment methods**
@@ -99,12 +118,13 @@ Since account-level email branding would show shared branding:
 
 Since multiple apps share this Stripe account, DecidePlease uses **metadata** to identify its transactions:
 
-**Metadata included on every PaymentIntent/CheckoutSession:**
+**Metadata included on every Subscription/PaymentIntent:**
 ```json
 {
   "app": "decideplease",
   "user_id": "<user_id>",
-  "credits": "20"
+  "plan": "starter|professional|team",
+  "billing_cycle": "monthly"
 }
 ```
 
@@ -206,8 +226,11 @@ After deployment, update the API URL if using a custom domain:
 | `OPENROUTER_API_KEY` | Your OpenRouter API key | For AI models |
 | `STRIPE_SECRET_KEY` | `sk_live_xxxxx` | Live secret key |
 | `STRIPE_PUBLISHABLE_KEY` | `pk_live_xxxxx` | Live publishable key |
-| `STRIPE_PRICE_ID` | `price_xxxxx` | From step 1.3 |
-| `STRIPE_WEBHOOK_SECRET` | `whsec_xxxxx` | From step 1.8 |
+| `STRIPE_STARTER_PRICE_ID` | `price_xxxxx` | Starter plan ($49/mo) |
+| `STRIPE_PROFESSIONAL_PRICE_ID` | `price_xxxxx` | Professional plan ($129/mo) |
+| `STRIPE_TEAM_PRICE_ID` | `price_xxxxx` | Team plan ($299/mo) |
+| `STRIPE_TEAM_SEAT_PRICE_ID` | `price_xxxxx` | Additional seat ($60/mo) |
+| `STRIPE_WEBHOOK_SECRET` | `whsec_xxxxx` | From step 1.9 |
 | `STRIPE_STATEMENT_DESCRIPTOR` | `DECIDEPLEASE` | Max 22 chars |
 | `RESEND_API_KEY` | `re_xxxxx` | For branded emails |
 | `RESEND_FROM_EMAIL` | `DecidePlease <noreply@decideplease.com>` | |
@@ -220,9 +243,6 @@ After deployment, update the API URL if using a custom domain:
 | `ADMIN_EMAILS` | `you@example.com,other@example.com` | Comma-separated superadmins |
 | `GOOGLE_CLIENT_ID` | From Google Cloud Console | For Google OAuth |
 | `GOOGLE_CLIENT_SECRET` | From Google Cloud Console | For Google OAuth |
-| `CREDITS_PER_PURCHASE` | `20` | Default |
-| `PRICE_DISPLAY` | `$5.00` | Shown in UI |
-| `PRICE_CENTS` | `500` | Amount in cents |
 
 ### 4.2 Frontend Environment Variables
 | Variable | Value |
@@ -245,8 +265,13 @@ The app sends these DecidePlease-branded emails:
 - Welcome email (on registration)
 - Password changed notification
 - Password reset link
-- Purchase confirmation
-- Refund notification
+- Subscription confirmation (new subscriber)
+- Subscription upgraded/downgraded
+- Subscription renewal reminder
+- Subscription canceled
+- Overage charge notification
+- Quota warning (approaching limit)
+- Payment failed / retry notification
 
 ---
 
@@ -367,8 +392,9 @@ The current implementation doesn't support saved cards. To add this:
 
 ---
 
-## Estimated Costs (Monthly)
+## Estimated Costs & Revenue (Monthly)
 
+### Infrastructure Costs
 | Service | Cost |
 |---------|------|
 | Render Starter (API) | ~$7/month |
@@ -376,10 +402,27 @@ The current implementation doesn't support saved cards. To add this:
 | Render PostgreSQL (Basic) | ~$7/month |
 | Stripe | 2.9% + $0.30 per transaction |
 | Resend | Free up to 3,000 emails/month |
-| OpenRouter | Pay per API call |
+| OpenRouter | Pay per API call (variable) |
 | Domain | ~$12/year |
 
-**Total Fixed**: ~$14/month + per-transaction fees
+**Total Fixed Infrastructure**: ~$14/month + per-transaction fees
+
+### Subscription Pricing
+| Plan | Monthly Price | Quotas |
+|------|---------------|--------|
+| Starter | $49 | 150 quick, 8 standard, 1 premium |
+| Professional | $129 | 400 quick, 25 standard, 5 premium |
+| Team | $299 | 1000 quick, 75 standard, 20 premium (3 seats) |
+| Additional Seat | +$60 | For Team plan |
+
+### Overage Pricing (per run, when quota exceeded)
+| Plan | Standard | Premium |
+|------|----------|---------|
+| Starter | $4.00 | $10.00 |
+| Professional | $3.00 | $8.00 |
+| Team | $2.50 | $6.00 |
+
+*Note: Quick Decision runs have hard caps (no overages available)*
 
 ---
 

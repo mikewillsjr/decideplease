@@ -540,7 +540,7 @@ function CouncilPage() {
     }
   };
 
-  const handleSendMessage = async (content, mode = 'standard', files = []) => {
+  const handleSendMessage = async (content, mode = 'decide_please', files = []) => {
     // Capture the source message ID before clearing it
     const sourceMessageId = respondingToMessageId;
 
@@ -685,7 +685,7 @@ function CouncilPage() {
     setOrphanedMessage(null);
 
     const contentToRetry = orphaned.content;
-    const modeToRetry = orphaned.mode || 'standard';
+    const modeToRetry = orphaned.mode || 'decide_please';
 
     // The orphaned message is already in the conversation - we need to delete it first
     try {

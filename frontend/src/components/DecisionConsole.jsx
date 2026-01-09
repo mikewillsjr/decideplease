@@ -15,7 +15,7 @@ export default function DecisionConsole({
   placeholder = "Describe your dilemma. The Council will deliberate...",
 }) {
   const [input, setInput] = useState('');
-  const [mode, setMode] = useState('standard');
+  const [mode, setMode] = useState('decide_please');
   const [files, setFiles] = useState([]);
   const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef(null);
@@ -43,7 +43,8 @@ export default function DecisionConsole({
   };
 
   // Calculate credit cost
-  const baseCost = mode === 'quick' ? 1 : mode === 'standard' ? 2 : 3;
+  const baseCost = (mode === 'quick' || mode === 'quick_decision') ? 1 :
+                   (mode === 'decide_pretty_please' || mode === 'extra_care') ? 4 : 2;
   const fileCost = files.length > 0 ? 1 : 0;
   const totalCost = baseCost + fileCost;
 

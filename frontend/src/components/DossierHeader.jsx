@@ -29,7 +29,7 @@ export default function DossierHeader({
         <div className="header-text">
           <h2 className="verdict-label">Executive Consensus</h2>
           <span className="meta-info">
-            Chairman: {chairmanConfig.shortName} • {modelCount} Models Consulted
+            Moderator: {chairmanConfig.shortName} • {modelCount} Decision Makers
           </span>
         </div>
       </div>

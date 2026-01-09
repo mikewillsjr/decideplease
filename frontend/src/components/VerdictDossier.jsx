@@ -11,9 +11,14 @@ import './VerdictDossier.css';
  * Mode display info - maps mode to human-readable stages
  */
 const MODE_INFO = {
-  quick: { label: 'Quick', stages: '1 → 3', description: 'Fast answer with Haiku-tier models' },
-  standard: { label: 'Standard', stages: '1 → 2 → 3', description: 'Full peer review' },
-  extra_care: { label: 'Extra Care', stages: '1 → 1.5 → 2 → 3', description: 'Cross-review + peer review' },
+  // New mode names
+  quick_decision: { label: 'Quick Decision', stages: '1 → 3', description: 'Fast answer with Haiku-tier models' },
+  decide_please: { label: 'Decide Please', stages: '1 → 2 → 3', description: 'Full peer review' },
+  decide_pretty_please: { label: 'Decide Pretty Please', stages: '1 → 1.5 → 2 → 3', description: 'Cross-review + peer review' },
+  // Legacy mode names (for backward compatibility)
+  quick: { label: 'Quick Decision', stages: '1 → 3', description: 'Fast answer with Haiku-tier models' },
+  standard: { label: 'Decide Please', stages: '1 → 2 → 3', description: 'Full peer review' },
+  extra_care: { label: 'Decide Pretty Please', stages: '1 → 1.5 → 2 → 3', description: 'Cross-review + peer review' },
 };
 
 /**
@@ -39,14 +44,14 @@ export default function VerdictDossier({
     label_to_model: labelToModel,
     stage2Skipped,
     stage1_5Skipped,
-    mode = 'standard',
+    mode = 'decide_please',
   } = metadata;
 
   const stage3Content = stage3?.response || '';
   const hasStage1 = stage1 && stage1.length > 0;
   const hasStage1_5 = stage1_5 && stage1_5.length > 0 && !stage1_5Skipped;
   const hasStage2 = stage2 && stage2.length > 0 && !stage2Skipped;
-  const modeInfo = MODE_INFO[mode] || MODE_INFO.standard;
+  const modeInfo = MODE_INFO[mode] || MODE_INFO.decide_please;
 
   // Determine which tabs to show
   const tabs = [];

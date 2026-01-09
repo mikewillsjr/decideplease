@@ -362,7 +362,7 @@ export default function LandingPage() {
                     </div>
                     <div className="step-content">
                       <h3>4. The Verdict</h3>
-                      <p>A Chairman model synthesizes the debate into one clear answer, highlighting the dissent and action items.</p>
+                      <p>A Moderator synthesizes the debate into one clear answer, highlighting the dissent and action items.</p>
                     </div>
                   </div>
                 </div>

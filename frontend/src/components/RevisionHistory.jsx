@@ -20,9 +20,13 @@ export default function RevisionHistory({ revisions, activeRevision, onSelectRev
 
   const getModeLabel = (mode) => {
     switch (mode) {
-      case 'quick': return 'Quick';
-      case 'extra_care': return 'Extra Care';
-      default: return 'Standard';
+      case 'quick':
+      case 'quick_decision': return 'Quick Decision';
+      case 'extra_care':
+      case 'decide_pretty_please': return 'Decide Pretty Please';
+      case 'standard':
+      case 'decide_please':
+      default: return 'Decide Please';
     }
   };
 

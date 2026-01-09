@@ -218,7 +218,7 @@ function AdminPage() {
     setSuccessMessage(null);
     try {
       const result = await api.setUserCreditsByEmail(quickEmail, parseInt(quickCredits));
-      setSuccessMessage(`Set ${result.email} credits: ${result.previous_credits} → ${result.new_credits}`);
+      setSuccessMessage(`Set ${result.email} decisions: ${result.previous_credits} → ${result.new_credits}`);
       setQuickEmail('');
       setQuickCredits('');
       if (activeTab === 'users') loadUsers();
@@ -469,7 +469,7 @@ function AdminPage() {
               />
               <input
                 type="number"
-                placeholder="Credits (set to)"
+                placeholder="Decisions (set to)"
                 value={quickCredits}
                 onChange={(e) => setQuickCredits(e.target.value)}
                 disabled={quickActionLoading}
@@ -480,7 +480,7 @@ function AdminPage() {
                 disabled={quickActionLoading || !quickEmail || quickCredits === ''}
                 className="btn-credits"
               >
-                Set Credits
+                Set Decisions
               </button>
               {hasPermission('send_password_reset') && (
                 <button
@@ -502,7 +502,7 @@ function AdminPage() {
               )}
             </div>
             <div className="quick-actions-hint">
-              Enter email to: set credits (999999 = unlimited), send password reset, or delete account
+              Enter email to: set decisions (999999 = unlimited), send password reset, or delete account
             </div>
           </div>
         )}
@@ -556,7 +556,7 @@ function AdminPage() {
                     <thead>
                       <tr>
                         <th>Email</th>
-                        <th>Credits</th>
+                        <th>Decisions</th>
                         <th>Queries</th>
                         <th>Joined</th>
                         {hasPermission('impersonate') && <th>Actions</th>}
@@ -598,13 +598,13 @@ function AdminPage() {
                     <div className="user-info">
                       <p><strong>Email:</strong> {selectedUser.user.email}</p>
                       <p><strong>ID:</strong> <code>{selectedUser.user.id}</code></p>
-                      <p><strong>Credits:</strong> {selectedUser.user.credits}</p>
+                      <p><strong>Decisions:</strong> {selectedUser.user.credits}</p>
                       <p><strong>Joined:</strong> {formatDate(selectedUser.user.created_at)}</p>
                     </div>
 
                     {hasPermission('modify_credits') && (
                       <div className="credit-adjustment">
-                        <h4>Adjust Credits</h4>
+                        <h4>Adjust Decisions</h4>
                         <div className="adjustment-form">
                           <input
                             type="number"
@@ -770,7 +770,7 @@ function AdminPage() {
                     </div>
                     <div className="detail-meta">
                       <span><strong>User:</strong> {selectedDecision.question?.user_email}</span>
-                      <span><strong>Mode:</strong> {selectedDecision.response?.mode || 'standard'}</span>
+                      <span><strong>Mode:</strong> {selectedDecision.response?.mode || 'decide_please'}</span>
                       <span><strong>Asked:</strong> {formatDate(selectedDecision.question?.created_at)}</span>
                     </div>
                     <div className="detail-section">
@@ -781,7 +781,7 @@ function AdminPage() {
                     </div>
                     {selectedDecision.response?.chairman_response && (
                       <div className="detail-section">
-                        <h4>Chairman Response</h4>
+                        <h4>Moderator Response</h4>
                         <div className="detail-content response-content">
                           {selectedDecision.response.chairman_response}
                         </div>

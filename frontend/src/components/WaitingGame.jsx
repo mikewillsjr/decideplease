@@ -154,7 +154,7 @@ function scrambleWord(word) {
  * Shows estimated time and gives users something fun to do
  */
 export default function WaitingGame({
-  mode = 'standard',
+  mode = 'decide_please',
   elapsed = 0,
   onComplete,
 }) {
@@ -168,12 +168,17 @@ export default function WaitingGame({
 
   // Estimated times by mode (in seconds)
   const estimates = {
+    // New mode names
+    quick_decision: { min: 10, max: 25 },
+    decide_please: { min: 30, max: 60 },
+    decide_pretty_please: { min: 60, max: 120 },
+    // Legacy mode names
     quick: { min: 10, max: 25 },
     standard: { min: 30, max: 60 },
     extra_care: { min: 60, max: 120 },
   };
 
-  const estimate = estimates[mode] || estimates.standard;
+  const estimate = estimates[mode] || estimates.decide_please;
 
   // Pick a new word using secure randomness
   const newWord = useCallback(() => {

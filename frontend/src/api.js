@@ -148,7 +148,7 @@ export const api = {
   /**
    * Send a message in a conversation.
    */
-  async sendMessage(conversationId, content, mode = 'standard') {
+  async sendMessage(conversationId, content, mode = 'decide_please') {
     const headers = await getHeaders();
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message`,
@@ -174,7 +174,7 @@ export const api = {
    * Send a message and receive streaming updates.
    * @param {string} conversationId - The conversation ID
    * @param {string} content - The message content
-   * @param {string} mode - Run mode: 'quick', 'standard', or 'extra_care'
+   * @param {string} mode - Run mode: 'quick_decision', 'decide_please', or 'decide_pretty_please'
    * @param {function} onEvent - Callback function for each event: (eventType, data) => void
    * @param {File[]} files - Optional array of File objects to attach
    * @param {number|null} sourceMessageId - Optional message ID to respond to (for responding to specific previous decisions)
@@ -197,7 +197,7 @@ export const api = {
 
     const requestBody = {
       content,
-      mode: mode || 'standard',
+      mode: mode || 'decide_please',
       files: fileAttachments,
     };
 
@@ -261,7 +261,7 @@ export const api = {
    * Rerun a decision with optional new input.
    * @param {string} conversationId - The conversation ID
    * @param {string|null} newInput - Optional new input for refinement
-   * @param {string} mode - Run mode: 'quick', 'standard', or 'extra_care'
+   * @param {string} mode - Run mode: 'quick_decision', 'decide_please', or 'decide_pretty_please'
    * @param {function} onEvent - Callback function for each event: (eventType, data) => void
    * @returns {Promise<void>}
    */
@@ -273,7 +273,7 @@ export const api = {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          mode: mode || 'standard',
+          mode: mode || 'decide_please',
           new_input: newInput || null,
         }),
       }
@@ -758,7 +758,7 @@ export const api = {
   },
 
   /**
-   * List recent decisions with full question and chairman response (admin).
+   * List recent decisions with full question and moderator response (admin).
    */
   async getAdminDecisions(limit = 50, offset = 0, search = '') {
     const headers = await getHeaders();
@@ -985,7 +985,7 @@ export const api = {
       {
         method: 'POST',
         headers,
-        body: JSON.stringify({ mode: mode || 'standard' }),
+        body: JSON.stringify({ mode: mode || 'decide_please' }),
       }
     );
 

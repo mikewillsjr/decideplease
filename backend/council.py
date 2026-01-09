@@ -3,25 +3,30 @@
 import asyncio
 from typing import List, Dict, Any, Tuple, Optional
 from .openrouter import query_models_parallel, query_model
-from .config import COUNCIL_MODELS, CHAIRMAN_MODEL, RUN_MODES, VISION_MODELS, TEXT_ONLY_MODELS
+from .config import (
+    DECISION_MAKERS, MODERATOR_MODEL, RUN_MODES, VISION_MODELS, TEXT_ONLY_MODELS,
+    LEGACY_MODE_MAPPING,
+    # Legacy aliases for backward compatibility
+    COUNCIL_MODELS, CHAIRMAN_MODEL
+)
 from .file_processing import generate_image_descriptions_for_text_models
 
 
 async def stage1_collect_responses(
     user_query: str,
-    council_models: Optional[List[str]] = None
+    decision_makers: Optional[List[str]] = None
 ) -> List[Dict[str, Any]]:
     """
-    Stage 1: Collect individual responses from all council models.
+    Stage 1: Collect individual responses from all Decision Makers.
 
     Args:
         user_query: The user's question
-        council_models: Optional list of models to use (defaults to COUNCIL_MODELS)
+        decision_makers: Optional list of models to use (defaults to DECISION_MAKERS)
 
     Returns:
         List of dicts with 'model' and 'response' keys
     """
-    models = council_models or COUNCIL_MODELS
+    models = decision_makers or DECISION_MAKERS
     messages = [{"role": "user", "content": user_query}]
 
     # Query all models in parallel
@@ -98,10 +103,10 @@ def build_multimodal_message(
 async def stage1_collect_responses_with_files(
     user_query: str,
     processed_files: List[Dict[str, Any]],
-    council_models: Optional[List[str]] = None
+    decision_makers: Optional[List[str]] = None
 ) -> List[Dict[str, Any]]:
     """
-    Stage 1 with file support: Collect individual responses from all council models.
+    Stage 1 with file support: Collect individual responses from all Decision Makers.
 
     For vision models, includes actual images. For text-only models (DeepSeek),
     uses Gemini Flash to generate text descriptions of images.
@@ -109,12 +114,12 @@ async def stage1_collect_responses_with_files(
     Args:
         user_query: The user's question
         processed_files: List of processed file dicts from file_processing.py
-        council_models: Optional list of models to use (defaults to COUNCIL_MODELS)
+        decision_makers: Optional list of models to use (defaults to DECISION_MAKERS)
 
     Returns:
         List of dicts with 'model' and 'response' keys
     """
-    models = council_models or COUNCIL_MODELS
+    models = decision_makers or DECISION_MAKERS
 
     # Check if we have any images that need descriptions for text-only models
     has_images = any(f['file_type'] == 'image' for f in processed_files)
@@ -149,10 +154,10 @@ async def stage1_collect_responses_with_files(
 async def stage1_5_cross_review(
     user_query: str,
     stage1_results: List[Dict[str, Any]],
-    council_models: Optional[List[str]] = None
+    decision_makers: Optional[List[str]] = None
 ) -> List[Dict[str, Any]]:
     """
-    Stage 1.5: Cross-Review step for Extra Care mode.
+    Stage 1.5: Cross-Review step for Decide Pretty Please mode.
 
     Each model sees their own response labeled clearly, and other responses
     anonymized as "Response A", "Response B", etc. to prevent bias.
@@ -161,7 +166,7 @@ async def stage1_5_cross_review(
     Args:
         user_query: The original user query
         stage1_results: Results from Stage 1
-        council_models: Optional list of models to use
+        decision_makers: Optional list of models to use
 
     Returns:
         List of refined responses (same format as Stage 1)
@@ -169,7 +174,7 @@ async def stage1_5_cross_review(
     import asyncio
     import random
 
-    models = council_models or COUNCIL_MODELS
+    models = decision_makers or DECISION_MAKERS
 
     # Create model -> stage1 response lookup
     model_to_response = {r['model']: r['response'] for r in stage1_results}
@@ -190,7 +195,7 @@ async def stage1_5_cross_review(
 
         other_responses_text = "\n\n".join(other_responses)
 
-        prompt = f"""You are participating in a cross-review step of an AI council deliberation.
+        prompt = f"""You are participating in a cross-review step of a Decision Makers deliberation.
 
 ORIGINAL QUESTION:
 {user_query}
@@ -198,14 +203,14 @@ ORIGINAL QUESTION:
 YOUR ORIGINAL RESPONSE:
 {own_response}
 
-OTHER COUNCIL RESPONSES (anonymized):
+OTHER DECISION MAKER RESPONSES (anonymized):
 {other_responses_text}
 
 ---
 
 YOUR TASK:
 The response labeled "YOUR ORIGINAL RESPONSE" above is yours from Stage 1.
-The other responses (A, B, C, etc.) are from anonymous fellow council members.
+The other responses (A, B, C, etc.) are from anonymous fellow Decision Makers.
 
 Provide your REFINED answer considering all perspectives. You may:
 - Incorporate valuable insights from other responses you hadn't considered
@@ -241,20 +246,20 @@ Your refined response:"""
 async def stage2_collect_rankings(
     user_query: str,
     stage1_results: List[Dict[str, Any]],
-    council_models: Optional[List[str]] = None
+    decision_makers: Optional[List[str]] = None
 ) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
     """
-    Stage 2: Each model ranks the anonymized responses.
+    Stage 2: Each Decision Maker ranks the anonymized responses.
 
     Args:
         user_query: The original user query
         stage1_results: Results from Stage 1
-        council_models: Optional list of models to use (defaults to COUNCIL_MODELS)
+        decision_makers: Optional list of models to use (defaults to DECISION_MAKERS)
 
     Returns:
         Tuple of (rankings list, label_to_model mapping)
     """
-    models = council_models or COUNCIL_MODELS
+    models = decision_makers or DECISION_MAKERS
     # Create anonymized labels for responses (Response A, Response B, etc.)
     labels = [chr(65 + i) for i in range(len(stage1_results))]  # A, B, C, ...
 
@@ -303,7 +308,7 @@ Now provide your evaluation and ranking:"""
 
     messages = [{"role": "user", "content": ranking_prompt}]
 
-    # Get rankings from all council models in parallel
+    # Get rankings from all Decision Makers in parallel
     responses = await query_models_parallel(models, messages)
 
     # Format results
@@ -325,41 +330,41 @@ async def stage3_synthesize_final(
     user_query: str,
     stage1_results: List[Dict[str, Any]],
     stage2_results: List[Dict[str, Any]],
-    chairman_model: Optional[str] = None
+    moderator_model: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Stage 3: Chairman synthesizes final response.
+    Stage 3: Moderator synthesizes final response.
 
     Args:
         user_query: The original user query
         stage1_results: Individual model responses from Stage 1
         stage2_results: Rankings from Stage 2
-        chairman_model: Optional model to use as chairman (defaults to CHAIRMAN_MODEL)
+        moderator_model: Optional model to use as moderator (defaults to MODERATOR_MODEL)
 
     Returns:
         Dict with 'model' and 'response' keys
     """
-    chairman = chairman_model or CHAIRMAN_MODEL
+    moderator = moderator_model or MODERATOR_MODEL
 
     # Log input sizes for debugging
-    print(f"[STAGE3] Chairman model: {chairman}")
+    print(f"[STAGE3] Moderator model: {moderator}")
     print(f"[STAGE3] Query length: {len(user_query)} chars")
     print(f"[STAGE3] Stage 1 responses: {len(stage1_results)}")
     print(f"[STAGE3] Stage 2 rankings: {len(stage2_results)}")
-    # Build comprehensive context for chairman
+    # Build comprehensive context for moderator
     stage1_text = "\n\n".join([
-        f"Model: {result['model']}\nResponse: {result['response']}"
+        f"Decision Maker: {result['model']}\nResponse: {result['response']}"
         for result in stage1_results
     ])
 
     # Build prompt based on whether peer review was conducted
     if stage2_results:
         stage2_text = "\n\n".join([
-            f"Model: {result['model']}\nRanking: {result['ranking']}"
+            f"Decision Maker: {result['model']}\nRanking: {result['ranking']}"
             for result in stage2_results
         ])
 
-        chairman_prompt = f"""You are the Chairman of an DecidePlease. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
+        moderator_prompt = f"""You are the Moderator of a Decision Makers panel. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
 
 Original Question: {user_query}
 
@@ -369,38 +374,38 @@ STAGE 1 - Individual Responses:
 STAGE 2 - Peer Rankings:
 {stage2_text}
 
-Your task as Chairman is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
+Your task as Moderator is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
 - The individual responses and their insights
 - The peer rankings and what they reveal about response quality
 - Any patterns of agreement or disagreement
 
-Provide a clear, well-reasoned final answer that represents the council's collective wisdom:"""
+Provide a clear, well-reasoned final answer that represents the Decision Makers' collective wisdom:"""
     else:
         # Quick mode - no peer review
-        chairman_prompt = f"""You are the Chairman of an DecidePlease. Multiple AI models have provided responses to a user's question.
+        moderator_prompt = f"""You are the Moderator of a Decision Makers panel. Multiple AI models have provided responses to a user's question.
 
 Original Question: {user_query}
 
 Individual Responses:
 {stage1_text}
 
-Your task as Chairman is to synthesize all of these responses into a single, comprehensive, accurate answer to the user's original question. Consider:
+Your task as Moderator is to synthesize all of these responses into a single, comprehensive, accurate answer to the user's original question. Consider:
 - The key insights from each response
 - Areas of agreement and disagreement
 - The strongest arguments and evidence presented
 
-Provide a clear, well-reasoned final answer that represents the council's collective wisdom:"""
+Provide a clear, well-reasoned final answer that represents the Decision Makers' collective wisdom:"""
 
-    messages = [{"role": "user", "content": chairman_prompt}]
+    messages = [{"role": "user", "content": moderator_prompt}]
 
-    # Query the chairman model
-    response = await query_model(chairman, messages)
+    # Query the moderator model
+    response = await query_model(moderator, messages)
 
     if response is None:
-        # Fallback if chairman fails
-        print(f"[STAGE3] ERROR: Chairman model returned None")
+        # Fallback if moderator fails
+        print(f"[STAGE3] ERROR: Moderator model returned None")
         return {
-            "model": chairman,
+            "model": moderator,
             "response": "Error: Unable to generate final synthesis."
         }
 
@@ -475,9 +480,9 @@ Provide a clear, well-reasoned final answer that represents the council's collec
     if echo_detected and not synthesis_found:
         print(f"[STAGE3] Echo detected without synthesis - retrying with explicit prompt")
 
-        # Build a summary of council responses for the retry
+        # Build a summary of Decision Maker responses for the retry
         # Include more context than before to handle complex questions
-        council_summary = "\n".join([
+        decision_maker_summary = "\n".join([
             f"- {r['model'].split('/')[-1]}: {r['response'][:800]}{'...' if len(r['response']) > 800 else ''}"
             for r in stage1_results[:4]  # Include top 4 responses with more detail
         ])
@@ -493,18 +498,18 @@ Provide a clear, well-reasoned final answer that represents the council's collec
 QUESTION CONTEXT (reference only - DO NOT INCLUDE IN YOUR RESPONSE):
 {query_context}
 
-COUNCIL MEMBER RESPONSES:
-{council_summary}
+DECISION MAKER RESPONSES:
+{decision_maker_summary}
 
 INSTRUCTIONS:
 - Start DIRECTLY with your synthesis or recommendation
 - Do NOT echo, quote, or summarize the question
-- Synthesize the council responses into actionable guidance
+- Synthesize the Decision Maker responses into actionable guidance
 - Use structured formatting (headers, bullets) for clarity
 
 YOUR SYNTHESIS:"""
 
-        retry_response = await query_model(chairman, [{"role": "user", "content": retry_prompt}])
+        retry_response = await query_model(moderator, [{"role": "user", "content": retry_prompt}])
 
         if retry_response and retry_response.get('content'):
             retry_content = retry_response['content'].strip()
@@ -514,22 +519,22 @@ YOUR SYNTHESIS:"""
                 content = retry_content
             else:
                 print(f"[STAGE3] Retry also echoed - falling back to error message")
-                content = """**Unable to generate synthesis** - The chairman model encountered an issue processing this query.
+                content = """**Unable to generate synthesis** - The moderator model encountered an issue processing this query.
 
 **Workaround:** Please try:
 1. Shortening your question
 2. Splitting into multiple smaller questions
 3. Using "Quick Answer" mode
 
-The individual council responses above may still be helpful."""
+The individual Decision Maker responses above may still be helpful."""
         else:
             print(f"[STAGE3] Retry failed - model returned None")
-            content = """**Unable to generate synthesis** - The chairman model failed to respond.
+            content = """**Unable to generate synthesis** - The moderator model failed to respond.
 
-Please try again or review the individual council member responses above."""
+Please try again or review the individual Decision Maker responses above."""
 
     return {
-        "model": chairman,
+        "model": moderator,
         "response": content
     }
 
@@ -668,18 +673,19 @@ async def run_full_council(user_query: str) -> Tuple[List, List, List, Dict, Dic
 
 async def run_council_with_mode(
     user_query: str,
-    mode: str = "standard",
+    mode: str = "decide_please",
     context_packet: Optional[Dict[str, Any]] = None,
     is_rerun: bool = False,
     new_input: Optional[str] = None,
     processed_files: Optional[List[Dict[str, Any]]] = None
 ) -> Tuple[List, List, List, Dict, Dict]:
     """
-    Run the council process with a specific mode.
+    Run the Decision Makers process with a specific mode.
 
     Args:
         user_query: The user's question
-        mode: Run mode - "quick", "standard", or "extra_care"
+        mode: Run mode - "quick_decision", "decide_please", or "decide_pretty_please"
+              (legacy names "quick", "standard", "extra_care" also supported)
         context_packet: Optional context from previous run (for reruns)
         is_rerun: Whether this is a rerun of a previous decision
         new_input: Optional new input for refinement reruns
@@ -688,13 +694,17 @@ async def run_council_with_mode(
     Returns:
         Tuple of (stage1_results, stage1_5_results, stage2_results, stage3_result, metadata)
     """
-    # Get mode configuration
+    # Handle legacy mode names
+    if mode in LEGACY_MODE_MAPPING:
+        mode = LEGACY_MODE_MAPPING[mode]
+
+    # Get mode configuration (fallback to decide_please if invalid)
     if mode not in RUN_MODES:
-        mode = "standard"
+        mode = "decide_please"
     mode_config = RUN_MODES[mode]
 
-    council_models = mode_config["council_models"]
-    chairman_model = mode_config["chairman_model"]
+    decision_makers = mode_config["decision_makers"]
+    moderator_model = mode_config["moderator_model"]
     enable_peer_review = mode_config["enable_peer_review"]
     enable_cross_review = mode_config.get("enable_cross_review", False)
 
@@ -707,23 +717,23 @@ async def run_council_with_mode(
     # Stage 1: Collect individual responses (with or without files)
     if processed_files:
         stage1_results = await stage1_collect_responses_with_files(
-            effective_query, processed_files, council_models
+            effective_query, processed_files, decision_makers
         )
     else:
-        stage1_results = await stage1_collect_responses(effective_query, council_models)
+        stage1_results = await stage1_collect_responses(effective_query, decision_makers)
 
     # If no models responded successfully, return error
     if not stage1_results:
         return [], [], [], {
             "model": "error",
-            "response": "All models failed to respond. Please try again."
+            "response": "All Decision Makers failed to respond. Please try again."
         }, {"mode": mode}
 
-    # Stage 1.5: Cross-Review (Extra Care mode only)
+    # Stage 1.5: Cross-Review (Decide Pretty Please mode only)
     stage1_5_results = []
     if enable_cross_review and stage1_results:
         stage1_5_results = await stage1_5_cross_review(
-            effective_query, stage1_results, council_models
+            effective_query, stage1_results, decision_makers
         )
         # Use refined responses for subsequent stages if cross-review succeeded
         responses_for_ranking = stage1_5_results if stage1_5_results else stage1_results
@@ -737,7 +747,7 @@ async def run_council_with_mode(
 
     if enable_peer_review:
         stage2_results, label_to_model = await stage2_collect_rankings(
-            effective_query, responses_for_ranking, council_models
+            effective_query, responses_for_ranking, decision_makers
         )
         aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
 
@@ -746,7 +756,7 @@ async def run_council_with_mode(
         effective_query,
         responses_for_ranking,
         stage2_results,
-        chairman_model
+        moderator_model
     )
 
     # Prepare metadata
@@ -754,10 +764,10 @@ async def run_council_with_mode(
         "label_to_model": label_to_model,
         "aggregate_rankings": aggregate_rankings,
         "mode": mode,
+        "mode_label": mode_config["label"],
         "enable_peer_review": enable_peer_review,
         "enable_cross_review": enable_cross_review,
         "has_stage1_5": bool(stage1_5_results),
-        "credit_cost": mode_config["credit_cost"],
         "is_rerun": is_rerun
     }
 
@@ -818,7 +828,7 @@ def extract_tldr_packet(stage3_response: str) -> Dict[str, Any]:
     This is a best-effort extraction - the response may not have all fields.
 
     Args:
-        stage3_response: The chairman's response text
+        stage3_response: The moderator's response text
 
     Returns:
         Dict with available TL;DR fields
@@ -923,7 +933,7 @@ def build_context_summary(
 
 def _extract_verdict_summary(stage3_response: str, max_chars: int = 800) -> str:
     """
-    Extract a concise verdict summary from the chairman's response.
+    Extract a concise verdict summary from the moderator's response.
 
     Tries to find structured sections first, falls back to truncation.
     """
