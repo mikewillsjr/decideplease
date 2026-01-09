@@ -1215,10 +1215,14 @@ _active_tasks: Dict[str, asyncio.Task] = {}
 _active_status: Dict[str, str] = {}
 
 
-async def _heartbeat_task(queue: asyncio.Queue, operation: str, interval: int = 5):
+async def _heartbeat_task(queue: asyncio.Queue, operation: str, interval: int = 2):
     """
     Send periodic heartbeat events during long-running operations.
     This keeps the UI responsive and shows users the system is still working.
+
+    IMPORTANT: interval reduced to 2 seconds to prevent QUIC/HTTP3 connection
+    timeouts (ERR_QUIC_PROTOCOL_ERROR.QUIC_TOO_MANY_RTOS) which occur when
+    there are long gaps between data being sent over the SSE connection.
     """
     import time
     start = time.time()
@@ -1632,8 +1636,11 @@ async def send_message_stream(
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx proxy buffering
+            "X-Content-Type-Options": "nosniff",
+            "Transfer-Encoding": "chunked",  # Explicit chunked encoding
         }
     )
 
@@ -1757,8 +1764,11 @@ async def rerun_decision(
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx proxy buffering
+            "X-Content-Type-Options": "nosniff",
+            "Transfer-Encoding": "chunked",  # Explicit chunked encoding
         }
     )
 

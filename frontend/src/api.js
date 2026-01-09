@@ -226,12 +226,17 @@ export const api = {
       try {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Failed to send message');
-      } catch {
-        throw new Error('Failed to send message');
+      } catch (parseError) {
+        // If JSON parsing failed, preserve the HTTP status info
+        if (parseError instanceof Error && parseError.message !== 'Failed to send message') {
+          throw new Error(`Failed to send message (HTTP ${response.status})`);
+        }
+        throw parseError;
       }
     }
 
-    await this._processSSEStream(response, onEvent);
+    // Process SSE stream with automatic reconnection on failure
+    await this._processSSEStreamWithRecovery(response, onEvent, conversationId);
   },
 
   /**
@@ -284,7 +289,8 @@ export const api = {
       throw new Error('Failed to rerun decision');
     }
 
-    await this._processSSEStream(response, onEvent);
+    // Process SSE stream with automatic reconnection on failure
+    await this._processSSEStreamWithRecovery(response, onEvent, conversationId);
   },
 
   /**
@@ -315,53 +321,158 @@ export const api = {
 
   /**
    * Helper to process SSE stream responses.
+   * Returns true if stream completed normally, false if interrupted.
    */
   async _processSSEStream(response, onEvent) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let receivedComplete = false;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      // Append new chunk to buffer
-      buffer += decoder.decode(value, { stream: true });
+        // Append new chunk to buffer
+        buffer += decoder.decode(value, { stream: true });
 
-      // Process complete lines from buffer
-      const lines = buffer.split('\n');
-      // Keep the last (potentially incomplete) line in buffer
-      buffer = lines.pop() || '';
+        // Process complete lines from buffer
+        const lines = buffer.split('\n');
+        // Keep the last (potentially incomplete) line in buffer
+        buffer = lines.pop() || '';
 
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data.trim()) {
-            try {
-              const event = JSON.parse(data);
-              onEvent(event.type, event);
-            } catch {
-              // Malformed SSE event - notify via error event
-              onEvent('error', { message: 'Invalid response from server' });
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data.trim()) {
+              try {
+                const event = JSON.parse(data);
+                onEvent(event.type, event);
+                // Track if we received the completion event
+                if (event.type === 'complete') {
+                  receivedComplete = true;
+                }
+              } catch {
+                // Malformed SSE event - notify via error event
+                onEvent('error', { message: 'Invalid response from server' });
+              }
             }
           }
         }
       }
-    }
 
-    // Process any remaining data in buffer
-    if (buffer.startsWith('data: ')) {
-      const data = buffer.slice(6);
-      if (data.trim()) {
-        try {
-          const event = JSON.parse(data);
-          onEvent(event.type, event);
-        } catch {
-          // Malformed final SSE event - notify via error event
-          onEvent('error', { message: 'Invalid response from server' });
+      // Process any remaining data in buffer
+      if (buffer.startsWith('data: ')) {
+        const data = buffer.slice(6);
+        if (data.trim()) {
+          try {
+            const event = JSON.parse(data);
+            onEvent(event.type, event);
+            if (event.type === 'complete') {
+              receivedComplete = true;
+            }
+          } catch {
+            // Malformed final SSE event - notify via error event
+            onEvent('error', { message: 'Invalid response from server' });
+          }
         }
       }
+    } catch (error) {
+      // Stream was interrupted (network error, QUIC timeout, etc.)
+      console.warn('[SSE] Stream interrupted:', error.message);
+      return false;
     }
+
+    return receivedComplete;
+  },
+
+  /**
+   * Process SSE stream with automatic recovery on connection failure.
+   * If the stream is interrupted, polls the status endpoint until processing
+   * completes, then fetches the final result.
+   */
+  async _processSSEStreamWithRecovery(response, onEvent, conversationId) {
+    const streamCompleted = await this._processSSEStream(response, onEvent);
+
+    if (!streamCompleted) {
+      // Stream was interrupted - enter recovery mode
+      console.log('[SSE Recovery] Stream interrupted, entering recovery mode...');
+      onEvent('recovery_start', { message: 'Connection lost, checking processing status...' });
+
+      // Poll status endpoint until processing completes
+      const maxAttempts = 180; // 6 minutes max (2s intervals)
+      let attempts = 0;
+
+      while (attempts < maxAttempts) {
+        attempts++;
+        await this._sleep(2000); // Wait 2 seconds between polls
+
+        try {
+          const status = await this.getConversationStatus(conversationId);
+
+          if (status.processing) {
+            // Still processing - send heartbeat to keep UI updated
+            onEvent('heartbeat', {
+              operation: `Recovering... (${status.current_stage || 'processing'})`,
+              elapsed_seconds: attempts * 2,
+            });
+          } else {
+            // Processing complete - fetch the updated conversation
+            console.log('[SSE Recovery] Processing complete, fetching result...');
+            const conversation = await this.getConversation(conversationId);
+
+            // Find the latest assistant message
+            const messages = conversation.messages || [];
+            const latestAssistant = messages
+              .filter(m => m.role === 'assistant')
+              .pop();
+
+            if (latestAssistant) {
+              // Emit the stage events for the recovered data
+              if (latestAssistant.stage1) {
+                onEvent('stage1_complete', { data: latestAssistant.stage1 });
+              }
+              if (latestAssistant.stage1_5) {
+                onEvent('stage1_5_complete', { data: latestAssistant.stage1_5 });
+              }
+              if (latestAssistant.stage2) {
+                onEvent('stage2_complete', { data: latestAssistant.stage2 });
+              }
+              if (latestAssistant.stage3) {
+                onEvent('stage3_complete', { data: latestAssistant.stage3 });
+              }
+
+              // Emit completion event
+              onEvent('complete', {
+                recovered: true,
+                message_id: latestAssistant.id,
+              });
+            } else {
+              onEvent('error', { message: 'Processing completed but no result found' });
+            }
+
+            return; // Recovery successful
+          }
+        } catch (error) {
+          console.warn('[SSE Recovery] Status check failed:', error.message);
+          // Continue polling - might be a transient network issue
+        }
+      }
+
+      // Exceeded max attempts
+      onEvent('error', {
+        message: 'Connection lost and recovery timed out. Please refresh the page.',
+        recoverable: false,
+      });
+    }
+  },
+
+  /**
+   * Helper to sleep for a given number of milliseconds.
+   */
+  _sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   },
 
   /**

@@ -396,6 +396,22 @@ function CouncilPage() {
         });
         break;
 
+      case 'recovery_start':
+        // Connection was lost, entering recovery mode
+        console.log('[Recovery] Connection lost, entering recovery mode');
+        setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
+          const messages = [...prev.messages];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
+          lastMsg.loading.recovering = true;
+          lastMsg.loading.heartbeat = {
+            operation: 'Reconnecting...',
+            elapsed: 0
+          };
+          return { ...prev, messages };
+        });
+        break;
+
       case 'stage1_5_start':
         setCurrentConversation((prev) => {
           if (!prev || !prev.messages) return prev;
