@@ -154,9 +154,9 @@ async def stage1_5_cross_review(
     """
     Stage 1.5: Cross-Review step for Extra Care mode.
 
-    Each model sees ALL Stage 1 responses and can refine their own answer.
-    This happens BEFORE peer ranking (Stage 2) to improve response quality
-    through exposure to other perspectives.
+    Each model sees their own response labeled clearly, and other responses
+    anonymized as "Response A", "Response B", etc. to prevent bias.
+    Responses are shuffled before labeling for additional anonymization.
 
     Args:
         user_query: The original user query
@@ -166,46 +166,68 @@ async def stage1_5_cross_review(
     Returns:
         List of refined responses (same format as Stage 1)
     """
+    import asyncio
+    import random
+
     models = council_models or COUNCIL_MODELS
 
-    # Build formatted view of all responses
-    all_responses_text = "\n\n".join([
-        f"--- {result['model'].split('/')[-1]}'s Response ---\n{result['response']}"
-        for result in stage1_results
-    ])
+    # Create model -> stage1 response lookup
+    model_to_response = {r['model']: r['response'] for r in stage1_results}
 
-    cross_review_prompt = f"""You are participating in a cross-review step of an AI council deliberation.
+    async def get_refined_response(model: str):
+        """Build personalized prompt for this model and query."""
+        own_response = model_to_response.get(model, "")
+
+        # Get other responses and shuffle them for anonymization
+        other_results = [r for r in stage1_results if r['model'] != model]
+        random.shuffle(other_results)
+
+        # Build anonymized list of other responses
+        other_responses = []
+        for i, result in enumerate(other_results):
+            label = chr(65 + i)  # A, B, C...
+            other_responses.append(f"Response {label}:\n{result['response']}")
+
+        other_responses_text = "\n\n".join(other_responses)
+
+        prompt = f"""You are participating in a cross-review step of an AI council deliberation.
 
 ORIGINAL QUESTION:
 {user_query}
 
-ALL COUNCIL RESPONSES FROM STAGE 1:
-{all_responses_text}
+YOUR ORIGINAL RESPONSE:
+{own_response}
+
+OTHER COUNCIL RESPONSES (anonymized):
+{other_responses_text}
 
 ---
 
 YOUR TASK:
-Having now seen all other responses from the council, provide your REFINED answer to the original question.
+The response labeled "YOUR ORIGINAL RESPONSE" above is yours from Stage 1.
+The other responses (A, B, C, etc.) are from anonymous fellow council members.
 
-You may:
+Provide your REFINED answer considering all perspectives. You may:
 - Incorporate valuable insights from other responses you hadn't considered
 - Strengthen your argument if you believe your initial position was correct
 - Change or nuance your position if another response convinced you
 - Address points of disagreement directly
-- Correct any errors you notice (in your response or others)
+- Correct any errors you notice
 
 Important: This is your FINAL answer before the peer ranking phase. Make it comprehensive and well-reasoned.
 
 Your refined response:"""
 
-    messages = [{"role": "user", "content": cross_review_prompt}]
+        messages = [{"role": "user", "content": prompt}]
+        return model, await query_model(model, messages)
 
-    # Query all models in parallel
-    responses = await query_models_parallel(models, messages)
+    # Query all models in parallel with personalized prompts
+    tasks = [get_refined_response(model) for model in models]
+    results = await asyncio.gather(*tasks)
 
     # Format results
     stage1_5_results = []
-    for model, response in responses.items():
+    for model, response in results:
         if response is not None:
             stage1_5_results.append({
                 "model": model,
