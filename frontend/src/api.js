@@ -183,6 +183,31 @@ export const api = {
   },
 
   /**
+   * Update a conversation's metadata (e.g., title).
+   */
+  async updateConversation(conversationId, { title }) {
+    const headers = await getHeaders();
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}`,
+      {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ title }),
+      }
+    );
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Not authenticated');
+      }
+      if (response.status === 404) {
+        throw new Error('Conversation not found');
+      }
+      throw new Error('Failed to update conversation');
+    }
+    return response.json();
+  },
+
+  /**
    * Check if a conversation is currently being processed.
    */
   async getConversationStatus(conversationId) {

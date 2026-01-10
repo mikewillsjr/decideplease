@@ -74,11 +74,13 @@
   padding: 10px 14px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   text-align: left;
+  color: #e5e7eb;
 }
 
 .verdict-response .markdown-content th {
   background: rgba(255, 255, 255, 0.05);
   font-weight: 600;
+  color: #f3f4f6;
 }
 
 .verdict-response .markdown-content tr:nth-child(even) {
@@ -86,7 +88,11 @@
 }
 
 .verdict-response .markdown-content tbody tr:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.verdict-response .markdown-content tbody tr:hover td {
+  color: #f3f4f6;
 }
 
 .verdict-response .awaiting {
@@ -431,10 +437,12 @@
 [data-theme="light"] .verdict-response .markdown-content th,
 [data-theme="light"] .verdict-response .markdown-content td {
   border-color: rgba(0, 0, 0, 0.1);
+  color: #374151;
 }
 
 [data-theme="light"] .verdict-response .markdown-content th {
   background: rgba(0, 0, 0, 0.03);
+  color: #1f2937;
 }
 
 [data-theme="light"] .verdict-response .markdown-content tr:nth-child(even) {
@@ -442,7 +450,11 @@
 }
 
 [data-theme="light"] .verdict-response .markdown-content tbody tr:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+[data-theme="light"] .verdict-response .markdown-content tbody tr:hover td {
+  color: #111827;
 }
 
 [data-theme="light"] .verdict-actions-bar {

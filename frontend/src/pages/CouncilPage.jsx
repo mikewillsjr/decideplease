@@ -320,6 +320,33 @@ function CouncilPage() {
     }
   };
 
+  const handleRenameConversation = async (id, newTitle) => {
+    try {
+      await api.updateConversation(id, { title: newTitle });
+      // Optimistically update local state
+      setConversations((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, title: newTitle } : c))
+      );
+      // Also update currentConversation if it's the one being renamed
+      if (currentConversation && currentConversation.id === id) {
+        setCurrentConversation((prev) => ({ ...prev, title: newTitle }));
+      }
+    } catch (error) {
+      console.error('Failed to rename conversation:', error);
+      setError('Failed to rename conversation. Please try again.');
+    }
+  };
+
+  // Move a conversation to the top of the list (for recently edited sorting)
+  const moveConversationToTop = (conversationId) => {
+    setConversations((prev) => {
+      const index = prev.findIndex((c) => c.id === conversationId);
+      if (index <= 0) return prev; // Already at top or not found
+      const conv = prev[index];
+      return [conv, ...prev.slice(0, index), ...prev.slice(index + 1)];
+    });
+  };
+
   // Helper function to safely get/create the last assistant message
   const getOrCreateLastAssistantMessage = (messages) => {
     let lastMsg = messages[messages.length - 1];
@@ -798,6 +825,7 @@ function CouncilPage() {
           onSelectConversation={handleSelectConversation}
           onNewConversation={handleNewConversation}
           onDeleteConversation={handleDeleteConversation}
+          onRenameConversation={handleRenameConversation}
         />
         {interfaceMode === 'chamber' ? (
           <CouncilChamber

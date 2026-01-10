@@ -177,15 +177,16 @@ async def list_conversations(
         )
 
         # Get paginated results - only count user messages (queries), not assistant responses
+        # Sort by updated_at (most recently edited first) with fallback to created_at
         rows = await conn.fetch(
             """
-            SELECT c.id, c.title, c.created_at,
+            SELECT c.id, c.title, c.created_at, c.updated_at,
                    COUNT(m.id) FILTER (WHERE m.role = 'user') as message_count
             FROM conversations c
             LEFT JOIN messages m ON m.conversation_id = c.id
             WHERE c.user_id = $1
             GROUP BY c.id
-            ORDER BY c.created_at DESC
+            ORDER BY COALESCE(c.updated_at, c.created_at) DESC
             LIMIT $2 OFFSET $3
             """,
             user_id,
@@ -228,6 +229,11 @@ async def add_user_message(conversation_id: str, content: str):
             """,
             UUID(conversation_id),
             content
+        )
+        # Update conversation's updated_at timestamp
+        await conn.execute(
+            "UPDATE conversations SET updated_at = NOW() WHERE id = $1",
+            UUID(conversation_id)
         )
 
 
@@ -338,7 +344,7 @@ async def update_conversation_title(conversation_id: str, title: str):
         await conn.execute(
             """
             UPDATE conversations
-            SET title = $1
+            SET title = $1, updated_at = NOW()
             WHERE id = $2
             """,
             title,
@@ -1007,6 +1013,11 @@ async def add_assistant_message_complete(
             rerun_input,
             revision_number,
             parent_message_id
+        )
+        # Update conversation's updated_at timestamp
+        await conn.execute(
+            "UPDATE conversations SET updated_at = NOW() WHERE id = $1",
+            UUID(conversation_id)
         )
         return row["id"]
 

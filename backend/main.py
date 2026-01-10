@@ -1157,6 +1157,31 @@ async def delete_conversation(
     return {"success": True}
 
 
+class UpdateConversationRequest(BaseModel):
+    """Request to update conversation metadata."""
+    title: str
+
+
+@app.patch("/api/conversations/{conversation_id}")
+async def update_conversation(
+    conversation_id: str,
+    request: UpdateConversationRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Update conversation metadata (title)."""
+    # Verify ownership by fetching the conversation
+    conversation = await storage.get_conversation(conversation_id, user["user_id"])
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Don't allow empty titles
+    if not request.title or not request.title.strip():
+        raise HTTPException(status_code=400, detail="Title cannot be empty")
+
+    await storage.update_conversation_title(conversation_id, request.title.strip())
+    return {"success": True, "title": request.title.strip()}
+
+
 @app.post("/api/conversations/{conversation_id}/message")
 @limiter.limit("3/minute")
 async def send_message(

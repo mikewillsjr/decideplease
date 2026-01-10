@@ -418,6 +418,94 @@ test.describe('API Tests - Authenticated Endpoints', () => {
       console.log('  Conversation deleted');
     });
 
+    test('PATCH /api/conversations/:id updates title', async ({ request }) => {
+      console.log('Testing: PATCH /api/conversations/:id');
+
+      // Create a conversation first
+      const createResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.conversations}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        data: {},
+      });
+
+      const { id } = await createResponse.json();
+
+      // Update the title
+      const newTitle = 'Updated Test Title';
+      const response = await request.patch(`${API_BASE_URL}${API_ENDPOINTS.conversations}/${id}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        data: { title: newTitle },
+      });
+
+      expect(response.status()).toBe(200);
+
+      const data = await response.json();
+      expect(data.success).toBe(true);
+      expect(data.title).toBe(newTitle);
+      console.log('  Conversation title updated');
+
+      // Verify by fetching the conversation
+      const getResponse = await request.get(`${API_BASE_URL}${API_ENDPOINTS.conversations}/${id}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const convData = await getResponse.json();
+      expect(convData.title).toBe(newTitle);
+      console.log('  Title persisted correctly');
+    });
+
+    test('PATCH /api/conversations/:id rejects empty title', async ({ request }) => {
+      console.log('Testing: PATCH /api/conversations/:id empty title');
+
+      // Create a conversation first
+      const createResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.conversations}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        data: {},
+      });
+
+      const { id } = await createResponse.json();
+
+      // Try to set empty title
+      const response = await request.patch(`${API_BASE_URL}${API_ENDPOINTS.conversations}/${id}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        data: { title: '' },
+      });
+
+      expect(response.status()).toBe(400);
+      console.log('  Empty title rejected with 400');
+    });
+
+    test('PATCH /api/conversations/:id rejects whitespace-only title', async ({ request }) => {
+      console.log('Testing: PATCH /api/conversations/:id whitespace title');
+
+      // Create a conversation first
+      const createResponse = await request.post(`${API_BASE_URL}${API_ENDPOINTS.conversations}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        data: {},
+      });
+
+      const { id } = await createResponse.json();
+
+      // Try to set whitespace-only title
+      const response = await request.patch(`${API_BASE_URL}${API_ENDPOINTS.conversations}/${id}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        data: { title: '   ' },
+      });
+
+      expect(response.status()).toBe(400);
+      console.log('  Whitespace-only title rejected with 400');
+    });
+
+    test('PATCH /api/conversations/:id returns 404 for non-existent conversation', async ({ request }) => {
+      console.log('Testing: PATCH /api/conversations/:id non-existent');
+
+      const response = await request.patch(`${API_BASE_URL}${API_ENDPOINTS.conversations}/00000000-0000-0000-0000-000000000000`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        data: { title: 'Test' },
+      });
+
+      expect(response.status()).toBe(404);
+      console.log('  Non-existent conversation returns 404');
+    });
+
     test('Conversations endpoints require auth', async ({ playwright }) => {
       console.log('Testing: Conversations auth requirement');
 

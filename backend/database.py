@@ -93,9 +93,18 @@ async def init_database():
                 id UUID PRIMARY KEY,
                 user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
                 title TEXT DEFAULT '',
-                created_at TIMESTAMP DEFAULT NOW()
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
             )
         """)
+
+        # Add updated_at column if it doesn't exist (for migration)
+        try:
+            await conn.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()")
+            # Initialize existing rows that have NULL updated_at
+            await conn.execute("UPDATE conversations SET updated_at = created_at WHERE updated_at IS NULL")
+        except Exception:
+            pass  # Column may already exist
 
         # Create messages table
         await conn.execute("""
