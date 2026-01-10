@@ -26,6 +26,8 @@ export default function CouncilChamber({
   onCancelRequest,
   onRetryOrphaned,
   orphanedMessage,
+  failedRequest,
+  onRetryFailed,
 }) {
   // Check if user needs to verify email (has password but not verified)
   const needsVerification = user && !user.email_verified && user.credits === 0;
@@ -274,9 +276,23 @@ export default function CouncilChamber({
 
       {/* Error banner */}
       {error && (
-        <div className="chamber-error">
-          <span>{error}</span>
-          <button onClick={onDismissError}>×</button>
+        <div className={`chamber-error ${failedRequest ? 'has-retry' : ''}`}>
+          <div className="error-content">
+            <span>{error}</span>
+            {failedRequest && (
+              <span className="error-preview">
+                "{failedRequest.content?.substring(0, 50)}{failedRequest.content?.length > 50 ? '...' : ''}"
+              </span>
+            )}
+          </div>
+          <div className="error-actions">
+            {failedRequest && onRetryFailed && (
+              <button className="retry-btn" onClick={onRetryFailed}>
+                Retry
+              </button>
+            )}
+            <button className="dismiss-btn" onClick={onDismissError}>×</button>
+          </div>
         </div>
       )}
 

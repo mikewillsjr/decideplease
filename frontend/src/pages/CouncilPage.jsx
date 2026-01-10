@@ -28,6 +28,8 @@ function CouncilPage() {
   const [userRole, setUserRole] = useState('user');
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [orphanedMessage, setOrphanedMessage] = useState(null);
+  // Store failed request data for retry functionality
+  const [failedRequest, setFailedRequest] = useState(null);
 
   // Ref to track polling cleanup function
   const pollingCleanupRef = useRef(null);
@@ -609,6 +611,7 @@ function CouncilPage() {
 
     setIsLoading(true);
     setError(null);
+    setFailedRequest(null); // Clear any previous failed request
     setRespondingToMessageId(null); // Clear the responding state
 
     try {
@@ -647,6 +650,14 @@ function CouncilPage() {
       }, files, sourceMessageId);
     } catch (error) {
       console.error('Failed to send message:', error);
+
+      // Preserve the failed request data for retry (unless it's a non-retryable error)
+      const isNonRetryable = error.message === 'Insufficient credits' ||
+                             error.message === 'Not authenticated';
+      if (!isNonRetryable) {
+        setFailedRequest({ content, mode, files, conversationId });
+      }
+
       if (error.message === 'Insufficient credits') {
         setError('No credits remaining. Please purchase more credits to continue.');
       } else {
@@ -741,6 +752,21 @@ function CouncilPage() {
     await handleSendMessage(contentToRetry, modeToRetry, []);
   }, [currentConversationId, handleSendMessage]);
 
+  // Retry a failed request (network error, etc.)
+  const handleRetryFailed = useCallback(async () => {
+    if (!failedRequest) return;
+
+    console.log('[CouncilPage] Retrying failed request:', failedRequest);
+    const { content, mode, files } = failedRequest;
+
+    // Clear the failed request state before retrying
+    setFailedRequest(null);
+    setError(null);
+
+    // Resend with the same parameters
+    await handleSendMessage(content, mode, files || []);
+  }, [failedRequest, handleSendMessage]);
+
   // Show nothing while auth is loading (prevents flash)
   if (authLoading) {
     return null;
@@ -779,12 +805,14 @@ function CouncilPage() {
             onSendMessage={handleSendMessage}
             isLoading={isLoading}
             error={error}
-            onDismissError={() => setError(null)}
+            onDismissError={() => { setError(null); setFailedRequest(null); }}
             user={user}
             quotas={quotas}
             onCancelRequest={handleCancelRequest}
             onRetryOrphaned={handleRetryOrphaned}
             orphanedMessage={orphanedMessage}
+            failedRequest={failedRequest}
+            onRetryFailed={handleRetryFailed}
           />
         ) : (
           <ChatInterface

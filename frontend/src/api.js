@@ -14,6 +14,61 @@ export const setAuthTokenGetter = (getter) => {
 };
 
 /**
+ * Check if an error is a transient network error that should be retried.
+ */
+const isRetryableError = (error) => {
+  // Network errors (fetch failed completely)
+  if (error.name === 'TypeError' && error.message.includes('fetch')) {
+    return true;
+  }
+  // Abort errors should not be retried
+  if (error.name === 'AbortError') {
+    return false;
+  }
+  // Generic network failure messages
+  const retryableMessages = [
+    'failed to fetch',
+    'network error',
+    'networkerror',
+    'load failed',
+    'net::',
+  ];
+  const msg = (error.message || '').toLowerCase();
+  return retryableMessages.some(m => msg.includes(m));
+};
+
+/**
+ * Retry a function with exponential backoff.
+ * @param {Function} fn - Async function to retry
+ * @param {number} maxRetries - Maximum number of retry attempts
+ * @param {number} baseDelay - Base delay in ms (doubles each retry)
+ * @returns {Promise<any>} Result of the function
+ */
+const withRetry = async (fn, maxRetries = 2, baseDelay = 1000) => {
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      // Don't retry non-retryable errors
+      if (!isRetryableError(error)) {
+        throw error;
+      }
+      // Don't retry after last attempt
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      // Wait before retrying (exponential backoff)
+      const delay = baseDelay * Math.pow(2, attempt);
+      console.log(`[API] Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms:`, error.message);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+};
+
+/**
  * Get headers including auth token if available.
  */
 const getHeaders = async () => {
@@ -206,34 +261,39 @@ export const api = {
       requestBody.source_message_id = sourceMessageId;
     }
 
-    const response = await fetch(
-      `${API_BASE}/api/conversations/${conversationId}/message/stream`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody),
-      }
-    );
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new Error('Not authenticated');
-      }
-      if (response.status === 402) {
-        throw new Error('Insufficient credits');
-      }
-      // Try to get error detail from response
-      try {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to send message');
-      } catch (parseError) {
-        // If JSON parsing failed, preserve the HTTP status info
-        if (parseError instanceof Error && parseError.message !== 'Failed to send message') {
-          throw new Error(`Failed to send message (HTTP ${response.status})`);
+    // Use retry wrapper for the initial fetch (handles transient network errors)
+    const response = await withRetry(async () => {
+      const res = await fetch(
+        `${API_BASE}/api/conversations/${conversationId}/message/stream`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(requestBody),
         }
-        throw parseError;
+      );
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error('Not authenticated');
+        }
+        if (res.status === 402) {
+          throw new Error('Insufficient credits');
+        }
+        // Try to get error detail from response
+        try {
+          const errorData = await res.json();
+          throw new Error(errorData.detail || 'Failed to send message');
+        } catch (parseError) {
+          // If JSON parsing failed, preserve the HTTP status info
+          if (parseError instanceof Error && parseError.message !== 'Failed to send message') {
+            throw new Error(`Failed to send message (HTTP ${res.status})`);
+          }
+          throw parseError;
+        }
       }
-    }
+
+      return res;
+    });
 
     // Process SSE stream with automatic reconnection on failure
     await this._processSSEStreamWithRecovery(response, onEvent, conversationId);
