@@ -499,6 +499,35 @@ function CouncilPage() {
           const lastMsg = getOrCreateLastAssistantMessage(messages);
           lastMsg.loading.preparing = false;
           lastMsg.loading.stage3 = true;
+          // Initialize stage3 for streaming
+          lastMsg.stage3 = { response: '', model: '', streaming: true };
+          return { ...prev, messages };
+        });
+        break;
+
+      case 'stage3_token':
+        // Streaming token from moderator - update incrementally
+        setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
+          const messages = [...prev.messages];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
+          // Use accumulated content for reliable state (handles React batching)
+          if (!lastMsg.stage3) {
+            lastMsg.stage3 = { response: '', model: '', streaming: true };
+          }
+          lastMsg.stage3.response = event.accumulated || (lastMsg.stage3.response + event.content);
+          lastMsg.stage3.streaming = true;
+          return { ...prev, messages };
+        });
+        break;
+
+      case 'stage3_retry':
+        // Echo detected, retrying - reset stage3 content
+        setCurrentConversation((prev) => {
+          if (!prev || !prev.messages) return prev;
+          const messages = [...prev.messages];
+          const lastMsg = getOrCreateLastAssistantMessage(messages);
+          lastMsg.stage3 = { response: '', model: '', streaming: true };
           return { ...prev, messages };
         });
         break;
@@ -508,7 +537,8 @@ function CouncilPage() {
           if (!prev || !prev.messages) return prev;
           const messages = [...prev.messages];
           const lastMsg = getOrCreateLastAssistantMessage(messages);
-          lastMsg.stage3 = event.data;
+          // Set final content and mark streaming complete
+          lastMsg.stage3 = { ...event.data, streaming: false };
           lastMsg.metadata = { ...lastMsg.metadata, ...event.metadata };
           lastMsg.loading.stage3 = false;
           return { ...prev, messages };

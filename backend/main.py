@@ -77,6 +77,7 @@ from .council import (
     stage1_5_cross_review,
     stage2_collect_rankings,
     stage3_synthesize_final,
+    stage3_synthesize_final_streaming,
     calculate_aggregate_rankings,
     extract_tldr_packet,
     build_context_summary,
@@ -1427,7 +1428,7 @@ Respond to the new input above. If it's new information that affects the decisio
             # Emit skipped event for Quick Decision mode
             await event_queue.put({'type': 'stage2_skipped', 'reason': 'Quick Decision mode - peer review disabled'})
 
-        # Stage 3: Synthesize final answer (use refined responses if available)
+        # Stage 3: Synthesize final answer with streaming (use refined responses if available)
         # Send preparing event before Stage 3
         await event_queue.put({
             'type': 'stage_preparing',
@@ -1437,14 +1438,42 @@ Respond to the new input above. If it's new information that affects the decisio
         _active_status[conversation_id] = "stage3"
         await event_queue.put({'type': 'stage3_start'})
 
-        # Start heartbeat for moderator synthesis
-        heartbeat = asyncio.create_task(_heartbeat_task(event_queue, "Final synthesis"))
-        try:
-            stage3_result = await stage3_synthesize_final(
-                effective_content, responses_for_ranking, stage2_results, moderator_model
-            )
-        finally:
-            heartbeat.cancel()
+        # Stream Stage 3 tokens to client as they arrive
+        accumulated_content = ""
+        stage3_model = moderator_model
+
+        async for event in stage3_synthesize_final_streaming(
+            effective_content, responses_for_ranking, stage2_results, moderator_model
+        ):
+            if event['type'] == 'token':
+                accumulated_content += event['content']
+                await event_queue.put({
+                    'type': 'stage3_token',
+                    'content': event['content'],
+                    'accumulated': accumulated_content
+                })
+            elif event['type'] == 'retry':
+                # Echo detected, retrying - reset accumulated content
+                await event_queue.put({
+                    'type': 'stage3_retry',
+                    'reason': event.get('reason', 'echo_detected')
+                })
+                accumulated_content = ""
+            elif event['type'] == 'complete':
+                stage3_model = event.get('model', moderator_model)
+                accumulated_content = event['content']
+            elif event['type'] == 'error':
+                # Log error but continue with fallback
+                logger.error("stage3_streaming_error",
+                    conversation_id=conversation_id,
+                    error=event.get('message'))
+                accumulated_content = "**Unable to generate synthesis** - Please try again."
+
+        # Build stage3_result from accumulated streaming content
+        stage3_result = {
+            'model': stage3_model,
+            'response': accumulated_content
+        }
 
         # ATOMIC SAVE: Save ALL stages in a single database transaction
         # This ensures we never have partial/incomplete messages if interrupted

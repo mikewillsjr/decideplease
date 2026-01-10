@@ -48,6 +48,7 @@ export default function VerdictDossier({
   } = metadata;
 
   const stage3Content = stage3?.response || '';
+  const isStreaming = stage3?.streaming === true;
   const hasStage1 = stage1 && stage1.length > 0;
   const hasStage1_5 = stage1_5 && stage1_5.length > 0 && !stage1_5Skipped;
   const hasStage2 = stage2 && stage2.length > 0 && !stage2Skipped;
@@ -144,7 +145,7 @@ export default function VerdictDossier({
       {/* Scrollable response area */}
       <div className="verdict-scroll-area">
         <div className="verdict-response">
-          {isLoading ? (
+          {isLoading && !stage3Content ? (
             <div className="loading-skeleton">
               <div className="skeleton-line wide" />
               <div className="skeleton-line medium" />
@@ -152,8 +153,9 @@ export default function VerdictDossier({
               <div className="skeleton-line short" />
             </div>
           ) : stage3Content ? (
-            <div className="markdown-content">
+            <div className={`markdown-content ${isStreaming ? 'streaming' : ''}`}>
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{stage3Content}</ReactMarkdown>
+              {isStreaming && <span className="streaming-cursor">|</span>}
             </div>
           ) : (
             <p className="awaiting">Awaiting council verdict...</p>
@@ -161,8 +163,8 @@ export default function VerdictDossier({
         </div>
       </div>
 
-      {/* Actions bar - only show when we have content */}
-      {stage3Content && !isLoading && (
+      {/* Actions bar - only show when we have content and not streaming */}
+      {stage3Content && !isLoading && !isStreaming && (
         <div className="verdict-actions-bar">
           {/* Mode indicator */}
           <div className="mode-indicator" title={modeInfo.description}>

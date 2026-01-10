@@ -1,8 +1,8 @@
 """3-stage DecidePlease orchestration."""
 
 import asyncio
-from typing import List, Dict, Any, Tuple, Optional
-from .openrouter import query_models_parallel, query_model
+from typing import List, Dict, Any, Tuple, Optional, AsyncGenerator
+from .openrouter import query_models_parallel, query_model, query_model_streaming
 from .config import (
     DECISION_MAKERS, MODERATOR_MODEL, RUN_MODES, VISION_MODELS, TEXT_ONLY_MODELS,
     LEGACY_MODE_MAPPING,
@@ -537,6 +537,185 @@ Please try again or review the individual Decision Maker responses above."""
         "model": moderator,
         "response": content
     }
+
+
+async def stage3_synthesize_final_streaming(
+    user_query: str,
+    stage1_results: List[Dict[str, Any]],
+    stage2_results: List[Dict[str, Any]],
+    moderator_model: Optional[str] = None
+) -> AsyncGenerator[Dict[str, Any], None]:
+    """
+    Stage 3: Moderator synthesizes final response with streaming.
+
+    Yields events as the response is generated:
+    - {'type': 'token', 'content': '...'} for each token chunk
+    - {'type': 'complete', 'content': '...', 'model': '...'} when finished
+    - {'type': 'retry', 'reason': '...'} if echo detected and retrying
+    - {'type': 'error', 'message': '...'} on failure
+
+    Args:
+        user_query: The original user query
+        stage1_results: Individual model responses from Stage 1
+        stage2_results: Rankings from Stage 2
+        moderator_model: Optional model to use as moderator
+
+    Yields:
+        Event dicts with streaming progress
+    """
+    moderator = moderator_model or MODERATOR_MODEL
+
+    # Build comprehensive context for moderator (same as non-streaming version)
+    stage1_text = "\n\n".join([
+        f"Decision Maker: {result['model']}\nResponse: {result['response']}"
+        for result in stage1_results
+    ])
+
+    # Build prompt based on whether peer review was conducted
+    if stage2_results:
+        stage2_text = "\n\n".join([
+            f"Decision Maker: {result['model']}\nRanking: {result['ranking']}"
+            for result in stage2_results
+        ])
+
+        moderator_prompt = f"""You are the Moderator of a Decision Makers panel. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
+
+Original Question: {user_query}
+
+STAGE 1 - Individual Responses:
+{stage1_text}
+
+STAGE 2 - Peer Rankings:
+{stage2_text}
+
+Your task as Moderator is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
+- The individual responses and their insights
+- The peer rankings and what they reveal about response quality
+- Any patterns of agreement or disagreement
+
+Provide a clear, well-reasoned final answer that represents the Decision Makers' collective wisdom:"""
+    else:
+        # Quick mode - no peer review
+        moderator_prompt = f"""You are the Moderator of a Decision Makers panel. Multiple AI models have provided responses to a user's question.
+
+Original Question: {user_query}
+
+Individual Responses:
+{stage1_text}
+
+Your task as Moderator is to synthesize all of these responses into a single, comprehensive, accurate answer to the user's original question. Consider:
+- The key insights from each response
+- Areas of agreement and disagreement
+- The strongest arguments and evidence presented
+
+Provide a clear, well-reasoned final answer that represents the Decision Makers' collective wisdom:"""
+
+    messages = [{"role": "user", "content": moderator_prompt}]
+
+    # Buffer initial tokens for echo detection before streaming to client
+    ECHO_BUFFER_SIZE = 300
+    buffer = ""
+    buffer_complete = False
+    echo_detected = False
+
+    async for event in query_model_streaming(moderator, messages):
+        if event['type'] == 'token':
+            if not buffer_complete:
+                # Still buffering for echo detection
+                buffer += event['content']
+                if len(buffer) >= ECHO_BUFFER_SIZE:
+                    buffer_complete = True
+                    # Check for echo
+                    if len(user_query) > 100:
+                        query_start = user_query[:150].strip()
+                        if buffer.strip().startswith(query_start[:80]):
+                            echo_detected = True
+                            print(f"[STAGE3 STREAMING] Echo detected in buffer")
+
+                    if echo_detected:
+                        # Don't stream the echo, will retry
+                        break
+                    else:
+                        # No echo - stream the buffer and continue
+                        yield {'type': 'token', 'content': buffer}
+            else:
+                # Buffer complete, stream tokens directly
+                yield event
+
+        elif event['type'] == 'complete':
+            if not buffer_complete:
+                # Stream completed before buffer was full - check for echo anyway
+                if len(user_query) > 100:
+                    query_start = user_query[:150].strip()
+                    if buffer.strip().startswith(query_start[:80]):
+                        echo_detected = True
+                        print(f"[STAGE3 STREAMING] Echo detected in short response")
+
+                if not echo_detected:
+                    # No echo - yield buffered content and complete
+                    if buffer:
+                        yield {'type': 'token', 'content': buffer}
+                    yield {'type': 'complete', 'content': event['content'], 'model': moderator}
+                    return
+            else:
+                if not echo_detected:
+                    yield {'type': 'complete', 'content': event['content'], 'model': moderator}
+                    return
+
+        elif event['type'] == 'error':
+            yield event
+            return
+
+    # If we got here with echo detected, retry with explicit prompt
+    if echo_detected:
+        print(f"[STAGE3 STREAMING] Retrying with explicit prompt")
+        yield {'type': 'retry', 'reason': 'echo_detected'}
+
+        # Build retry prompt (same as non-streaming version)
+        decision_maker_summary = "\n".join([
+            f"- {r['model'].split('/')[-1]}: {r['response'][:800]}{'...' if len(r['response']) > 800 else ''}"
+            for r in stage1_results[:4]
+        ])
+
+        query_context_len = min(1500, len(user_query))
+        query_context = user_query[:query_context_len]
+        if len(user_query) > query_context_len:
+            query_context += "..."
+
+        retry_prompt = f"""CRITICAL: Do NOT repeat the question. Provide ONLY your synthesis/recommendation.
+
+QUESTION CONTEXT (reference only - DO NOT INCLUDE IN YOUR RESPONSE):
+{query_context}
+
+DECISION MAKER RESPONSES:
+{decision_maker_summary}
+
+INSTRUCTIONS:
+- Start DIRECTLY with your synthesis or recommendation
+- Do NOT echo, quote, or summarize the question
+- Synthesize the Decision Maker responses into actionable guidance
+- Use structured formatting (headers, bullets) for clarity
+
+YOUR SYNTHESIS:"""
+
+        retry_messages = [{"role": "user", "content": retry_prompt}]
+
+        # Stream the retry response
+        async for event in query_model_streaming(moderator, retry_messages):
+            if event['type'] == 'token':
+                yield event
+            elif event['type'] == 'complete':
+                yield {'type': 'complete', 'content': event['content'], 'model': moderator}
+                return
+            elif event['type'] == 'error':
+                yield event
+                return
+
+        # If retry also failed, yield error
+        yield {
+            'type': 'error',
+            'message': 'Unable to generate synthesis after retry'
+        }
 
 
 def parse_ranking_from_text(ranking_text: str) -> List[str]:
