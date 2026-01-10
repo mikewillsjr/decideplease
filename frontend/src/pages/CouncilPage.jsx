@@ -19,6 +19,7 @@ function CouncilPage() {
   const [currentConversation, setCurrentConversation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [credits, setCredits] = useState(null);
+  const [quotas, setQuotas] = useState(null);
   const [creditPackInfo, setCreditPackInfo] = useState(null);
   const [error, setError] = useState(null);
   const [loadError, setLoadError] = useState(false);
@@ -50,6 +51,9 @@ function CouncilPage() {
     try {
       const userInfo = await api.getUserInfo();
       setCredits(userInfo.credits);
+      if (userInfo.quotas) {
+        setQuotas(userInfo.quotas);
+      }
     } catch (err) {
       console.error('Failed to load user info:', err);
     }
@@ -551,9 +555,12 @@ function CouncilPage() {
         break;
 
       case 'complete':
-        // Stream complete, update credits and reload conversations
+        // Stream complete, update credits/quotas and reload conversations
         if (event.credits !== undefined) {
           setCredits(event.credits);
+        }
+        if (event.quotas) {
+          setQuotas(event.quotas);
         }
         loadConversations();
         setIsLoading(false);
@@ -774,6 +781,7 @@ function CouncilPage() {
             error={error}
             onDismissError={() => setError(null)}
             user={user}
+            quotas={quotas}
             onCancelRequest={handleCancelRequest}
             onRetryOrphaned={handleRetryOrphaned}
             orphanedMessage={orphanedMessage}

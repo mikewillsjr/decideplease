@@ -1872,3 +1872,343 @@ async def get_pending_magic_link(email: str) -> Optional[Dict[str, Any]]:
                 "created_at": row["created_at"]
             }
         return None
+
+
+# ============================================================================
+# QUOTA MANAGEMENT (Per-Type Decision Quotas)
+# ============================================================================
+
+# Mapping from run mode to database column names
+MODE_TO_QUOTA_FIELD = {
+    "quick_decision": "quick_decision",
+    "decide_please": "standard_decision",
+    "decide_pretty_please": "premium_decision",
+    # Legacy mappings
+    "quick": "quick_decision",
+    "standard": "standard_decision",
+    "extra_care": "premium_decision",
+}
+
+
+class InsufficientQuotaError(Exception):
+    """Raised when a user doesn't have enough quota for an operation."""
+    def __init__(self, mode: str, available: int):
+        self.mode = mode
+        self.available = available
+        super().__init__(f"No {mode} decisions remaining (have {available})")
+
+
+async def ensure_user_quotas(user_id: str) -> None:
+    """
+    Ensure a user has a quota record. Creates one if it doesn't exist.
+
+    Args:
+        user_id: User ID
+    """
+    import uuid
+    async with get_connection() as conn:
+        existing = await conn.fetchval(
+            "SELECT id FROM user_quotas WHERE user_id = $1",
+            user_id
+        )
+        if not existing:
+            await conn.execute(
+                """
+                INSERT INTO user_quotas (id, user_id, created_at, updated_at)
+                VALUES ($1, $2, NOW(), NOW())
+                ON CONFLICT (user_id) DO NOTHING
+                """,
+                str(uuid.uuid4()),
+                user_id
+            )
+
+
+async def get_user_quotas(user_id: str) -> Dict[str, Any]:
+    """
+    Get a user's quota status including subscription quotas and admin grants.
+
+    This function calculates remaining quotas by combining:
+    1. Subscription quotas (quota - used)
+    2. Admin-granted decisions (sum of unexpired grants)
+
+    Args:
+        user_id: User ID
+
+    Returns:
+        Dict with quota information per decision type:
+        {
+            "quick_decision": {"remaining": 105, "admin_granted": 0, "used": 45, "quota": 150},
+            "standard_decision": {"remaining": 5, "admin_granted": 2, "used": 3, "quota": 8},
+            "premium_decision": {"remaining": 1, "admin_granted": 0, "used": 0, "quota": 1},
+            "quota_period_end": "2026-02-01T00:00:00Z"
+        }
+    """
+    await ensure_user_quotas(user_id)
+
+    async with get_connection() as conn:
+        # Get subscription quotas
+        quota_row = await conn.fetchrow(
+            """
+            SELECT
+                quick_decision_quota, quick_decision_used,
+                standard_decision_quota, standard_decision_used,
+                premium_decision_quota, premium_decision_used,
+                quota_period_end
+            FROM user_quotas
+            WHERE user_id = $1
+            """,
+            user_id
+        )
+
+        # Get admin-granted decisions (sum of unexpired grants)
+        admin_grants = await conn.fetchrow(
+            """
+            SELECT
+                COALESCE(SUM(quick_decisions), 0) as quick_granted,
+                COALESCE(SUM(standard_decisions), 0) as standard_granted,
+                COALESCE(SUM(premium_decisions), 0) as premium_granted
+            FROM admin_granted_decisions
+            WHERE user_id = $1
+              AND (expires_at IS NULL OR expires_at > NOW())
+            """,
+            user_id
+        )
+
+        # Calculate remaining for each type
+        quick_quota = quota_row["quick_decision_quota"] or 0 if quota_row else 0
+        quick_used = quota_row["quick_decision_used"] or 0 if quota_row else 0
+        quick_admin = int(admin_grants["quick_granted"]) if admin_grants else 0
+        quick_remaining = max(0, quick_quota - quick_used) + quick_admin
+
+        standard_quota = quota_row["standard_decision_quota"] or 0 if quota_row else 0
+        standard_used = quota_row["standard_decision_used"] or 0 if quota_row else 0
+        standard_admin = int(admin_grants["standard_granted"]) if admin_grants else 0
+        standard_remaining = max(0, standard_quota - standard_used) + standard_admin
+
+        premium_quota = quota_row["premium_decision_quota"] or 0 if quota_row else 0
+        premium_used = quota_row["premium_decision_used"] or 0 if quota_row else 0
+        premium_admin = int(admin_grants["premium_granted"]) if admin_grants else 0
+        premium_remaining = max(0, premium_quota - premium_used) + premium_admin
+
+        period_end = quota_row["quota_period_end"] if quota_row else None
+
+        return {
+            "quick_decision": {
+                "remaining": quick_remaining,
+                "admin_granted": quick_admin,
+                "used": quick_used,
+                "quota": quick_quota,
+            },
+            "standard_decision": {
+                "remaining": standard_remaining,
+                "admin_granted": standard_admin,
+                "used": standard_used,
+                "quota": standard_quota,
+            },
+            "premium_decision": {
+                "remaining": premium_remaining,
+                "admin_granted": premium_admin,
+                "used": premium_used,
+                "quota": premium_quota,
+            },
+            "quota_period_end": period_end.isoformat() if period_end else None,
+        }
+
+
+async def reserve_decision_quota(user_id: str, mode: str) -> Dict[str, Any]:
+    """
+    Atomically reserve a decision quota for a request.
+
+    Consumption priority:
+    1. Admin-granted decisions (expiring soonest first, then never-expiring)
+    2. Subscription quota
+
+    Args:
+        user_id: User ID
+        mode: Run mode (quick_decision, decide_please, decide_pretty_please)
+
+    Returns:
+        Updated quota info for the mode used
+
+    Raises:
+        InsufficientQuotaError: If user doesn't have enough quota
+    """
+    import uuid
+
+    # Map mode to field name
+    quota_field = MODE_TO_QUOTA_FIELD.get(mode)
+    if not quota_field:
+        raise ValueError(f"Unknown mode: {mode}")
+
+    # Column names for this mode
+    admin_col = f"{quota_field.replace('_decision', '')}_decisions"
+    quota_col = f"{quota_field}_quota"
+    used_col = f"{quota_field}_used"
+
+    await ensure_user_quotas(user_id)
+
+    async with get_connection() as conn:
+        # Try to deduct from admin grants first (oldest/expiring soonest first)
+        # Check for grants with remaining decisions
+        admin_grant = await conn.fetchrow(
+            f"""
+            SELECT id, {admin_col} as remaining
+            FROM admin_granted_decisions
+            WHERE user_id = $1
+              AND {admin_col} > 0
+              AND (expires_at IS NULL OR expires_at > NOW())
+            ORDER BY
+              CASE WHEN expires_at IS NULL THEN 1 ELSE 0 END,
+              expires_at ASC,
+              created_at ASC
+            LIMIT 1
+            FOR UPDATE
+            """,
+            user_id
+        )
+
+        if admin_grant and admin_grant["remaining"] > 0:
+            # Deduct from admin grant
+            await conn.execute(
+                f"""
+                UPDATE admin_granted_decisions
+                SET {admin_col} = {admin_col} - 1
+                WHERE id = $1
+                """,
+                admin_grant["id"]
+            )
+            logger.info("quota_reserved_from_admin_grant",
+                       user_id=user_id, mode=mode, grant_id=admin_grant["id"])
+            return await get_user_quotas(user_id)
+
+        # Try to deduct from subscription quota
+        result = await conn.fetchrow(
+            f"""
+            UPDATE user_quotas
+            SET {used_col} = {used_col} + 1,
+                updated_at = NOW()
+            WHERE user_id = $1
+              AND {quota_col} > {used_col}
+            RETURNING {quota_col} as quota, {used_col} as used
+            """,
+            user_id
+        )
+
+        if result:
+            logger.info("quota_reserved_from_subscription",
+                       user_id=user_id, mode=mode,
+                       quota=result["quota"], used=result["used"])
+            return await get_user_quotas(user_id)
+
+        # No quota available - get current for error message
+        quotas = await get_user_quotas(user_id)
+        remaining = quotas.get(quota_field, {}).get("remaining", 0)
+        raise InsufficientQuotaError(mode=mode, available=remaining)
+
+
+async def refund_decision_quota(user_id: str, mode: str) -> Dict[str, Any]:
+    """
+    Refund a decision quota (e.g., if a request fails after deduction).
+
+    This adds back to the subscription quota (not admin grants, since we
+    can't know which grant was used).
+
+    Args:
+        user_id: User ID
+        mode: Run mode
+
+    Returns:
+        Updated quota info
+    """
+    quota_field = MODE_TO_QUOTA_FIELD.get(mode)
+    if not quota_field:
+        raise ValueError(f"Unknown mode: {mode}")
+
+    used_col = f"{quota_field}_used"
+
+    async with get_connection() as conn:
+        await conn.execute(
+            f"""
+            UPDATE user_quotas
+            SET {used_col} = GREATEST(0, {used_col} - 1),
+                updated_at = NOW()
+            WHERE user_id = $1
+            """,
+            user_id
+        )
+
+    logger.info("quota_refunded", user_id=user_id, mode=mode)
+    return await get_user_quotas(user_id)
+
+
+async def grant_admin_decisions(
+    user_id: str,
+    decision_type: str,
+    amount: int,
+    granted_by: str,
+    granted_by_email: str,
+    notes: Optional[str] = None,
+    expires_at: Optional[datetime] = None
+) -> Dict[str, Any]:
+    """
+    Grant decisions to a user from admin panel.
+
+    Args:
+        user_id: User ID to grant to
+        decision_type: Type of decision (quick_decision, standard_decision, premium_decision)
+        amount: Number of decisions to grant
+        granted_by: Admin user ID
+        granted_by_email: Admin email
+        notes: Optional notes about the grant
+        expires_at: Optional expiration (None = never expires)
+
+    Returns:
+        The created grant record
+    """
+    import uuid
+
+    # Validate decision type
+    valid_types = ["quick_decision", "standard_decision", "premium_decision"]
+    if decision_type not in valid_types:
+        raise ValueError(f"Invalid decision_type: {decision_type}. Must be one of {valid_types}")
+
+    # Map to column name
+    col_map = {
+        "quick_decision": "quick_decisions",
+        "standard_decision": "standard_decisions",
+        "premium_decision": "premium_decisions",
+    }
+    col = col_map[decision_type]
+
+    grant_id = str(uuid.uuid4())
+
+    async with get_connection() as conn:
+        await conn.execute(
+            f"""
+            INSERT INTO admin_granted_decisions
+                (id, user_id, {col}, granted_by, granted_by_email, notes, expires_at, granted_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+            """,
+            grant_id,
+            user_id,
+            amount,
+            granted_by,
+            granted_by_email,
+            notes,
+            expires_at
+        )
+
+    logger.info("admin_decisions_granted",
+               user_id=user_id, decision_type=decision_type,
+               amount=amount, granted_by=granted_by_email)
+
+    return {
+        "id": grant_id,
+        "user_id": user_id,
+        "decision_type": decision_type,
+        "amount": amount,
+        "granted_by": granted_by,
+        "granted_by_email": granted_by_email,
+        "notes": notes,
+        "expires_at": expires_at.isoformat() if expires_at else None,
+    }

@@ -22,6 +22,7 @@ export default function CouncilChamber({
   error,
   onDismissError,
   user,
+  quotas,
   onCancelRequest,
   onRetryOrphaned,
   orphanedMessage,
@@ -292,6 +293,7 @@ export default function CouncilChamber({
             needsVerification={needsVerification}
             loading={currentRound?.loading}
             mode={currentRound?.metadata?.mode || 'decide_please'}
+            quotas={quotas}
           />
         )}
 

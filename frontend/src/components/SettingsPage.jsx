@@ -104,8 +104,9 @@ export default function SettingsPage() {
     return localStorage.getItem('decideplease_interface') || 'chamber';
   });
 
-  // Credits info
+  // Credits and quotas info
   const [credits, setCredits] = useState(null);
+  const [quotas, setQuotas] = useState(null);
   const [creditPackInfo, setCreditPackInfo] = useState(null);
 
   // Payment methods state
@@ -127,6 +128,9 @@ export default function SettingsPage() {
     try {
       const info = await api.getUserInfo();
       setCredits(info.credits);
+      if (info.quotas) {
+        setQuotas(info.quotas);
+      }
     } catch (err) {
       console.error('Failed to load user info:', err);
     }
@@ -458,9 +462,47 @@ export default function SettingsPage() {
                         <span className="info-label">Email</span>
                         <span className="info-value">{user?.email}</span>
                       </div>
-                      <div className="info-row">
-                        <span className="info-label">Credits</span>
-                        <span className="info-value">{credits ?? '...'}</span>
+                    </div>
+                  </div>
+
+                  <div className="settings-card">
+                    <h3>Decision Quotas</h3>
+                    <p className="settings-description" style={{ marginBottom: '16px', opacity: 0.7 }}>
+                      Your available decisions by type.
+                    </p>
+                    <div className="quota-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                      <div className="quota-card" style={{ padding: '16px', background: 'var(--card-bg, #f8fafc)', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '24px', fontWeight: '600', color: 'var(--primary, #6366f1)' }}>
+                          {quotas?.quick_decision?.remaining ?? '...'}
+                        </div>
+                        <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '4px' }}>Quick</div>
+                        {quotas?.quick_decision?.admin_granted > 0 && (
+                          <div style={{ fontSize: '11px', color: '#22c55e', marginTop: '4px' }}>
+                            +{quotas.quick_decision.admin_granted} granted
+                          </div>
+                        )}
+                      </div>
+                      <div className="quota-card" style={{ padding: '16px', background: 'var(--card-bg, #f8fafc)', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '24px', fontWeight: '600', color: 'var(--primary, #6366f1)' }}>
+                          {quotas?.standard_decision?.remaining ?? '...'}
+                        </div>
+                        <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '4px' }}>Standard</div>
+                        {quotas?.standard_decision?.admin_granted > 0 && (
+                          <div style={{ fontSize: '11px', color: '#22c55e', marginTop: '4px' }}>
+                            +{quotas.standard_decision.admin_granted} granted
+                          </div>
+                        )}
+                      </div>
+                      <div className="quota-card" style={{ padding: '16px', background: 'var(--card-bg, #f8fafc)', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '24px', fontWeight: '600', color: 'var(--primary, #6366f1)' }}>
+                          {quotas?.premium_decision?.remaining ?? '...'}
+                        </div>
+                        <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '4px' }}>Premium</div>
+                        {quotas?.premium_decision?.admin_granted > 0 && (
+                          <div style={{ fontSize: '11px', color: '#22c55e', marginTop: '4px' }}>
+                            +{quotas.premium_decision.admin_granted} granted
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

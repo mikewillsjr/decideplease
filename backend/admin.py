@@ -406,6 +406,88 @@ async def set_credits_by_email(
     }
 
 
+class GrantDecisionsRequest(BaseModel):
+    """Request to grant decisions to a user."""
+    email: EmailStr
+    decision_type: str  # quick_decision, standard_decision, premium_decision
+    amount: int
+    notes: Optional[str] = None
+
+
+@router.post("/users/grant-decisions")
+@limiter.limit("20/minute")
+async def grant_decisions_to_user(
+    request: Request,
+    grant_request: GrantDecisionsRequest,
+    admin: dict = Depends(require_modify_credits)
+):
+    """
+    Grant decisions of a specific type to a user by email.
+
+    Admin-granted decisions never expire by default and are consumed
+    before subscription quotas.
+    """
+    admin_id = admin.get("user_id", "")
+    admin_email = admin.get("email", "")
+
+    # Validate decision type
+    valid_types = ["quick_decision", "standard_decision", "premium_decision"]
+    if grant_request.decision_type not in valid_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid decision_type. Must be one of: {', '.join(valid_types)}"
+        )
+
+    if grant_request.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    async with get_connection() as conn:
+        user = await conn.fetchrow(
+            "SELECT id, email FROM users WHERE LOWER(email) = LOWER($1)",
+            grant_request.email
+        )
+
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User not found: {grant_request.email}")
+
+    # Grant the decisions
+    grant = await storage.grant_admin_decisions(
+        user_id=user["id"],
+        decision_type=grant_request.decision_type,
+        amount=grant_request.amount,
+        granted_by=admin_id,
+        granted_by_email=admin_email,
+        notes=grant_request.notes,
+        expires_at=None  # Never expires
+    )
+
+    # Log the action
+    await storage.log_admin_action(
+        admin_id=admin_id,
+        admin_email=admin_email,
+        action="grant_decisions",
+        target_user_id=user["id"],
+        details={
+            "target_email": user["email"],
+            "decision_type": grant_request.decision_type,
+            "amount": grant_request.amount,
+            "notes": grant_request.notes,
+        }
+    )
+
+    # Get updated quotas
+    quotas = await storage.get_user_quotas(user["id"])
+
+    return {
+        "success": True,
+        "user_id": user["id"],
+        "email": user["email"],
+        "decision_type": grant_request.decision_type,
+        "amount_granted": grant_request.amount,
+        "quotas": quotas,
+    }
+
+
 @router.delete("/users/delete-by-email")
 @limiter.limit("5/minute")
 async def delete_user_by_email(

@@ -796,7 +796,7 @@ export const api = {
   },
 
   /**
-   * Set user credits by email (admin).
+   * Set user credits by email (admin) - Legacy, kept for backward compatibility.
    */
   async setUserCreditsByEmail(email, credits) {
     const headers = await getHeaders();
@@ -807,6 +807,32 @@ export const api = {
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       throw new Error(data.detail || 'Failed to set credits');
+    }
+    return response.json();
+  },
+
+  /**
+   * Grant decisions to a user by email (admin).
+   * @param {string} email - User email
+   * @param {string} decisionType - Decision type: 'quick_decision', 'standard_decision', or 'premium_decision'
+   * @param {number} amount - Number of decisions to grant
+   * @param {string} notes - Optional notes about the grant
+   */
+  async grantDecisions(email, decisionType, amount, notes = null) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/admin/users/grant-decisions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email,
+        decision_type: decisionType,
+        amount,
+        notes,
+      }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to grant decisions');
     }
     return response.json();
   },

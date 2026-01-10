@@ -92,20 +92,6 @@ export default function UnifiedHeader({
 
           {isSignedIn ? (
             <>
-              {/* Credits Display */}
-              <div className="credits-display">
-                <span className="credits-icon">&#x27e1;</span>
-                <span className="credits-value">{credits ?? '...'} Credits</span>
-                {creditPackInfo?.stripe_configured && (
-                  <button
-                    className="buy-credits-btn"
-                    onClick={() => setShowPurchaseModal(true)}
-                  >
-                    +{creditPackInfo.credits}
-                  </button>
-                )}
-              </div>
-
               {/* User Menu */}
               <div className="user-menu-container">
                 <button

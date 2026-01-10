@@ -3,6 +3,24 @@ import SpeedSelector from './SpeedSelector';
 import FileUpload from './FileUpload';
 import './DecisionConsole.css';
 
+// Map run modes to quota field names
+const MODE_TO_QUOTA_FIELD = {
+  'quick_decision': 'quick_decision',
+  'decide_please': 'standard_decision',
+  'decide_pretty_please': 'premium_decision',
+  // Legacy mappings
+  'quick': 'quick_decision',
+  'standard': 'standard_decision',
+  'extra_care': 'premium_decision',
+};
+
+// Friendly names for display
+const MODE_LABELS = {
+  'quick_decision': 'Quick',
+  'standard_decision': 'Standard',
+  'premium_decision': 'Premium',
+};
+
 /**
  * Decision Console - The centered input card in Assembly State.
  * Features textarea, speed selector, file upload, and "Run Simulation" button.
@@ -13,6 +31,7 @@ export default function DecisionConsole({
   isLoading = false,
   disabled = false,
   placeholder = "Describe your dilemma. The Council will deliberate...",
+  quotas = null, // New: per-type quotas from API
 }) {
   const [input, setInput] = useState('');
   const [mode, setMode] = useState('decide_please');
@@ -42,11 +61,11 @@ export default function DecisionConsole({
     }
   };
 
-  // Calculate credit cost
-  const baseCost = (mode === 'quick' || mode === 'quick_decision') ? 1 :
-                   (mode === 'decide_pretty_please' || mode === 'extra_care') ? 4 : 2;
-  const fileCost = files.length > 0 ? 1 : 0;
-  const totalCost = baseCost + fileCost;
+  // Get quota info for the current mode
+  const quotaField = MODE_TO_QUOTA_FIELD[mode] || 'standard_decision';
+  const quotaInfo = quotas?.[quotaField];
+  const remaining = quotaInfo?.remaining ?? null;
+  const modeLabel = MODE_LABELS[quotaField] || 'Standard';
 
   const canSubmit = input.trim().length > 0 && !isLoading && !disabled;
 
@@ -88,11 +107,16 @@ export default function DecisionConsole({
         </div>
 
         <div className="footer-right">
-          <div className="credit-info">
-            <span className="credit-dot"></span>
-            <span className="credit-text">
-              {totalCost} Credit{totalCost !== 1 ? 's' : ''}
-              {fileCost > 0 && <span className="file-cost"> (+1 for files)</span>}
+          <div className="quota-info">
+            <span className={`quota-dot ${remaining === 0 ? 'empty' : ''}`}></span>
+            <span className="quota-text">
+              {remaining === null ? (
+                '...'
+              ) : remaining > 0 ? (
+                `${remaining} ${modeLabel} remaining`
+              ) : (
+                <span className="no-quota">No {modeLabel} remaining</span>
+              )}
             </span>
           </div>
 

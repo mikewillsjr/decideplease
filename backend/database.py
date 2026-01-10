@@ -248,8 +248,137 @@ async def init_database():
             ON magic_link_tokens(expires_at)
         """)
 
+        # Create user_quotas table for per-type decision tracking
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_quotas (
+                id TEXT PRIMARY KEY,
+                user_id TEXT REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+
+                -- Subscription quotas (from plan, reset monthly)
+                quick_decision_quota INTEGER DEFAULT 0,
+                standard_decision_quota INTEGER DEFAULT 0,
+                premium_decision_quota INTEGER DEFAULT 0,
+
+                -- Used counts (reset monthly with subscription renewal)
+                quick_decision_used INTEGER DEFAULT 0,
+                standard_decision_used INTEGER DEFAULT 0,
+                premium_decision_used INTEGER DEFAULT 0,
+
+                -- Period tracking (lazy reset on access)
+                quota_period_start TIMESTAMP,
+                quota_period_end TIMESTAMP,
+
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_user_quotas_user_id
+            ON user_quotas(user_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_user_quotas_period_end
+            ON user_quotas(quota_period_end)
+        """)
+
+        # Create admin_granted_decisions table for non-expiring admin grants
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS admin_granted_decisions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+
+                -- Per-type grants
+                quick_decisions INTEGER DEFAULT 0,
+                standard_decisions INTEGER DEFAULT 0,
+                premium_decisions INTEGER DEFAULT 0,
+
+                -- Audit info
+                granted_by TEXT,
+                granted_by_email TEXT,
+                granted_at TIMESTAMP DEFAULT NOW(),
+                expires_at TIMESTAMP,  -- NULL = never expires
+                notes TEXT,
+
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_admin_granted_user_id
+            ON admin_granted_decisions(user_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_admin_granted_expires
+            ON admin_granted_decisions(expires_at)
+        """)
+
+        # Migrate existing credits to admin-granted decisions
+        await migrate_credits_to_quotas(conn)
+
         # Seed superadmin account if it doesn't exist
         await seed_superadmin(conn)
+
+
+async def migrate_credits_to_quotas(conn):
+    """
+    Migrate existing credits to admin-granted decisions.
+
+    This is a one-time migration that converts legacy credits to the new
+    per-type quota system. Users with credits will receive admin-granted
+    standard decisions (which never expire).
+
+    - Users with 0 credits: No migration needed
+    - Users with 5 credits (default): Grant 5 standard decisions
+    - Users with N credits: Grant N standard decisions
+    - Users with 9999999 credits (unlimited): Skip, handled by role permissions
+    """
+    import uuid
+
+    # Check if migration has already run by looking for a marker
+    marker = await conn.fetchval(
+        """
+        SELECT COUNT(*) FROM admin_granted_decisions
+        WHERE notes = 'MIGRATION: Legacy credits converted'
+        """
+    )
+    if marker and marker > 0:
+        # Migration already done
+        return
+
+    # Find users with credits > 0 and < 9999999 (unlimited)
+    users_to_migrate = await conn.fetch(
+        """
+        SELECT id, email, credits FROM users
+        WHERE credits > 0 AND credits < 9999999
+        """
+    )
+
+    if not users_to_migrate:
+        print("[MIGRATION] No users need credit migration")
+        return
+
+    print(f"[MIGRATION] Migrating {len(users_to_migrate)} users from credits to quotas...")
+
+    for user in users_to_migrate:
+        user_id = user["id"]
+        credits = user["credits"]
+
+        # Create admin-granted decisions
+        grant_id = str(uuid.uuid4())
+        await conn.execute(
+            """
+            INSERT INTO admin_granted_decisions
+                (id, user_id, standard_decisions, granted_by, granted_by_email,
+                 notes, expires_at, granted_at)
+            VALUES ($1, $2, $3, 'SYSTEM', 'migration@decideplease.com',
+                    'MIGRATION: Legacy credits converted', NULL, NOW())
+            ON CONFLICT DO NOTHING
+            """,
+            grant_id,
+            user_id,
+            credits
+        )
+
+    print(f"[MIGRATION] Successfully migrated {len(users_to_migrate)} users")
 
 
 def generate_password(length: int = 16) -> str:

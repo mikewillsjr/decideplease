@@ -31,6 +31,7 @@ export default function AssemblyState({
   disabled,
   loading = null, // Loading state with stage flags
   mode = 'decide_please', // Current deliberation mode
+  quotas = null, // Per-type quotas from API
 }) {
   const [isInputActive, setIsInputActive] = useState(false);
   const [selectedMode, setSelectedMode] = useState(mode);
@@ -67,6 +68,7 @@ export default function AssemblyState({
         onFocusChange={setIsInputActive}
         isLoading={isLoading}
         disabled={disabled}
+        quotas={quotas}
       />
     </div>
   );

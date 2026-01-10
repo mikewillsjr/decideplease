@@ -39,6 +39,13 @@ function AdminPage() {
   const [quickCredits, setQuickCredits] = useState('');
   const [quickActionLoading, setQuickActionLoading] = useState(false);
 
+  // Grant decisions states
+  const [grantEmail, setGrantEmail] = useState('');
+  const [grantType, setGrantType] = useState('standard_decision');
+  const [grantAmount, setGrantAmount] = useState('');
+  const [grantNotes, setGrantNotes] = useState('');
+  const [grantLoading, setGrantLoading] = useState(false);
+
   // Staff management states
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [newStaffPassword, setNewStaffPassword] = useState('');
@@ -226,6 +233,32 @@ function AdminPage() {
       setError(err.message);
     }
     setQuickActionLoading(false);
+  };
+
+  // Grant decisions handler
+  const handleGrantDecisions = async () => {
+    if (!grantEmail || !grantAmount) return;
+    setGrantLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const result = await api.grantDecisions(
+        grantEmail,
+        grantType,
+        parseInt(grantAmount),
+        grantNotes || null
+      );
+      const typeLabel = grantType.replace('_decision', '').charAt(0).toUpperCase() +
+                        grantType.replace('_decision', '').slice(1);
+      setSuccessMessage(`Granted ${result.amount_granted} ${typeLabel} decisions to ${result.email}`);
+      setGrantEmail('');
+      setGrantAmount('');
+      setGrantNotes('');
+      if (activeTab === 'users') loadUsers();
+    } catch (err) {
+      setError(err.message);
+    }
+    setGrantLoading(false);
   };
 
   const handleSendPasswordReset = async () => {
@@ -503,6 +536,55 @@ function AdminPage() {
             </div>
             <div className="quick-actions-hint">
               Enter email to: set decisions (999999 = unlimited), send password reset, or delete account
+            </div>
+
+            {/* Grant Decisions Section */}
+            <h4 style={{ marginTop: '20px', marginBottom: '10px' }}>Grant Decisions by Type</h4>
+            <div className="quick-actions-form">
+              <input
+                type="email"
+                placeholder="User email"
+                value={grantEmail}
+                onChange={(e) => setGrantEmail(e.target.value)}
+                disabled={grantLoading}
+              />
+              <select
+                value={grantType}
+                onChange={(e) => setGrantType(e.target.value)}
+                disabled={grantLoading}
+                style={{ width: '140px' }}
+              >
+                <option value="quick_decision">Quick</option>
+                <option value="standard_decision">Standard</option>
+                <option value="premium_decision">Premium</option>
+              </select>
+              <input
+                type="number"
+                placeholder="Amount"
+                value={grantAmount}
+                onChange={(e) => setGrantAmount(e.target.value)}
+                disabled={grantLoading}
+                min="1"
+                style={{ width: '80px' }}
+              />
+              <input
+                type="text"
+                placeholder="Notes (optional)"
+                value={grantNotes}
+                onChange={(e) => setGrantNotes(e.target.value)}
+                disabled={grantLoading}
+                style={{ width: '150px' }}
+              />
+              <button
+                onClick={handleGrantDecisions}
+                disabled={grantLoading || !grantEmail || !grantAmount}
+                className="btn-credits"
+              >
+                {grantLoading ? 'Granting...' : 'Grant'}
+              </button>
+            </div>
+            <div className="quick-actions-hint">
+              Grant decisions by type. Admin-granted decisions never expire.
             </div>
           </div>
         )}

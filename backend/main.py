@@ -37,7 +37,7 @@ from .logging_config import get_logger
 logger = get_logger(__name__)
 
 from . import storage_pg as storage
-from .storage_pg import InsufficientCreditsError, cleanup_incomplete_messages
+from .storage_pg import InsufficientCreditsError, InsufficientQuotaError, cleanup_incomplete_messages
 from .database import init_database, close_pool, get_connection
 from .auth_custom import (
     get_current_user,
@@ -281,11 +281,21 @@ class Conversation(BaseModel):
     messages: List[Dict[str, Any]]
 
 
+class QuotaInfo(BaseModel):
+    """Quota information for a single decision type."""
+    remaining: int
+    admin_granted: int
+    used: int = 0
+    quota: int = 0
+
+
 class UserInfo(BaseModel):
-    """User information including credits."""
+    """User information including quotas."""
     user_id: str
     email: str
-    credits: int
+    credits: int  # Legacy: kept for backward compatibility
+    quotas: Optional[Dict[str, QuotaInfo]] = None
+    quota_period_end: Optional[str] = None
 
 
 class CreateCheckoutRequest(BaseModel):
@@ -1069,12 +1079,22 @@ async def delete_account(user: dict = Depends(get_current_user)):
 
 @app.get("/api/user", response_model=UserInfo)
 async def get_user_info(user: dict = Depends(get_current_user)):
-    """Get current user information including credits."""
+    """Get current user information including quotas."""
     user_data = await storage.get_or_create_user(user["user_id"], user["email"])
+
+    # Get per-type quotas
+    quotas = await storage.get_user_quotas(user["user_id"])
+
     return UserInfo(
         user_id=user_data["id"],
         email=user_data["email"],
-        credits=user_data["credits"]
+        credits=user_data["credits"],  # Legacy: kept for backward compatibility
+        quotas={
+            "quick_decision": QuotaInfo(**quotas["quick_decision"]),
+            "standard_decision": QuotaInfo(**quotas["standard_decision"]),
+            "premium_decision": QuotaInfo(**quotas["premium_decision"]),
+        },
+        quota_period_end=quotas.get("quota_period_end"),
     )
 
 
@@ -1166,14 +1186,17 @@ async def send_message(
     user_role = user.get("role", "user")
     has_unlimited = has_permission(user_role, 'unlimited_credits') or user_email in ADMIN_EMAILS
 
-    # Atomically reserve credits BEFORE starting any processing
+    # Default mode for non-streaming endpoint
+    mode = "decide_please"
+
+    # Atomically reserve quota BEFORE starting any processing
     if not has_unlimited:
         try:
-            await storage.reserve_credits_atomic(user["user_id"], 1)
-        except InsufficientCreditsError as e:
+            await storage.reserve_decision_quota(user["user_id"], mode)
+        except InsufficientQuotaError as e:
             raise HTTPException(
                 status_code=402,
-                detail=f"Insufficient credits. Need {e.required}, have {e.available}."
+                detail=f"No {e.mode} decisions remaining."
             )
 
     # Check if this is the first message
@@ -1531,26 +1554,28 @@ Respond to the new input above. If it's new information that affects the decisio
             await storage.update_conversation_title(conversation_id, title)
             await event_queue.put({'type': 'title_complete', 'data': {'title': title}})
 
-        # Get final credits
+        # Get final quotas
+        remaining_quotas = await storage.get_user_quotas(user_id)
+        # Also get legacy credits for backward compatibility
         remaining_credits = await storage.get_user_credits(user_id)
         await event_queue.put({
             'type': 'complete',
-            'credits': remaining_credits,
+            'credits': remaining_credits,  # Legacy: kept for backward compatibility
+            'quotas': remaining_quotas,
             'mode': mode,
             'message_id': message_id
         })
 
     except Exception as e:
-        # Refund credits on error - user shouldn't pay for failed requests
+        # Refund quota on error - user shouldn't pay for failed requests
         try:
-            credit_cost = mode_config['credit_cost']
-            await storage.refund_credits(user_id, credit_cost)
-            logger.warning("credits_refunded_on_error",
+            await storage.refund_decision_quota(user_id, mode)
+            logger.warning("quota_refunded_on_error",
                 user_id=user_id,
-                credit_cost=credit_cost,
+                mode=mode,
                 error=str(e))
         except Exception as refund_error:
-            logger.error("credits_refund_failed",
+            logger.error("quota_refund_failed",
                 user_id=user_id,
                 original_error=str(e),
                 refund_error=str(refund_error))
@@ -1619,22 +1644,17 @@ async def send_message_stream(
     user_role = user.get("role", "user")
     has_unlimited = has_permission(user_role, 'unlimited_credits') or user_email in ADMIN_EMAILS
 
-    # Atomically reserve credits BEFORE starting any processing
-    # This prevents concurrent requests from overdrawing credits
-    remaining_credits = None
+    # Atomically reserve quota BEFORE starting any processing
+    # This prevents concurrent requests from overdrawing quotas
+    updated_quotas = None
     if not has_unlimited:
         try:
-            remaining_credits = await storage.reserve_credits_atomic(user["user_id"], credit_cost)
-        except InsufficientCreditsError as e:
+            updated_quotas = await storage.reserve_decision_quota(user["user_id"], mode)
+        except InsufficientQuotaError as e:
             raise HTTPException(
                 status_code=402,
-                detail=f"Insufficient credits. Need {e.required}, have {e.available}."
+                detail=f"No {e.mode} decisions remaining."
             )
-
-        # Send low credits email if user is running low (1 or 0 credits remaining)
-        if remaining_credits <= 1:
-            from .email import send_low_credits_email
-            asyncio.create_task(send_low_credits_email(user["email"], remaining_credits))
 
     # Check if this is the first message
     is_first_message = len(conversation["messages"]) == 0
@@ -1933,21 +1953,16 @@ async def rerun_decision(
     user_role = user.get("role", "user")
     has_unlimited = has_permission(user_role, 'unlimited_credits') or user_email in ADMIN_EMAILS
 
-    # Atomically reserve credits BEFORE starting any processing
-    remaining_credits = None
+    # Atomically reserve quota BEFORE starting any processing
+    updated_quotas = None
     if not has_unlimited:
         try:
-            remaining_credits = await storage.reserve_credits_atomic(user["user_id"], credit_cost)
-        except InsufficientCreditsError as e:
+            updated_quotas = await storage.reserve_decision_quota(user["user_id"], mode)
+        except InsufficientQuotaError as e:
             raise HTTPException(
                 status_code=402,
-                detail=f"Insufficient credits. Need {e.required}, have {e.available}."
+                detail=f"No {e.mode} decisions remaining."
             )
-
-        # Send low credits email if user is running low (1 or 0 credits remaining)
-        if remaining_credits <= 1:
-            from .email import send_low_credits_email
-            asyncio.create_task(send_low_credits_email(user["email"], remaining_credits))
 
     # Create event queue for SSE
     event_queue: asyncio.Queue = asyncio.Queue()

@@ -105,8 +105,8 @@
   gap: 16px;
 }
 
-/* Credit info */
-.credit-info {
+/* Quota info */
+.quota-info {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -114,15 +114,19 @@
   color: var(--text-dim, #6b7280);
 }
 
-.credit-dot {
+.quota-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--primary, #6366f1);
 }
 
-.file-cost {
-  color: var(--text-dim, #52525b);
+.quota-dot.empty {
+  background: #ef4444;
+}
+
+.no-quota {
+  color: #ef4444;
 }
 
 /* Run Button */
