@@ -316,20 +316,21 @@
   overflow-x: auto;
 }
 
-/* Tables */
-table {
+/* Tables - scoped to admin-page to avoid affecting other components */
+.admin-page table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
 }
 
-th, td {
+.admin-page th,
+.admin-page td {
   text-align: left;
   padding: 14px 12px;
   border-bottom: 1px solid #e0e0e0;
 }
 
-th {
+.admin-page th {
   background: #f8f8f8;
   font-weight: 600;
   color: #555;
@@ -338,16 +339,16 @@ th {
   letter-spacing: 0.5px;
 }
 
-tbody tr {
+.admin-page tbody tr {
   transition: background 0.15s;
 }
 
-tbody tr:hover {
+.admin-page tbody tr:hover {
   background: #f8f8f8;
   cursor: pointer;
 }
 
-tbody tr.selected {
+.admin-page tbody tr.selected {
   background: #e8f0fe;
 }
 

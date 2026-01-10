@@ -189,31 +189,32 @@
   overflow-x: auto;
 }
 
-/* Tables */
-table {
+/* Tables - scoped to admin-panel to avoid affecting other components */
+.admin-panel table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
 }
 
-th, td {
+.admin-panel th,
+.admin-panel td {
   text-align: left;
   padding: 12px;
   border-bottom: 1px solid #e0e0e0;
 }
 
-th {
+.admin-panel th {
   background: #f8f8f8;
   font-weight: 600;
   color: #666;
 }
 
-tbody tr:hover {
+.admin-panel tbody tr:hover {
   background: #f8f8f8;
   cursor: pointer;
 }
 
-tbody tr.selected {
+.admin-panel tbody tr.selected {
   background: #e8f0fe;
 }
 
