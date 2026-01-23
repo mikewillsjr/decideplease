@@ -12,8 +12,9 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login', init
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [oauthProviders, setOauthProviders] = useState([]);
-  const [oauthLoading, setOauthLoading] = useState(false);
+  // TODO: Re-enable when Google OAuth is configured in production
+  const [oauthProviders] = useState([]);
+  const [oauthLoading, setOauthLoading] = useState(false); // eslint-disable-line no-unused-vars
   const [emailSentType, setEmailSentType] = useState(null); // 'magic_link' or 'verification'
   const [requiresVerification, setRequiresVerification] = useState(false);
 
@@ -34,20 +35,21 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login', init
   }, [isOpen, initialMode, initialEmail]);
 
   // Fetch OAuth providers on mount
-  useEffect(() => {
-    const fetchProviders = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/api/auth/oauth/providers`);
-        if (response.ok) {
-          const data = await response.json();
-          setOauthProviders(data.providers || []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch OAuth providers:', err);
-      }
-    };
-    fetchProviders();
-  }, []);
+  // TODO: Re-enable when Google OAuth is configured in production
+  // useEffect(() => {
+  //   const fetchProviders = async () => {
+  //     try {
+  //       const response = await fetch(`${API_BASE}/api/auth/oauth/providers`);
+  //       if (response.ok) {
+  //         const data = await response.json();
+  //         setOauthProviders(data.providers || []);
+  //       }
+  //     } catch (err) {
+  //       console.error('Failed to fetch OAuth providers:', err);
+  //     }
+  //   };
+  //   fetchProviders();
+  // }, []);
 
   // Handle Google OAuth login
   const handleGoogleLogin = async () => {
@@ -149,7 +151,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login', init
     setIsLoading(true);
 
     try {
-      const result = await requestMagicLink(email, null);
+      await requestMagicLink(email, null);
       setEmailSentType('magic_link');
       setMode('email_sent');
     } catch (err) {
