@@ -503,3 +503,251 @@ async def charge_with_saved_cards(
         "message": "All saved cards failed. Please add a new card or try a different payment method.",
         "failed_attempts": errors,
     }
+
+
+# ============== Overage & Pay-Per-Use Charging ==============
+
+from .config import OVERAGE_PRICING, PAYPERUSE_PRICING
+
+
+def get_overage_price_cents(plan: str, mode: str) -> int | None:
+    """
+    Get overage price in cents for a subscriber's plan and decision mode.
+
+    Args:
+        plan: Subscription plan (starter, professional, team)
+        mode: Decision mode (quick_decision, decide_please, decide_pretty_please)
+
+    Returns:
+        Price in cents, or None if no overage allowed (hard cap)
+    """
+    if plan not in OVERAGE_PRICING:
+        return None
+
+    price_dollars = OVERAGE_PRICING[plan].get(mode)
+    if price_dollars is None:
+        return None  # Hard cap, no overages
+
+    return int(price_dollars * 100)  # Convert to cents
+
+
+def get_payperuse_price_cents(mode: str) -> int:
+    """
+    Get pay-per-use price in cents for a decision mode.
+
+    Args:
+        mode: Decision mode (quick_decision, decide_please, decide_pretty_please)
+
+    Returns:
+        Price in cents
+    """
+    return PAYPERUSE_PRICING.get(mode, 0)
+
+
+async def charge_overage(
+    user_id: str,
+    user_email: str,
+    customer_id: str,
+    mode: str,
+    plan: str,
+    payment_method_id: str = None
+) -> dict:
+    """
+    Charge a subscriber for an overage decision.
+
+    Args:
+        user_id: Our user ID
+        user_email: User's email
+        customer_id: Stripe customer ID
+        mode: Decision mode being charged
+        plan: User's subscription plan
+        payment_method_id: Optional specific card to charge
+
+    Returns:
+        Dict with payment result
+    """
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+
+    price_cents = get_overage_price_cents(plan, mode)
+    if price_cents is None:
+        return {
+            "success": False,
+            "error": "no_overage_allowed",
+            "message": "This decision type does not allow overages. Please upgrade your plan.",
+        }
+
+    # Get mode label for description
+    mode_labels = {
+        "quick_decision": "Quick Decision",
+        "decide_please": "Standard Decision",
+        "decide_pretty_please": "Premium Decision",
+    }
+    mode_label = mode_labels.get(mode, mode)
+
+    try:
+        # If no specific payment method, use default
+        if not payment_method_id:
+            payment_method_id = _get_default_payment_method(customer_id)
+
+        if not payment_method_id:
+            # No default, try to get any saved card
+            methods = stripe.PaymentMethod.list(customer=customer_id, type="card", limit=1)
+            if methods.data:
+                payment_method_id = methods.data[0].id
+            else:
+                return {
+                    "success": False,
+                    "error": "no_payment_method",
+                    "message": "No payment method available. Please add a card.",
+                }
+
+        intent = stripe.PaymentIntent.create(
+            amount=price_cents,
+            currency="usd",
+            customer=customer_id,
+            payment_method=payment_method_id,
+            off_session=True,
+            confirm=True,
+            metadata={
+                "app": "decideplease",
+                "user_id": user_id,
+                "charge_type": "overage",
+                "mode": mode,
+                "plan": plan,
+            },
+            statement_descriptor=STATEMENT_DESCRIPTOR,
+            receipt_email=user_email,
+            description=f"DecidePlease {mode_label} Overage",
+        )
+
+        if intent.status == "succeeded":
+            return {
+                "success": True,
+                "payment_intent_id": intent.id,
+                "amount_cents": price_cents,
+                "mode": mode,
+            }
+        else:
+            return {
+                "success": False,
+                "error": "payment_incomplete",
+                "message": f"Payment status: {intent.status}",
+                "payment_intent_id": intent.id,
+            }
+
+    except stripe.error.CardError as e:
+        return {
+            "success": False,
+            "error": "card_declined",
+            "message": e.user_message or str(e),
+        }
+    except stripe.error.StripeError as e:
+        return {
+            "success": False,
+            "error": "payment_failed",
+            "message": str(e),
+        }
+
+
+async def charge_payperuse(
+    user_id: str,
+    user_email: str,
+    customer_id: str,
+    mode: str,
+    payment_method_id: str = None
+) -> dict:
+    """
+    Charge a non-subscriber for a single pay-per-use decision.
+
+    Args:
+        user_id: Our user ID
+        user_email: User's email
+        customer_id: Stripe customer ID
+        mode: Decision mode being charged
+        payment_method_id: Optional specific card to charge
+
+    Returns:
+        Dict with payment result
+    """
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+
+    price_cents = get_payperuse_price_cents(mode)
+    if price_cents <= 0:
+        return {
+            "success": False,
+            "error": "invalid_mode",
+            "message": "Invalid decision mode for pay-per-use.",
+        }
+
+    # Get mode label for description
+    mode_labels = {
+        "quick_decision": "Quick Decision",
+        "decide_please": "Standard Decision",
+        "decide_pretty_please": "Premium Decision",
+    }
+    mode_label = mode_labels.get(mode, mode)
+
+    try:
+        # If no specific payment method, use default
+        if not payment_method_id:
+            payment_method_id = _get_default_payment_method(customer_id)
+
+        if not payment_method_id:
+            # No default, try to get any saved card
+            methods = stripe.PaymentMethod.list(customer=customer_id, type="card", limit=1)
+            if methods.data:
+                payment_method_id = methods.data[0].id
+            else:
+                return {
+                    "success": False,
+                    "error": "no_payment_method",
+                    "message": "No payment method available. Please add a card.",
+                }
+
+        intent = stripe.PaymentIntent.create(
+            amount=price_cents,
+            currency="usd",
+            customer=customer_id,
+            payment_method=payment_method_id,
+            off_session=True,
+            confirm=True,
+            metadata={
+                "app": "decideplease",
+                "user_id": user_id,
+                "charge_type": "payperuse",
+                "mode": mode,
+            },
+            statement_descriptor=STATEMENT_DESCRIPTOR,
+            receipt_email=user_email,
+            description=f"DecidePlease {mode_label}",
+        )
+
+        if intent.status == "succeeded":
+            return {
+                "success": True,
+                "payment_intent_id": intent.id,
+                "amount_cents": price_cents,
+                "mode": mode,
+            }
+        else:
+            return {
+                "success": False,
+                "error": "payment_incomplete",
+                "message": f"Payment status: {intent.status}",
+                "payment_intent_id": intent.id,
+            }
+
+    except stripe.error.CardError as e:
+        return {
+            "success": False,
+            "error": "card_declined",
+            "message": e.user_message or str(e),
+        }
+    except stripe.error.StripeError as e:
+        return {
+            "success": False,
+            "error": "payment_failed",
+            "message": str(e),
+        }

@@ -101,7 +101,7 @@ PLAN_QUOTAS = {
     },
 }
 
-# Overage pricing (per run)
+# Overage pricing (per run, in dollars) - for subscribers who exceed quota
 OVERAGE_PRICING = {
     "starter": {
         "quick_decision": None,       # hard cap, no overages
@@ -118,6 +118,13 @@ OVERAGE_PRICING = {
         "decide_please": 2.50,
         "decide_pretty_please": 6.00,
     },
+}
+
+# Pay-per-use pricing (in cents) - for non-subscribers
+PAYPERUSE_PRICING = {
+    "quick_decision": 99,             # $0.99
+    "decide_please": 599,             # $5.99
+    "decide_pretty_please": 1299,     # $12.99
 }
 
 # Rate limits (anti-abuse)

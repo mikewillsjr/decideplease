@@ -2152,6 +2152,148 @@ async def refund_decision_quota(user_id: str, mode: str) -> Dict[str, Any]:
     return await get_user_quotas(user_id)
 
 
+async def check_quota_with_payment_options(user_id: str, mode: str) -> Dict[str, Any]:
+    """
+    Check if user has quota, and if not, what payment options are available.
+
+    This function does NOT reserve quota - it only checks availability and
+    returns information needed for the frontend to display appropriate modals.
+
+    Args:
+        user_id: User ID
+        mode: Run mode (quick_decision, decide_please, decide_pretty_please)
+
+    Returns:
+        Dict with:
+        - has_quota: bool - whether user can run this mode
+        - remaining: int - remaining count for this mode
+        - subscription_plan: str|None - user's plan if subscribed
+        - payment_option: str|None - 'overage'|'payperuse'|'upgrade'|None
+        - price_cents: int|None - price in cents if payment needed
+    """
+    from .config import OVERAGE_PRICING, PAYPERUSE_PRICING
+
+    quota_field = MODE_TO_QUOTA_FIELD.get(mode)
+    if not quota_field:
+        raise ValueError(f"Unknown mode: {mode}")
+
+    # Ensure user has quotas record
+    await ensure_user_quotas(user_id)
+
+    # Get user info including subscription plan
+    async with get_connection() as conn:
+        user = await conn.fetchrow(
+            "SELECT subscription_plan, stripe_customer_id FROM users WHERE id = $1",
+            user_id
+        )
+
+    subscription_plan = user["subscription_plan"] if user else None
+    stripe_customer_id = user["stripe_customer_id"] if user else None
+
+    # Get current quotas
+    quotas = await get_user_quotas(user_id)
+    quota_info = quotas.get(quota_field, {})
+    remaining = quota_info.get("remaining", 0)
+
+    # Check if user has quota
+    if remaining > 0:
+        return {
+            "has_quota": True,
+            "remaining": remaining,
+            "subscription_plan": subscription_plan,
+            "payment_option": None,
+            "price_cents": None,
+            "stripe_customer_id": stripe_customer_id,
+        }
+
+    # No quota - determine payment options
+    if subscription_plan and subscription_plan in OVERAGE_PRICING:
+        # Subscriber - check if overage is available for this mode
+        overage_price = OVERAGE_PRICING[subscription_plan].get(mode)
+        if overage_price is not None:
+            # Overage available
+            return {
+                "has_quota": False,
+                "remaining": 0,
+                "subscription_plan": subscription_plan,
+                "payment_option": "overage",
+                "price_cents": int(overage_price * 100),
+                "stripe_customer_id": stripe_customer_id,
+            }
+        else:
+            # Hard cap (e.g., quick_decision for subscribers)
+            return {
+                "has_quota": False,
+                "remaining": 0,
+                "subscription_plan": subscription_plan,
+                "payment_option": "upgrade",  # Can only upgrade, no overage
+                "price_cents": None,
+                "stripe_customer_id": stripe_customer_id,
+            }
+    else:
+        # Non-subscriber - pay-per-use
+        payperuse_price = PAYPERUSE_PRICING.get(mode, 0)
+        if payperuse_price > 0:
+            return {
+                "has_quota": False,
+                "remaining": 0,
+                "subscription_plan": None,
+                "payment_option": "payperuse",
+                "price_cents": payperuse_price,
+                "stripe_customer_id": stripe_customer_id,
+            }
+        else:
+            # Mode not available for pay-per-use (shouldn't happen with current config)
+            return {
+                "has_quota": False,
+                "remaining": 0,
+                "subscription_plan": None,
+                "payment_option": None,
+                "price_cents": None,
+                "stripe_customer_id": stripe_customer_id,
+            }
+
+
+async def record_overage_charge(
+    user_id: str,
+    stripe_payment_intent: str,
+    mode: str,
+    amount_cents: int,
+    status: str = "completed"
+) -> str:
+    """Record an overage charge in the database."""
+    async with get_connection() as conn:
+        result = await conn.fetchval(
+            """
+            INSERT INTO overage_charges (user_id, stripe_payment_intent, mode, amount_cents, status)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
+            """,
+            user_id, stripe_payment_intent, mode, amount_cents, status
+        )
+        return str(result)
+
+
+async def record_payperuse_charge(
+    user_id: str,
+    stripe_payment_intent: str,
+    mode: str,
+    amount_cents: int,
+    status: str = "completed"
+) -> str:
+    """Record a pay-per-use charge in the database."""
+    async with get_connection() as conn:
+        result = await conn.fetchval(
+            """
+            INSERT INTO payperuse_charges (user_id, stripe_payment_intent, mode, amount_cents, status)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
+            """,
+            user_id, stripe_payment_intent, mode, amount_cents, status
+        )
+        return str(result)
+
+
 async def grant_admin_decisions(
     user_id: str,
     decision_type: str,
