@@ -302,19 +302,36 @@ export const api = {
           throw new Error('Not authenticated');
         }
         if (res.status === 402) {
-          throw new Error('Insufficient credits');
+          // Parse the payment options from the response
+          try {
+            const paymentData = await res.json();
+            // Create an error with payment details attached
+            const error = new Error(paymentData.message || 'Insufficient quota');
+            error.isPaymentRequired = true;
+            error.paymentOption = paymentData.payment_option;
+            error.priceCents = paymentData.price_cents;
+            error.mode = paymentData.mode;
+            error.subscriptionPlan = paymentData.subscription_plan;
+            error.stripeCustomerId = paymentData.stripe_customer_id;
+            throw error;
+          } catch (parseError) {
+            if (parseError.isPaymentRequired) {
+              throw parseError; // Re-throw our custom error
+            }
+            throw new Error('Insufficient credits');
+          }
         }
         // Try to get error detail from response
+        let errorMessage = `Failed to send message (HTTP ${res.status})`;
         try {
           const errorData = await res.json();
-          throw new Error(errorData.detail || 'Failed to send message');
-        } catch (parseError) {
-          // If JSON parsing failed, preserve the HTTP status info
-          if (parseError instanceof Error && parseError.message !== 'Failed to send message') {
-            throw new Error(`Failed to send message (HTTP ${res.status})`);
+          if (errorData.detail) {
+            errorMessage = errorData.detail;
           }
-          throw parseError;
+        } catch {
+          // JSON parsing failed, use default message with HTTP status
         }
+        throw new Error(errorMessage);
       }
 
       return res;
@@ -695,6 +712,48 @@ export const api = {
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       throw new Error(data.detail || 'Failed to charge saved card');
+    }
+    return response.json();
+  },
+
+  /**
+   * Charge subscriber for an overage decision.
+   * Called when a subscriber exceeds their quota.
+   */
+  async chargeOverage(mode, paymentMethodId = null) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/payments/charge-overage`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        mode,
+        payment_method_id: paymentMethodId,
+      }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to charge overage');
+    }
+    return response.json();
+  },
+
+  /**
+   * Charge non-subscriber for a pay-per-use decision.
+   * Called when a non-subscriber wants to run a single decision.
+   */
+  async chargePayPerUse(mode, paymentMethodId = null) {
+    const headers = await getHeaders();
+    const response = await fetch(`${API_BASE}/api/payments/charge-payperuse`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        mode,
+        payment_method_id: paymentMethodId,
+      }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Failed to charge pay-per-use');
     }
     return response.json();
   },

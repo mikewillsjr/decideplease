@@ -37,7 +37,14 @@ from .logging_config import get_logger
 logger = get_logger(__name__)
 
 from . import storage_pg as storage
-from .storage_pg import InsufficientCreditsError, InsufficientQuotaError, cleanup_incomplete_messages
+from .storage_pg import (
+    InsufficientCreditsError,
+    InsufficientQuotaError,
+    cleanup_incomplete_messages,
+    check_quota_with_payment_options,
+    record_overage_charge,
+    record_payperuse_charge,
+)
 from .database import init_database, close_pool, get_connection
 from .auth_custom import (
     get_current_user,
@@ -212,7 +219,7 @@ app.add_middleware(
 # Request body size limit (100KB max for regular requests, 60MB for file uploads)
 MAX_BODY_SIZE = 100 * 1024  # 100KB
 MAX_UPLOAD_BODY_SIZE = 60 * 1024 * 1024  # 60MB for file uploads (5 files x 10MB + overhead)
-MAX_QUERY_LENGTH = 10000  # 10,000 characters max for user queries
+MAX_QUERY_LENGTH = 50000  # 50,000 characters max for user queries
 
 @app.middleware("http")
 async def limit_request_size(request: Request, call_next):
@@ -1196,9 +1203,10 @@ async def send_message(
     """
     # Validate query length
     if len(msg_request.content) > MAX_QUERY_LENGTH:
+        over_by = len(msg_request.content) - MAX_QUERY_LENGTH
         raise HTTPException(
             status_code=400,
-            detail=f"Query too long. Maximum length is {MAX_QUERY_LENGTH} characters."
+            detail=f"Your message is too long ({len(msg_request.content):,} characters). Please shorten it by about {over_by:,} characters. Tip: Try summarizing key points or attaching long documents as files instead."
         )
 
     # Check if conversation exists and belongs to user
@@ -1629,9 +1637,10 @@ async def send_message_stream(
     """
     # Validate query length
     if len(msg_request.content) > MAX_QUERY_LENGTH:
+        over_by = len(msg_request.content) - MAX_QUERY_LENGTH
         raise HTTPException(
             status_code=400,
-            detail=f"Query too long. Maximum length is {MAX_QUERY_LENGTH} characters."
+            detail=f"Your message is too long ({len(msg_request.content):,} characters). Please shorten it by about {over_by:,} characters. Tip: Try summarizing key points or attaching long documents as files instead."
         )
 
     # Validate mode (handle legacy mode names)
@@ -1676,9 +1685,21 @@ async def send_message_stream(
         try:
             updated_quotas = await storage.reserve_decision_quota(user["user_id"], mode)
         except InsufficientQuotaError as e:
-            raise HTTPException(
+            # Get detailed payment options for the frontend
+            payment_info = await check_quota_with_payment_options(user["user_id"], mode)
+
+            # Return 402 with detailed payment options
+            return JSONResponse(
                 status_code=402,
-                detail=f"No {e.mode} decisions remaining."
+                content={
+                    "error": "insufficient_quota",
+                    "message": f"No {e.mode} decisions remaining.",
+                    "mode": mode,
+                    "payment_option": payment_info.get("payment_option"),
+                    "price_cents": payment_info.get("price_cents"),
+                    "subscription_plan": payment_info.get("subscription_plan"),
+                    "stripe_customer_id": payment_info.get("stripe_customer_id"),
+                }
             )
 
     # Check if this is the first message
@@ -2240,6 +2261,113 @@ async def charge_saved_cards(
         customer_id=customer_id,
         preferred_method_id=request.payment_method_id
     )
+
+    return result
+
+
+class OverageChargeRequest(BaseModel):
+    mode: str  # Decision mode (quick_decision, decide_please, decide_pretty_please)
+    payment_method_id: Optional[str] = None  # Optional specific card to use
+
+
+@app.post("/api/payments/charge-overage")
+async def charge_overage_endpoint(
+    request: OverageChargeRequest,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Charge a subscriber for an overage decision.
+
+    Called when a subscriber has exhausted their quota and wants to
+    purchase a single additional decision at their plan's overage rate.
+    """
+    from .payments import charge_overage
+
+    db_user = await storage.get_user_by_id(user["user_id"])
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    customer_id = db_user.get("stripe_customer_id")
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="No payment method on file. Please add a card.")
+
+    subscription_plan = db_user.get("subscription_plan")
+    if not subscription_plan:
+        raise HTTPException(status_code=400, detail="No active subscription. Use pay-per-use instead.")
+
+    result = await charge_overage(
+        user_id=user["user_id"],
+        user_email=user["email"],
+        customer_id=customer_id,
+        mode=request.mode,
+        plan=subscription_plan,
+        payment_method_id=request.payment_method_id
+    )
+
+    if result.get("success"):
+        # Record the overage charge
+        await record_overage_charge(
+            user_id=user["user_id"],
+            stripe_payment_intent=result.get("payment_intent_id"),
+            mode=request.mode,
+            amount_cents=result.get("amount_cents"),
+            status="completed"
+        )
+
+    return result
+
+
+class PayPerUseChargeRequest(BaseModel):
+    mode: str  # Decision mode (quick_decision, decide_please, decide_pretty_please)
+    payment_method_id: Optional[str] = None  # Optional specific card to use
+
+
+@app.post("/api/payments/charge-payperuse")
+async def charge_payperuse_endpoint(
+    request: PayPerUseChargeRequest,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Charge a non-subscriber for a single pay-per-use decision.
+
+    Called when a user without a subscription wants to purchase
+    a single decision.
+    """
+    from .payments import charge_payperuse, get_or_create_customer
+
+    db_user = await storage.get_user_by_id(user["user_id"])
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    customer_id = db_user.get("stripe_customer_id")
+
+    # Create Stripe customer if they don't have one
+    if not customer_id:
+        customer_id = await get_or_create_customer(
+            user_id=user["user_id"],
+            user_email=user["email"],
+            existing_customer_id=None
+        )
+        # Save customer ID to user record
+        await storage.update_user(user["user_id"], stripe_customer_id=customer_id)
+
+    result = await charge_payperuse(
+        user_id=user["user_id"],
+        user_email=user["email"],
+        customer_id=customer_id,
+        mode=request.mode,
+        payment_method_id=request.payment_method_id
+    )
+
+    if result.get("success"):
+        # Record the pay-per-use charge
+        await record_payperuse_charge(
+            user_id=user["user_id"],
+            stripe_payment_intent=result.get("payment_intent_id"),
+            mode=request.mode,
+            amount_cents=result.get("amount_cents"),
+            status="completed"
+        )
 
     return result
 
