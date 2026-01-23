@@ -1201,8 +1201,12 @@ async def send_message(
     Send a message and run the 3-stage council process.
     Returns the complete response with all stages.
     """
-    # Validate query length
-    if len(msg_request.content) > MAX_QUERY_LENGTH:
+    # Check if user is admin (skip length limit for admins)
+    user_email = user.get("email", "").lower()
+    is_admin = user_email in ADMIN_EMAILS
+
+    # Validate query length (skip for admins)
+    if not is_admin and len(msg_request.content) > MAX_QUERY_LENGTH:
         over_by = len(msg_request.content) - MAX_QUERY_LENGTH
         raise HTTPException(
             status_code=400,
@@ -1635,8 +1639,12 @@ async def send_message_stream(
     Processing continues in background even if client disconnects.
     Supports optional file attachments (images, PDFs, Office docs).
     """
-    # Validate query length
-    if len(msg_request.content) > MAX_QUERY_LENGTH:
+    # Check if user is admin (skip length limit for admins)
+    user_email = user.get("email", "").lower()
+    is_admin = user_email in ADMIN_EMAILS
+
+    # Validate query length (skip for admins)
+    if not is_admin and len(msg_request.content) > MAX_QUERY_LENGTH:
         over_by = len(msg_request.content) - MAX_QUERY_LENGTH
         raise HTTPException(
             status_code=400,
