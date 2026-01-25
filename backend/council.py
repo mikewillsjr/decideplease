@@ -374,7 +374,11 @@ STAGE 1 - Individual Responses:
 STAGE 2 - Peer Rankings:
 {stage2_text}
 
-Your task as Moderator is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
+Your task as Moderator is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question.
+
+IMPORTANT: Do NOT reference "Response A", "Response B", etc. in your synthesis. The anonymous labels are internal to the peer review process. Instead, directly synthesize the best insights into a unified answer.
+
+Consider:
 - The individual responses and their insights
 - The peer rankings and what they reveal about response quality
 - Any patterns of agreement or disagreement
@@ -389,7 +393,11 @@ Original Question: {user_query}
 Individual Responses:
 {stage1_text}
 
-Your task as Moderator is to synthesize all of these responses into a single, comprehensive, accurate answer to the user's original question. Consider:
+Your task as Moderator is to synthesize all of these responses into a single, comprehensive, accurate answer to the user's original question.
+
+IMPORTANT: Do NOT reference individual models or responses by name. Directly synthesize the best insights into a unified answer.
+
+Consider:
 - The key insights from each response
 - Areas of agreement and disagreement
 - The strongest arguments and evidence presented
@@ -588,7 +596,11 @@ STAGE 1 - Individual Responses:
 STAGE 2 - Peer Rankings:
 {stage2_text}
 
-Your task as Moderator is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
+Your task as Moderator is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question.
+
+IMPORTANT: Do NOT reference "Response A", "Response B", etc. in your synthesis. The anonymous labels are internal to the peer review process. Instead, directly synthesize the best insights into a unified answer.
+
+Consider:
 - The individual responses and their insights
 - The peer rankings and what they reveal about response quality
 - Any patterns of agreement or disagreement
@@ -603,7 +615,11 @@ Original Question: {user_query}
 Individual Responses:
 {stage1_text}
 
-Your task as Moderator is to synthesize all of these responses into a single, comprehensive, accurate answer to the user's original question. Consider:
+Your task as Moderator is to synthesize all of these responses into a single, comprehensive, accurate answer to the user's original question.
+
+IMPORTANT: Do NOT reference individual models or responses by name. Directly synthesize the best insights into a unified answer.
+
+Consider:
 - The key insights from each response
 - Areas of agreement and disagreement
 - The strongest arguments and evidence presented
